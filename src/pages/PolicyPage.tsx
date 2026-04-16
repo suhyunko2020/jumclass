@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { useCourses } from '../hooks/useCourses'
@@ -64,7 +64,10 @@ export default function PolicyPage() {
   const content = settings.policies?.[key] || ''
   const title = TITLES[key] || '정책'
 
-  document.title = `${title} — JUMCLASS`
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    document.title = `${title} — JUMCLASS`
+  }, [type, title])
 
   return (
     <>
