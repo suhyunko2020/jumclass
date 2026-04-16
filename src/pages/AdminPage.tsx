@@ -1072,10 +1072,10 @@ export default function AdminPage() {
                 {/* 정책 관리 */}
                 <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
                   <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '16px' }}>정책 관리</div>
-                  {(['privacy', 'terms', 'refund'] as const).map(key => (
+                  {(['privacy', 'terms', 'refund', 'copyright'] as const).map(key => (
                     <div className="form-group" key={key}>
                       <label className="form-label">
-                        {key === 'privacy' ? '개인정보처리방침' : key === 'terms' ? '이용약관' : '환불 정책'}
+                        {key === 'privacy' ? '개인정보처리방침' : key === 'terms' ? '이용약관' : key === 'refund' ? '환불 정책' : '저작권 안내'}
                         <a href={`/policy/${key}`} target="_blank" rel="noopener noreferrer"
                           style={{ marginLeft: '8px', fontSize: '.72rem', color: 'var(--purple-2)' }}>미리보기 →</a>
                       </label>

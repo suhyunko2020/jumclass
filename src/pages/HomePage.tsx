@@ -214,6 +214,7 @@ export default function HomePage() {
               <Link to="/policy/privacy">개인정보처리방침</Link>
               <Link to="/policy/terms">이용약관</Link>
               <Link to="/policy/refund">환불 정책</Link>
+              <Link to="/policy/copyright">저작권 안내</Link>
             </div>
           </div>
           <div className="footer-bottom">

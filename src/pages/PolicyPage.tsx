@@ -6,6 +6,7 @@ const TITLES: Record<string, string> = {
   privacy: '개인정보처리방침',
   terms: '이용약관',
   refund: '환불 정책',
+  copyright: '저작권 안내',
 }
 
 function renderMarkdown(md: string) {
@@ -37,6 +38,8 @@ function renderMarkdown(md: string) {
     if (inTable) { inTable = false; flushTable() }
     if (line.startsWith('# ')) {
       elements.push(<h1 key={i} className="policy-h1">{line.slice(2)}</h1>)
+    } else if (line.startsWith('### ')) {
+      elements.push(<h3 key={i} className="policy-h3">{line.slice(4)}</h3>)
     } else if (line.startsWith('## ')) {
       elements.push(<h2 key={i} className="policy-h2">{line.slice(3)}</h2>)
     } else if (line.startsWith('- ')) {
