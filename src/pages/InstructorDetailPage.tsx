@@ -141,11 +141,18 @@ export default function InstructorDetailPage() {
                       return (
                         <div key={svc.id} className="inst-svc-card">
                           <div className="inst-svc-top">
-                            <span className="inst-svc-type">{
-                              svc.type === 'consultation' ? '상담' :
-                              svc.type === 'reading' ? '리딩' :
-                              svc.type === 'lesson' ? '레슨' : '기타'
-                            }</span>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <span className="inst-svc-type">{
+                                svc.type === 'consultation' ? '상담' :
+                                svc.type === 'reading' ? '리딩' :
+                                svc.type === 'lesson' ? '레슨' : '기타'
+                              }</span>
+                              {svc.mode && (
+                                <span style={{ fontSize: '.68rem', fontWeight: 600, padding: '2px 7px', borderRadius: 'var(--pill)', background: svc.mode === 'online' ? 'rgba(52,196,124,.08)' : svc.mode === 'offline' ? 'rgba(232,156,56,.08)' : 'rgba(124,111,205,.08)', color: svc.mode === 'online' ? 'var(--ok)' : svc.mode === 'offline' ? 'var(--warn)' : 'var(--purple-2)' }}>
+                                  {svc.mode === 'online' ? '비대면(Zoom)' : svc.mode === 'offline' ? '대면' : '대면+비대면'}
+                                </span>
+                              )}
+                            </div>
                             <span className="inst-svc-dur">{svc.duration}</span>
                           </div>
                           <div className="inst-svc-title">{svc.title}</div>

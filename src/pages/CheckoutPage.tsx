@@ -112,7 +112,14 @@ export default function CheckoutPage() {
             </div>
             <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
               {(isServiceCheckout
-                ? ['결제 후 강사가 직접 연락드립니다', '카카오톡 또는 이메일로 진행']
+                ? [
+                    '결제 후 강사가 직접 연락드립니다',
+                    '이후 일정과 스케줄은 모두 개인 맞춤으로 진행됩니다',
+                    ...(service!.mode === 'offline' ? ['대면 강의로 진행됩니다'] :
+                        service!.mode === 'online' ? ['비대면 강의 (Zoom)로 진행됩니다'] :
+                        service!.mode === 'both' ? ['대면 또는 비대면 (Zoom) 선택 가능'] :
+                        []),
+                  ]
                 : ['결제 즉시 수강 시작 가능', '365일 수강 기간', '학습 자료 다운로드 포함', '7일 환불 보장']
               ).map(t => (
                 <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '.84rem', color: 'var(--t2)' }}>

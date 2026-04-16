@@ -1556,10 +1556,22 @@ export default function AdminPage() {
                       onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, originalPrice: Number(e.target.value) } } : null)} />
                   </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">소요 시간</label>
-                  <input className="form-input" placeholder="30분, 1시간 등" value={instSvcModal.service.duration}
-                    onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, duration: e.target.value } } : null)} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">소요 시간</label>
+                    <input className="form-input" placeholder="30분, 1시간 등" value={instSvcModal.service.duration}
+                      onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, duration: e.target.value } } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">강의 방식</label>
+                    <select className="form-input" value={instSvcModal.service.mode || ''}
+                      onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, mode: (e.target.value || undefined) as InstructorService['mode'] } } : null)}>
+                      <option value="">미지정</option>
+                      <option value="offline">대면 강의</option>
+                      <option value="online">비대면 (Zoom)</option>
+                      <option value="both">대면 + 비대면</option>
+                    </select>
+                  </div>
                 </div>
                 <button type="submit" className="btn btn-primary w-full">저장하기</button>
               </form>

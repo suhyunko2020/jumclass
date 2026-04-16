@@ -98,6 +98,7 @@ export interface InstructorService {
   originalPrice: number;
   duration: string;
   type: 'consultation' | 'reading' | 'lesson' | 'other';
+  mode?: 'online' | 'offline' | 'both';
 }
 
 export interface Instructor {
