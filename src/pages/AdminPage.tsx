@@ -431,6 +431,10 @@ export default function AdminPage() {
   }
 
   async function currAddAttachment(sectionKey: string, lessonId: string, file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast('파일 크기가 10MB를 초과합니다.', 'err')
+      return
+    }
     const dataUrl = await new Promise<string>((resolve) => {
       const reader = new FileReader()
       reader.onload = () => resolve(reader.result as string)
