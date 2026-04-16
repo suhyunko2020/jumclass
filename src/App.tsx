@@ -11,6 +11,8 @@ import PaymentSuccessPage from './pages/PaymentSuccessPage'
 import PaymentFailPage from './pages/PaymentFailPage'
 import AdminPage from './pages/AdminPage'
 import MyPage from './pages/MyPage'
+import InstructorsPage from './pages/InstructorsPage'
+import InstructorDetailPage from './pages/InstructorDetailPage'
 
 export default function App() {
   const location = useLocation()
@@ -30,6 +32,8 @@ export default function App() {
         <Route path="/payment-success" element={<PaymentSuccessPage />} />
         <Route path="/payment-fail" element={<PaymentFailPage />} />
         <Route path="/my" element={<MyPage />} />
+        <Route path="/instructors" element={<InstructorsPage />} />
+        <Route path="/instructor/:instructorId" element={<InstructorDetailPage />} />
         <Route path="/admin2026" element={<AdminPage />} />
       </Routes>
     </AuthModalProvider>

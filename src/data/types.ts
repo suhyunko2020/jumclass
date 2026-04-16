@@ -90,6 +90,32 @@ export interface User {
   password?: string;
 }
 
+export interface InstructorService {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  originalPrice: number;
+  duration: string;
+  type: 'consultation' | 'reading' | 'lesson' | 'other';
+}
+
+export interface Instructor {
+  id: string;
+  name: string;
+  photo: string;
+  title: string;
+  bio: string;
+  specialties: string[];
+  experience: string;
+  instagram?: string;
+  kakao?: string;
+  email?: string;
+  services: InstructorService[];
+  courseIds: string[];
+  status?: 'public' | 'private';
+}
+
 export interface Inquiry {
   id: string;
   userId: string;

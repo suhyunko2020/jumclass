@@ -9,9 +9,10 @@ import {
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
 } from '../utils/storage'
 import { formatPrice } from '../utils/format'
-import type { Inquiry, Course, LessonItem, CurriculumSection } from '../data/types'
+import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
+import { useInstructors } from '../hooks/useInstructors'
 
-type Section = 'overview' | 'courses' | 'students' | 'payments' | 'inquiries' | 'reviews'
+type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews'
 
 // ── 커리큘럼 편집 상태 타입 ──────────────────────────────────
 interface CurrEditSection {
@@ -63,6 +64,7 @@ const DEFAULT_TIERS = [
 export default function AdminPage() {
   const { isAdminLoggedIn, adminLogin, adminLogout, enrollManual } = useAuth()
   const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview } = useCourses()
+  const { getAll: getAllInstructors, saveInstructor, deleteInstructor } = useInstructors()
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -88,6 +90,8 @@ export default function AdminPage() {
   const [adminReviewModal, setAdminReviewModal] = useState(false)
   const [arForm, setArForm] = useState({ courseId: '', userName: '', rating: 5, text: '' })
   const [studentSearch, setStudentSearch] = useState('')
+  const [instModal, setInstModal] = useState<Instructor | null>(null)
+  const [instSvcModal, setInstSvcModal] = useState<{ instId: string; service: InstructorService | null } | null>(null)
   const [courseEnrollModal, setCourseEnrollModal] = useState<string | null>(null)
   const [ceUserId, setCeUserId] = useState('')
   const [ceDays, setCeDays] = useState(365)
@@ -172,14 +176,49 @@ export default function AdminPage() {
 
   const pendingCount = inquiries.filter(i => i.status === 'pending').length
 
+  const allInstructors = getAllInstructors()
+
   const navItems: { sec: Section; icon: string; label: string; badge?: number }[] = [
-    { sec: 'overview',  icon: '📊', label: '대시보드' },
-    { sec: 'courses',   icon: '📚', label: '강의 관리' },
-    { sec: 'students',  icon: '👥', label: '수강생' },
-    { sec: 'payments',  icon: '💳', label: '결제 내역' },
-    { sec: 'inquiries', icon: '💬', label: '문의 관리', badge: pendingCount },
-    { sec: 'reviews',   icon: '⭐', label: '리뷰 관리' },
+    { sec: 'overview',    icon: '📊', label: '대시보드' },
+    { sec: 'courses',     icon: '📚', label: '강의 관리' },
+    { sec: 'instructors', icon: '👤', label: '강사 관리' },
+    { sec: 'students',    icon: '👥', label: '수강생' },
+    { sec: 'payments',    icon: '💳', label: '결제 내역' },
+    { sec: 'inquiries',   icon: '💬', label: '문의 관리', badge: pendingCount },
+    { sec: 'reviews',     icon: '⭐', label: '리뷰 관리' },
   ]
+
+  function openNewInstructor() {
+    setInstModal({
+      id: 'inst-' + Date.now(), name: '', photo: '', title: '', bio: '',
+      specialties: [], experience: '', instagram: '', kakao: '', email: '',
+      services: [], courseIds: [], status: 'public',
+    })
+  }
+
+  function handleSaveInstructor(e: React.FormEvent) {
+    e.preventDefault()
+    if (!instModal) return
+    saveInstructor(instModal)
+    toast('강사 정보가 저장되었습니다.', 'ok')
+    setInstModal(null)
+  }
+
+  function handleSaveService(e: React.FormEvent) {
+    e.preventDefault()
+    if (!instSvcModal) return
+    const inst = getAllInstructors().find(i => i.id === instSvcModal.instId)
+    if (!inst) return
+    const svc = instSvcModal.service
+    if (!svc) return
+    const services = [...inst.services]
+    const idx = services.findIndex(s => s.id === svc.id)
+    if (idx >= 0) services[idx] = svc
+    else services.push(svc)
+    saveInstructor({ ...inst, services })
+    toast('서비스가 저장되었습니다.', 'ok')
+    setInstSvcModal(null)
+  }
 
   // ── 문의 답변 저장 ──────────────────────────────────────────
   async function handleAnswer(e: React.FormEvent) {
@@ -875,6 +914,55 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* ═══ 강사 관리 ═══ */}
+          {sec === 'instructors' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>강사 관리 ({allInstructors.length}명)</h1>
+                <button className="btn btn-primary btn-sm" onClick={openNewInstructor}>+ 강사 등록</button>
+              </div>
+              {allInstructors.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>등록된 강사가 없습니다.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {allInstructors.map(inst => (
+                    <div key={inst.id} style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '20px', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                      <div style={{ width: '56px', height: '56px', borderRadius: 'var(--r2)', background: 'rgba(124,111,205,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', fontWeight: 800, color: 'var(--purple-2)', flexShrink: 0, overflow: 'hidden' }}>
+                        {inst.photo ? <img src={inst.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : inst.name.charAt(0)}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <span style={{ fontWeight: 700, fontSize: '.9rem' }}>{inst.name}</span>
+                          <span style={{ fontSize: '.75rem', color: 'var(--purple-2)' }}>{inst.title}</span>
+                          <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: inst.status === 'private' ? 'rgba(224,82,82,.1)' : 'rgba(52,196,124,.1)', color: inst.status === 'private' ? 'var(--fail)' : 'var(--ok)' }}>
+                            {inst.status === 'private' ? '비공개' : '공개'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '.78rem', color: 'var(--t3)', marginBottom: '8px' }}>{inst.experience} · 서비스 {inst.services.length}개</div>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <button className="btn btn-primary btn-sm" onClick={() => setInstModal({ ...inst })}>편집</button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => {
+                            setInstSvcModal({ instId: inst.id, service: { id: 'svc-' + Date.now(), title: '', description: '', price: 0, originalPrice: 0, duration: '', type: 'consultation' } })
+                          }}>+ 서비스</button>
+                          {inst.services.map(svc => (
+                            <button key={svc.id} className="btn btn-ghost btn-sm" style={{ fontSize: '.72rem' }}
+                              onClick={() => setInstSvcModal({ instId: inst.id, service: { ...svc } })}>
+                              {svc.title || '서비스'} ({formatPrice(svc.price)})
+                            </button>
+                          ))}
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
+                            onClick={() => { if (confirm('삭제하시겠습니까?')) { deleteInstructor(inst.id); toast('삭제 완료', 'ok') } }}>
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ═══ 리뷰 관리 ═══ */}
           {sec === 'reviews' && (
             <div>
@@ -1201,6 +1289,152 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      {/* ── 강사 편집 모달 ── */}
+      {instModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setInstModal(null) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '560px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <button className="modal-close" onClick={() => setInstModal(null)}>✕</button>
+            <div className="modal-head" style={{ flexShrink: 0 }}>
+              <h2>{instModal.name ? '강사 편집' : '새 강사 등록'}</h2>
+            </div>
+            <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
+              <form onSubmit={handleSaveInstructor}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">이름 *</label>
+                    <input className="form-input" required value={instModal.name}
+                      onChange={e => setInstModal(p => p ? { ...p, name: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">직함</label>
+                    <input className="form-input" placeholder="전문 타로 리더" value={instModal.title}
+                      onChange={e => setInstModal(p => p ? { ...p, title: e.target.value } : null)} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">프로필 사진 URL</label>
+                  <input className="form-input" placeholder="https://..." value={instModal.photo}
+                    onChange={e => setInstModal(p => p ? { ...p, photo: e.target.value } : null)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">경력</label>
+                  <input className="form-input" placeholder="10년+ 경력" value={instModal.experience}
+                    onChange={e => setInstModal(p => p ? { ...p, experience: e.target.value } : null)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">소개</label>
+                  <textarea className="form-input" rows={4} value={instModal.bio}
+                    onChange={e => setInstModal(p => p ? { ...p, bio: e.target.value } : null)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">전문 분야 (쉼표 구분)</label>
+                  <input className="form-input" placeholder="타로, 오라클, 수비학" value={instModal.specialties.join(', ')}
+                    onChange={e => setInstModal(p => p ? { ...p, specialties: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } : null)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Instagram</label>
+                    <input className="form-input" placeholder="@username" value={instModal.instagram || ''}
+                      onChange={e => setInstModal(p => p ? { ...p, instagram: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">KakaoTalk</label>
+                    <input className="form-input" placeholder="카카오톡 ID" value={instModal.kakao || ''}
+                      onChange={e => setInstModal(p => p ? { ...p, kakao: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">이메일</label>
+                    <input className="form-input" type="email" value={instModal.email || ''}
+                      onChange={e => setInstModal(p => p ? { ...p, email: e.target.value } : null)} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">연결 강의 (복수 선택)</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {courses.map(c => {
+                      const sel = instModal.courseIds.includes(c.id)
+                      return (
+                        <button key={c.id} type="button"
+                          style={{ fontSize: '.75rem', padding: '4px 10px', borderRadius: 'var(--pill)', cursor: 'pointer', background: sel ? 'rgba(124,111,205,.2)' : 'rgba(255,255,255,.04)', color: sel ? 'var(--purple-2)' : 'var(--t3)', border: `1px solid ${sel ? 'rgba(124,111,205,.3)' : 'var(--line)'}` }}
+                          onClick={() => setInstModal(p => {
+                            if (!p) return null
+                            const ids = sel ? p.courseIds.filter(id => id !== c.id) : [...p.courseIds, c.id]
+                            return { ...p, courseIds: ids }
+                          })}
+                        >{c.emoji} {c.title}</button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">상태</label>
+                  <select className="form-input" value={instModal.status || 'public'}
+                    onChange={e => setInstModal(p => p ? { ...p, status: e.target.value as 'public' | 'private' } : null)}>
+                    <option value="public">공개</option>
+                    <option value="private">비공개</option>
+                  </select>
+                </div>
+                <button type="submit" className="btn btn-primary w-full">저장하기</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 강사 서비스 편집 모달 ── */}
+      {instSvcModal && instSvcModal.service && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setInstSvcModal(null) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '460px' }}>
+            <button className="modal-close" onClick={() => setInstSvcModal(null)}>✕</button>
+            <div className="modal-head">
+              <h2>서비스 {instSvcModal.service.title ? '편집' : '등록'}</h2>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleSaveService}>
+                <div className="form-group">
+                  <label className="form-label">서비스명 *</label>
+                  <input className="form-input" required value={instSvcModal.service.title}
+                    onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, title: e.target.value } } : null)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">유형</label>
+                  <select className="form-input" value={instSvcModal.service.type}
+                    onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, type: e.target.value as InstructorService['type'] } } : null)}>
+                    <option value="consultation">상담</option>
+                    <option value="reading">리딩</option>
+                    <option value="lesson">레슨</option>
+                    <option value="other">기타</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">설명</label>
+                  <textarea className="form-input" rows={3} value={instSvcModal.service.description}
+                    onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, description: e.target.value } } : null)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">가격</label>
+                    <input className="form-input" type="number" value={instSvcModal.service.price}
+                      onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, price: Number(e.target.value) } } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">원래 가격</label>
+                    <input className="form-input" type="number" value={instSvcModal.service.originalPrice}
+                      onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, originalPrice: Number(e.target.value) } } : null)} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">소요 시간</label>
+                  <input className="form-input" placeholder="30분, 1시간 등" value={instSvcModal.service.duration}
+                    onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, duration: e.target.value } } : null)} />
+                </div>
+                <button type="submit" className="btn btn-primary w-full">저장하기</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 관리자 리뷰 작성 모달 ── */}
       {adminReviewModal && (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setAdminReviewModal(false) }}>

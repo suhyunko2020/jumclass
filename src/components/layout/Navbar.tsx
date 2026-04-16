@@ -18,9 +18,7 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [location.pathname])
+  useEffect(() => { setMobileOpen(false) }, [location.pathname])
 
   const isLesson = location.pathname === '/lesson'
   if (isLesson) {
@@ -61,12 +59,12 @@ export default function Navbar() {
       <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
         <Link to="/" className="nav-logo">JUM<span className="dot">CLASS</span></Link>
 
-        {/* 데스크톱 네비 */}
         <div className="nav-center">
           <div className="nav-center-pill">
             <Link to="/" className={`nav-link ${path === '/' ? 'active' : ''}`}>Home</Link>
             <Link to="/courses" className={`nav-link ${isActive('/courses') || isActive('/course') ? 'active' : ''}`}>Course</Link>
-            <a href="#contact" className="nav-link" onClick={handleContact}>Contact Us</a>
+            <Link to="/instructors" className={`nav-link ${isActive('/instructor') ? 'active' : ''}`}>Instructor</Link>
+            <a href="#contact" className="nav-link" onClick={handleContact}>Contact</a>
           </div>
         </div>
 
@@ -105,19 +103,19 @@ export default function Navbar() {
                       onClick={() => setDropdownOpen(false)}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.05)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      📚 내 강의실
+                      내 강의실
                     </Link>
                     <Link to="/my?tab=payments" style={{ display: 'block', padding: '11px 16px', fontSize: '.875rem', transition: 'var(--t)' }}
                       onClick={() => setDropdownOpen(false)}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.05)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      💳 결제내역
+                      결제내역
                     </Link>
                     <Link to="/my?tab=inquiries" style={{ display: 'block', padding: '11px 16px', fontSize: '.875rem', transition: 'var(--t)' }}
                       onClick={() => setDropdownOpen(false)}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.05)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      💬 문의하기
+                      문의하기
                     </Link>
                     <div style={{ height: '1px', background: 'var(--line)', margin: '0 12px' }} />
                     <button onClick={handleLogout} style={{
@@ -140,7 +138,6 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* 모바일 우측: 햄버거만 */}
         <button className={`hamburger ${mobileOpen ? 'is-open' : ''}`} onClick={() => setMobileOpen(p => !p)}>
           <span /><span /><span />
         </button>
@@ -148,7 +145,6 @@ export default function Navbar() {
 
       {/* 모바일 메뉴 */}
       <div className={`mobile-menu ${mobileOpen ? 'open' : ''}`}>
-        {/* 프로필 영역 */}
         {user && (
           <div className="mobile-profile">
             <div className="mobile-profile-avatar">{user.avatar}</div>
@@ -159,38 +155,24 @@ export default function Navbar() {
           </div>
         )}
 
-        {/* 네비게이션 */}
         <div className="mobile-nav-section">
-          <Link to="/" className={`mobile-nav-item ${path === '/' ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>
-            <span className="mobile-nav-icon">🏠</span> Home
-          </Link>
-          <Link to="/courses" className={`mobile-nav-item ${isActive('/courses') ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>
-            <span className="mobile-nav-icon">📚</span> Course
-          </Link>
-          <a href="#contact" className="mobile-nav-item" onClick={handleContact}>
-            <span className="mobile-nav-icon">✉️</span> Contact Us
-          </a>
+          <Link to="/" className={`mobile-nav-item ${path === '/' ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>Home</Link>
+          <Link to="/courses" className={`mobile-nav-item ${isActive('/courses') ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>Course</Link>
+          <Link to="/instructors" className={`mobile-nav-item ${isActive('/instructor') ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>Instructor</Link>
+          <a href="#contact" className="mobile-nav-item" onClick={handleContact}>Contact</a>
         </div>
 
         {user ? (
           <>
             <div className="mobile-menu-divider" />
             <div className="mobile-nav-section">
-              <Link to="/classroom" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
-                <span className="mobile-nav-icon">🎬</span> 내 강의실
-              </Link>
-              <Link to="/my?tab=payments" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
-                <span className="mobile-nav-icon">💳</span> 결제/환불 내역
-              </Link>
-              <Link to="/my?tab=inquiries" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
-                <span className="mobile-nav-icon">💬</span> 1:1 문의
-              </Link>
+              <Link to="/classroom" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>내 강의실</Link>
+              <Link to="/my?tab=payments" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>결제/환불 내역</Link>
+              <Link to="/my?tab=inquiries" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>1:1 문의</Link>
             </div>
             <div className="mobile-menu-divider" />
             <div className="mobile-nav-section">
-              <button className="mobile-nav-item" style={{ width: '100%', color: 'var(--t3)' }} onClick={handleLogout}>
-                로그아웃
-              </button>
+              <button className="mobile-nav-item" style={{ width: '100%', color: 'var(--t3)' }} onClick={handleLogout}>로그아웃</button>
             </div>
           </>
         ) : (
