@@ -43,7 +43,8 @@ export async function uploadLessonAttachment(lessonId: string, file: File): Prom
     upsert: false,
   })
   if (error) {
-    console.warn('첨부파일 업로드 실패:', error.message)
+    console.error('첨부파일 업로드 실패:', error.message, error)
+    alert(`업로드 에러: ${error.message}`)
     return null
   }
 

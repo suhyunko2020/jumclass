@@ -436,11 +436,12 @@ export default function AdminPage() {
       return
     }
     toast('업로드 중...', 'info')
-    const att = await uploadLessonAttachment(lessonId, file)
-    if (!att) {
-      toast('파일 업로드에 실패했습니다. Storage 버킷을 확인해주세요.', 'err')
+    const result = await uploadLessonAttachment(lessonId, file)
+    if (!result) {
+      toast('파일 업로드에 실패했습니다. 콘솔에서 에러를 확인해주세요.', 'err')
       return
     }
+    const att = result
     toast('파일이 업로드되었습니다.', 'ok')
     setCurriculumModal(p => {
       if (!p) return null
