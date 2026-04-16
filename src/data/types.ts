@@ -10,12 +10,19 @@ export interface PauseConfig {
   maxDays: number;
 }
 
+export interface LessonAttachment {
+  name: string;
+  ext: string;
+  dataUrl: string;
+}
+
 export interface LessonItem {
   id: string;
   title: string;
   duration: string;
   vimeo: string;
   status: 'free' | 'locked';
+  attachments?: LessonAttachment[];
 }
 
 export interface CurriculumSection {

@@ -27,6 +27,7 @@ interface CurrEditItem {
   duration: string
   vimeo: string
   status: 'free' | 'locked'
+  attachments?: { name: string; ext: string; dataUrl: string }[]
 }
 interface CurriculumModalState {
   courseId: string
@@ -412,6 +413,48 @@ export default function AdminPage() {
     } : null)
   }
 
+  async function currFetchVimeoDuration(sectionKey: string, lessonId: string, vimeoId: string) {
+    if (!vimeoId) return
+    try {
+      const res = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${vimeoId}`)
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.duration) {
+        const mins = Math.floor(data.duration / 60)
+        const secs = data.duration % 60
+        const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+        currUpdateLesson(sectionKey, lessonId, 'duration', formatted)
+        toast(`영상 길이: ${formatted}`, 'ok')
+      }
+    } catch { /* ignore */ }
+  }
+
+  function currAddAttachment(sectionKey: string, lessonId: string, file: File) {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const ext = file.name.split('.').pop()?.toLowerCase() || ''
+      const att = { name: file.name.replace(/\.[^.]+$/, ''), ext, dataUrl: reader.result as string }
+      setCurriculumModal(p => p ? {
+        ...p,
+        sections: p.sections.map(s => s._key !== sectionKey ? s : {
+          ...s,
+          items: s.items.map(i => i.id !== lessonId ? i : { ...i, attachments: [...(i.attachments || []), att] }),
+        }),
+      } : null)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function currRemoveAttachment(sectionKey: string, lessonId: string, attIdx: number) {
+    setCurriculumModal(p => p ? {
+      ...p,
+      sections: p.sections.map(s => s._key !== sectionKey ? s : {
+        ...s,
+        items: s.items.map(i => i.id !== lessonId ? i : { ...i, attachments: (i.attachments || []).filter((_, j) => j !== attIdx) }),
+      }),
+    } : null)
+  }
+
   function handleSaveCurriculum() {
     if (!curriculumModal) return
     const curriculum: CurriculumSection[] = curriculumModal.sections
@@ -424,6 +467,7 @@ export default function AdminPage() {
           duration: i.duration || '00:00',
           vimeo: i.vimeo || '',
           status: i.status as LessonItem['status'],
+          ...(i.attachments && i.attachments.length > 0 ? { attachments: i.attachments } : {}),
         })),
       }))
 
@@ -1815,27 +1859,52 @@ export default function AdminPage() {
                       <div style={{ fontSize: '.78rem', color: 'var(--t3)', padding: '8px 0' }}>강의가 없습니다.</div>
                     )}
                     {sec.items.map((item, ii) => (
-                      <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 80px 120px 80px 28px', gap: '6px', alignItems: 'center', padding: '6px 0', borderBottom: ii < sec.items.length - 1 ? '1px solid rgba(255,255,255,.05)' : 'none' }}>
-                        <span style={{ fontSize: '.72rem', color: 'var(--t3)', textAlign: 'center' }}>{ii + 1}</span>
-                        <input className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
-                          placeholder="강의 제목" value={item.title}
-                          onChange={e => currUpdateLesson(sec._key, item.id, 'title', e.target.value)} />
-                        <input className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
-                          placeholder="시간 (00:00)" value={item.duration}
-                          onChange={e => currUpdateLesson(sec._key, item.id, 'duration', e.target.value)} />
-                        <input className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
-                          placeholder="Vimeo ID" value={item.vimeo}
-                          onChange={e => currUpdateLesson(sec._key, item.id, 'vimeo', e.target.value)} />
-                        <select className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
-                          value={item.status}
-                          onChange={e => currUpdateLesson(sec._key, item.id, 'status', e.target.value)}>
-                          <option value="free">무료</option>
-                          <option value="locked">잠금</option>
-                        </select>
-                        <button
-                          style={{ width: '28px', height: '28px', borderRadius: 'var(--r1)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', cursor: 'pointer', fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          onClick={() => currDeleteLesson(sec._key, item.id)}
-                        >✕</button>
+                      <div key={item.id} style={{ padding: '8px 0', borderBottom: ii < sec.items.length - 1 ? '1px solid rgba(255,255,255,.05)' : 'none' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 80px 28px', gap: '6px', alignItems: 'center' }}>
+                          <span style={{ fontSize: '.72rem', color: 'var(--t3)', textAlign: 'center' }}>{ii + 1}</span>
+                          <input className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
+                            placeholder="강의 제목" value={item.title}
+                            onChange={e => currUpdateLesson(sec._key, item.id, 'title', e.target.value)} />
+                          <select className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
+                            value={item.status}
+                            onChange={e => currUpdateLesson(sec._key, item.id, 'status', e.target.value)}>
+                            <option value="free">무료</option>
+                            <option value="locked">잠금</option>
+                          </select>
+                          <button
+                            style={{ width: '28px', height: '28px', borderRadius: 'var(--r1)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', cursor: 'pointer', fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={() => currDeleteLesson(sec._key, item.id)}
+                          >✕</button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 80px auto', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                          <span />
+                          <input className="form-input" style={{ padding: '5px 8px', fontSize: '.78rem' }}
+                            placeholder="Vimeo ID" value={item.vimeo}
+                            onChange={e => currUpdateLesson(sec._key, item.id, 'vimeo', e.target.value)}
+                            onBlur={() => { if (item.vimeo && !item.duration) currFetchVimeoDuration(sec._key, item.id, item.vimeo) }} />
+                          <input className="form-input" style={{ padding: '5px 8px', fontSize: '.78rem' }}
+                            placeholder="00:00" value={item.duration}
+                            onChange={e => currUpdateLesson(sec._key, item.id, 'duration', e.target.value)} />
+                          <button style={{ fontSize: '.68rem', padding: '4px 8px', borderRadius: 'var(--r1)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                            onClick={() => currFetchVimeoDuration(sec._key, item.id, item.vimeo)}>
+                            시간 가져오기
+                          </button>
+                        </div>
+                        {/* 첨부파일 */}
+                        <div style={{ marginTop: '4px', paddingLeft: '30px' }}>
+                          {(item.attachments || []).map((att, ai) => (
+                            <div key={ai} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '.72rem', padding: '2px 8px', borderRadius: 'var(--pill)', background: 'rgba(255,255,255,.04)', border: '1px solid var(--line)', marginRight: '4px', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--t2)' }}>{att.name}.{att.ext}</span>
+                              <button style={{ fontSize: '.65rem', color: 'var(--fail)', cursor: 'pointer' }}
+                                onClick={() => currRemoveAttachment(sec._key, item.id, ai)}>✕</button>
+                            </div>
+                          ))}
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '.7rem', padding: '2px 8px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.06)', color: 'var(--purple-2)', cursor: 'pointer', border: '1px dashed rgba(124,111,205,.2)' }}>
+                            + 첨부파일
+                            <input type="file" style={{ display: 'none' }}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) currAddAttachment(sec._key, item.id, f); e.target.value = '' }} />
+                          </label>
+                        </div>
                       </div>
                     ))}
                     <button
