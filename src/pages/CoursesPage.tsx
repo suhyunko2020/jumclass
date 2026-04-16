@@ -69,7 +69,7 @@ export default function CoursesPage() {
                   </li>
                 ))}
               </ul>
-              <Link to="/course/tarot-business" className="btn btn-gold btn-lg">자격증 과정 보기 →</Link>
+              <button className="btn btn-gold btn-lg" onClick={() => { setFilter('자격증'); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>자격증 과정 보기 →</button>
             </div>
             <div style={{ background: 'var(--bg-3)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '36px', textAlign: 'center' }}>
               <div style={{ fontSize: '4.5rem', marginBottom: '18px' }}>👑</div>
