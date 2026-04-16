@@ -147,13 +147,22 @@ export default function ClassroomPage() {
                           계속 수강하기 →
                         </button>
                       )}
-                      {prog >= 100 && user && !hasReviewed(c.id, user.uid) && (
-                        <button className="btn btn-ghost btn-sm"
-                          style={{ fontSize: '.75rem', color: 'var(--gold)' }}
-                          onClick={e2 => { e2.stopPropagation(); setReviewModal({ courseId: c.id, courseTitle: c.title }) }}>
-                          ⭐ 리뷰 작성하기
-                        </button>
-                      )}
+                      {user && (() => {
+                        const reviewed = hasReviewed(c.id, user.uid)
+                        return reviewed ? (
+                          <button className="btn btn-ghost btn-sm" disabled
+                            style={{ fontSize: '.75rem', color: 'var(--t3)', opacity: .5, cursor: 'default' }}
+                            onClick={e2 => e2.stopPropagation()}>
+                            ✓ 리뷰 작성 완료
+                          </button>
+                        ) : (
+                          <button className="btn btn-ghost btn-sm"
+                            style={{ fontSize: '.75rem', color: 'var(--gold)' }}
+                            onClick={e2 => { e2.stopPropagation(); setReviewModal({ courseId: c.id, courseTitle: c.title }) }}>
+                            ⭐ 리뷰 작성하기
+                          </button>
+                        )
+                      })()}
                       {canPause && (
                         <button className="btn btn-ghost btn-sm"
                           style={{ fontSize: '.75rem', color: 'var(--t3)' }}

@@ -6,7 +6,7 @@ import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
   getInquiries, answerInquiry,
-  getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment,
+  getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
 } from '../utils/storage'
 import { formatPrice } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection } from '../data/types'
@@ -88,6 +88,11 @@ export default function AdminPage() {
   const [adminReviewModal, setAdminReviewModal] = useState(false)
   const [arForm, setArForm] = useState({ courseId: '', userName: '', rating: 5, text: '' })
   const [studentSearch, setStudentSearch] = useState('')
+  const [courseEnrollModal, setCourseEnrollModal] = useState<string | null>(null)
+  const [ceUserId, setCeUserId] = useState('')
+  const [ceDays, setCeDays] = useState(365)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [enrollEditModal, setEnrollEditModal] = useState<{ user: any; enrollment: any; course: any } | null>(null)
 
   useEffect(() => { document.title = '관리자 대시보드 — JUMCLASS' }, [])
 
@@ -410,6 +415,36 @@ export default function AdminPage() {
     refresh()
   }
 
+  // ── 강의별 수강생 등록 ──────────────────────────────────────
+  async function handleCourseEnroll(e: React.FormEvent) {
+    e.preventDefault()
+    if (!courseEnrollModal || !ceUserId) return
+    const ok = await enrollManual(ceUserId, courseEnrollModal, ceDays)
+    if (ok) toast('수강 등록 완료', 'ok')
+    else toast('등록 실패', 'err')
+    setCourseEnrollModal(null)
+    setCeUserId('')
+    setCeDays(365)
+    refresh()
+  }
+
+  // ── 수강 정보 수정 ────────────────────────────────────────
+  async function handleEnrollEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!enrollEditModal) return
+    const em = enrollEditModal
+    const ok = await updateEnrollmentAdmin(em.user.uid, em.enrollment.courseId, {
+      expiryDate: em.enrollment.expiryDate,
+      paused: em.enrollment.paused,
+      pauseCount: em.enrollment.pauseCount,
+      remainingDays: em.enrollment.remainingDays,
+    })
+    if (ok) toast('수강 정보가 수정되었습니다.', 'ok')
+    else toast('수정 실패', 'err')
+    setEnrollEditModal(null)
+    refresh()
+  }
+
   // ─────────────────────────────────────────────────────────────
   // render
   // ─────────────────────────────────────────────────────────────
@@ -612,6 +647,7 @@ export default function AdminPage() {
                               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                 <button className="btn btn-primary btn-sm" onClick={() => openCourseEdit(c)}>편집</button>
                                 <button className="btn btn-ghost btn-sm" onClick={() => openCurriculumEdit(c)}>커리큘럼</button>
+                                <button className="btn btn-ghost btn-sm" onClick={() => setCourseEnrollModal(c.id)}>+ 수강생</button>
                                 <Link to={`/course/${c.id}`} className="btn btn-ghost btn-sm">보기</Link>
                                 {isCustom ? (
                                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }} onClick={() => handleDeleteCourse(c.id)}>삭제</button>
@@ -680,9 +716,12 @@ export default function AdminPage() {
                                   const c = courses.find(x => x.id === e.courseId)
                                   return (
                                     <div key={e.courseId} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <span style={{ fontSize: '.72rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)' }}>
+                                      <button
+                                        style={{ fontSize: '.72rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)', cursor: 'pointer' }}
+                                        onClick={() => setEnrollEditModal({ user: u, enrollment: { ...e }, course: c })}
+                                      >
                                         {c ? `${c.emoji} ${c.title.slice(0, 8)}` : e.courseId}
-                                      </span>
+                                      </button>
                                       <button
                                         title="수강 취소"
                                         style={{ fontSize: '.65rem', color: 'var(--fail)', cursor: 'pointer', padding: '1px 4px', borderRadius: '3px', background: 'rgba(224,82,82,.1)' }}
@@ -723,7 +762,7 @@ export default function AdminPage() {
                 ) : (
                   <table className="admin-table">
                     <thead>
-                      <tr><th>수강생</th><th>강의</th><th>등록일</th><th>수강 기간</th><th>진도</th><th>타입</th><th>상태</th></tr>
+                      <tr><th>수강생</th><th>강의</th><th>등록일</th><th>수강 기간</th><th>타입</th><th>상태</th></tr>
                     </thead>
                     <tbody>
                       {allEnrollments.map((e, i) => {
@@ -745,14 +784,6 @@ export default function AdminPage() {
                             <td style={{ fontSize: '.855rem' }}>{c ? `${c.emoji} ${c.title}` : e.courseId}</td>
                             <td style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{new Date(e.enrolledAt).toLocaleDateString()}</td>
                             <td style={{ fontSize: '.8rem', color: expired ? 'var(--fail)' : e.paused ? 'var(--warn)' : 'var(--t2)' }}>{daysLeft}</td>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <div style={{ width: '60px', height: '4px', borderRadius: '99px', background: 'rgba(255,255,255,.1)', overflow: 'hidden' }}>
-                                  <div style={{ width: `${e.progress || 0}%`, height: '100%', background: 'var(--purple)', borderRadius: '99px' }} />
-                                </div>
-                                <span style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{e.progress || 0}%</span>
-                              </div>
-                            </td>
                             <td>
                               <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: e.type === 'manual' ? 'rgba(232,156,56,.12)' : 'rgba(52,196,124,.12)', color: e.type === 'manual' ? 'var(--warn)' : 'var(--ok)' }}>
                                 {e.type === 'manual' ? '수동' : '결제'}
@@ -1216,6 +1247,121 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* ── 강의별 수강생 등록 모달 ── */}
+      {courseEnrollModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCourseEnrollModal(null) }}>
+          <div className="modal-box" style={{ position: 'relative' }}>
+            <button className="modal-close" onClick={() => setCourseEnrollModal(null)}>✕</button>
+            <div className="modal-head">
+              <h2>수강생 등록</h2>
+              <p style={{ fontSize: '.82rem', color: 'var(--t2)' }}>
+                {courses.find(c => c.id === courseEnrollModal)?.emoji} {courses.find(c => c.id === courseEnrollModal)?.title}
+              </p>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleCourseEnroll}>
+                <div className="form-group">
+                  <label className="form-label">수강생 선택</label>
+                  <select className="form-input" required value={ceUserId} onChange={e => setCeUserId(e.target.value)}>
+                    <option value="">수강생을 선택하세요</option>
+                    {users.map(u => <option key={u.uid} value={u.uid}>{u.name} ({u.email})</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">수강 기간</label>
+                  <select className="form-input" value={ceDays} onChange={e => setCeDays(Number(e.target.value))}>
+                    <option value={30}>30일</option>
+                    <option value={90}>90일</option>
+                    <option value={180}>180일</option>
+                    <option value={365}>365일</option>
+                    <option value={9999}>무제한</option>
+                  </select>
+                </div>
+                <button type="submit" className="btn btn-primary w-full">등록하기</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 수강 정보 수정 모달 ── */}
+      {enrollEditModal && (() => {
+        const em = enrollEditModal
+        const enrollment = em.enrollment
+        const daysLeft = enrollment.paused
+          ? (enrollment.remainingDays || 0)
+          : Math.max(0, Math.ceil((new Date(enrollment.expiryDate).getTime() - Date.now()) / 86400000))
+        return (
+          <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setEnrollEditModal(null) }}>
+            <div className="modal-box" style={{ position: 'relative', maxWidth: '480px' }}>
+              <button className="modal-close" onClick={() => setEnrollEditModal(null)}>✕</button>
+              <div className="modal-head">
+                <h2>수강 정보 수정</h2>
+                <p style={{ fontSize: '.82rem', color: 'var(--t2)' }}>
+                  {em.user.name} — {em.course?.emoji} {em.course?.title || enrollment.courseId}
+                </p>
+              </div>
+              <div className="modal-body">
+                {/* 진도 현황 */}
+                <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '.78rem', fontWeight: 700, marginBottom: '8px' }}>수강 진도</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <div style={{ flex: 1, height: '6px', borderRadius: '99px', background: 'rgba(255,255,255,.1)', overflow: 'hidden' }}>
+                      <div style={{ width: `${enrollment.progress || 0}%`, height: '100%', background: 'var(--purple)', borderRadius: '99px' }} />
+                    </div>
+                    <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--t1)' }}>{enrollment.progress || 0}%</span>
+                  </div>
+                  <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>
+                    잔여 {daysLeft}일 · 등록일 {new Date(enrollment.enrolledAt).toLocaleDateString()}
+                  </div>
+                </div>
+
+                <form onSubmit={handleEnrollEdit}>
+                  <div className="form-group">
+                    <label className="form-label">수강 만료일</label>
+                    <input className="form-input" type="date"
+                      value={enrollment.expiryDate.split('T')[0]}
+                      onChange={e => setEnrollEditModal(p => p ? {
+                        ...p, enrollment: { ...p.enrollment, expiryDate: new Date(e.target.value).toISOString() }
+                      } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">휴강 상태</label>
+                    <select className="form-input"
+                      value={enrollment.paused ? '1' : '0'}
+                      onChange={e => setEnrollEditModal(p => p ? {
+                        ...p, enrollment: { ...p.enrollment, paused: e.target.value === '1' }
+                      } : null)}>
+                      <option value="0">수강중</option>
+                      <option value="1">휴강중</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">휴강 사용 횟수</label>
+                    <input className="form-input" type="number" min="0"
+                      value={enrollment.pauseCount || 0}
+                      onChange={e => setEnrollEditModal(p => p ? {
+                        ...p, enrollment: { ...p.enrollment, pauseCount: Number(e.target.value) }
+                      } : null)} />
+                  </div>
+                  {enrollment.paused && (
+                    <div className="form-group">
+                      <label className="form-label">잔여 일수</label>
+                      <input className="form-input" type="number" min="0"
+                        value={enrollment.remainingDays || 0}
+                        onChange={e => setEnrollEditModal(p => p ? {
+                          ...p, enrollment: { ...p.enrollment, remainingDays: Number(e.target.value) }
+                        } : null)} />
+                    </div>
+                  )}
+                  <button type="submit" className="btn btn-primary w-full">저장하기</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── 커리큘럼 편집 모달 ── */}
       {curriculumModal && (

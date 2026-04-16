@@ -81,6 +81,8 @@ export default function MyPage() {
     courseId: string; courseTitle: string; orderDate: string;
     refundable: boolean; refundAmount: number; penalty: number; reason: string;
     price: number; badge: string;
+    completedCount: number; totalLessons: number; progress: number;
+    daysSinceEnroll: number; totalDays: number;
   } | null>(null)
   const [refundReason, setRefundReason] = useState('')
 
@@ -91,9 +93,14 @@ export default function MyPage() {
     if (!enrollment) return
     const totalLessons = course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
     const result = calcRefund(course, enrollment, totalLessons)
+    const completedCount = enrollment.completedLessons?.length ?? 0
+    const daysSinceEnroll = Math.floor((Date.now() - new Date(enrollment.enrolledAt).getTime()) / 86400000)
+    const totalDays = Math.floor((new Date(enrollment.expiryDate).getTime() - new Date(enrollment.enrolledAt).getTime()) / 86400000)
     setRefundModal({
       courseId, courseTitle: course.title, orderDate,
       ...result, price: course.price, badge: course.badge,
+      completedCount, totalLessons, progress: enrollment.progress || 0,
+      daysSinceEnroll, totalDays,
     })
     setRefundReason('')
   }
@@ -344,31 +351,85 @@ export default function MyPage() {
       )}
 
       {/* ── 환불 요청 모달 ── */}
-      {refundModal && (
+      {refundModal && (() => {
+        const fullyWatched = refundModal.progress >= 100
+        return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setRefundModal(null) }}>
-          <div className="modal-box" style={{ position: 'relative', maxWidth: '500px' }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '520px' }}>
             <button className="modal-close" onClick={() => setRefundModal(null)}>✕</button>
             <div className="modal-head">
               <h2>환불 요청</h2>
               <p style={{ fontSize: '.85rem', color: 'var(--t2)' }}>{refundModal.courseTitle}</p>
             </div>
             <div className="modal-body">
-              {/* 환불 정책 안내 */}
-              <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(124,111,205,.06)', border: '1px solid rgba(124,111,205,.15)', marginBottom: '16px' }}>
-                <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--purple-2)', marginBottom: '8px' }}>
-                  {refundModal.badge === '자격증' ? '자격증 과정 환불 정책' : '인터넷 강의 환불 정책'}
+              {/* 수강 현황 */}
+              <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', marginBottom: '14px' }}>
+                <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--t1)', marginBottom: '10px' }}>수강 현황</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>수강 진도</div>
+                  <div style={{ fontSize: '.8rem', fontWeight: 600, textAlign: 'right' }}>{refundModal.completedCount}/{refundModal.totalLessons}강 ({refundModal.progress}%)</div>
+                  <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>수강 경과일</div>
+                  <div style={{ fontSize: '.8rem', fontWeight: 600, textAlign: 'right' }}>{refundModal.daysSinceEnroll}일 / 총 {refundModal.totalDays}일</div>
+                  <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>결제 금액</div>
+                  <div style={{ fontSize: '.8rem', fontWeight: 700, textAlign: 'right', color: 'var(--t1)' }}>{formatPrice(refundModal.price)}</div>
                 </div>
-                <div style={{ fontSize: '.8rem', color: 'var(--t2)', lineHeight: 1.7 }}>{refundModal.reason}</div>
+                <div style={{ marginTop: '8px' }}>
+                  <div style={{ height: '4px', borderRadius: '99px', background: 'rgba(255,255,255,.1)', overflow: 'hidden' }}>
+                    <div style={{ width: `${refundModal.progress}%`, height: '100%', background: refundModal.progress >= 100 ? 'var(--fail)' : 'var(--purple)', borderRadius: '99px' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* 환불 정책 */}
+              <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(124,111,205,.06)', border: '1px solid rgba(124,111,205,.15)', marginBottom: '14px' }}>
+                <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--purple-2)', marginBottom: '10px' }}>
+                  {refundModal.badge === '자격증' ? '* 자격증 과정 환불 정책' : '* 인터넷 강의 환불 정책'}
+                </div>
+                {refundModal.badge === '자격증' ? (
+                  <table style={{ width: '100%', fontSize: '.75rem', color: 'var(--t2)', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                      <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 600 }}>시점</th>
+                      <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 600 }}>환불 기준</th>
+                    </tr></thead>
+                    <tbody>
+                      <tr><td style={{ padding: '4px 0' }}>강습 시작 전</td><td style={{ textAlign: 'right', padding: '4px 0' }}>전액 (위약금 10% 별도)</td></tr>
+                      <tr><td style={{ padding: '4px 0' }}>기간 1/3 경과 전</td><td style={{ textAlign: 'right', padding: '4px 0' }}>수강료 2/3 (위약금 10%)</td></tr>
+                      <tr><td style={{ padding: '4px 0' }}>기간 1/2 경과 전</td><td style={{ textAlign: 'right', padding: '4px 0' }}>수강료 1/2 (위약금 10%)</td></tr>
+                      <tr style={{ color: 'var(--fail)' }}><td style={{ padding: '4px 0' }}>기간 1/2 경과 후</td><td style={{ textAlign: 'right', padding: '4px 0' }}>환불 불가</td></tr>
+                    </tbody>
+                  </table>
+                ) : (
+                  <table style={{ width: '100%', fontSize: '.75rem', color: 'var(--t2)', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                      <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 600 }}>시점</th>
+                      <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 600 }}>환불 기준</th>
+                    </tr></thead>
+                    <tbody>
+                      <tr><td style={{ padding: '4px 0' }}>수강 시작 전</td><td style={{ textAlign: 'right', padding: '4px 0' }}>전액 (위약금 10% 별도)</td></tr>
+                      <tr><td style={{ padding: '4px 0' }}>7일 이내 / 2강 이하</td><td style={{ textAlign: 'right', padding: '4px 0' }}>90% (위약금 10%)</td></tr>
+                      <tr><td style={{ padding: '4px 0' }}>7일 이후 / 기간 1/2 이하</td><td style={{ textAlign: 'right', padding: '4px 0' }}>수강분 공제 후 환불</td></tr>
+                      <tr style={{ color: 'var(--fail)' }}><td style={{ padding: '4px 0' }}>기간 1/2 초과</td><td style={{ textAlign: 'right', padding: '4px 0' }}>환불 불가</td></tr>
+                    </tbody>
+                  </table>
+                )}
+                <div style={{ marginTop: '8px', fontSize: '.75rem', color: 'var(--purple-2)', fontWeight: 600 }}>
+                  현재 적용: {refundModal.reason}
+                </div>
               </div>
 
               {/* 환불 금액 */}
-              <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: refundModal.refundable ? 'rgba(52,196,124,.06)' : 'rgba(224,82,82,.06)', border: `1px solid ${refundModal.refundable ? 'rgba(52,196,124,.15)' : 'rgba(224,82,82,.15)'}`, marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '.82rem' }}>
-                  <span style={{ color: 'var(--t2)' }}>결제 금액</span>
-                  <span style={{ fontWeight: 700 }}>{formatPrice(refundModal.price)}</span>
-                </div>
-                {refundModal.refundable && (
+              <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: fullyWatched ? 'rgba(224,82,82,.06)' : refundModal.refundable ? 'rgba(52,196,124,.06)' : 'rgba(224,82,82,.06)', border: `1px solid ${fullyWatched ? 'rgba(224,82,82,.15)' : refundModal.refundable ? 'rgba(52,196,124,.15)' : 'rgba(224,82,82,.15)'}`, marginBottom: '16px' }}>
+                {fullyWatched ? (
+                  <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                    <div style={{ fontSize: '.9rem', fontWeight: 700, color: 'var(--fail)', marginBottom: '4px' }}>환불 불가</div>
+                    <div style={{ fontSize: '.8rem', color: 'var(--t2)' }}>이미 수강을 완료하여 환불이 불가능합니다.</div>
+                  </div>
+                ) : refundModal.refundable ? (
                   <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '.82rem' }}>
+                      <span style={{ color: 'var(--t2)' }}>결제 금액</span>
+                      <span style={{ fontWeight: 700 }}>{formatPrice(refundModal.price)}</span>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '.82rem' }}>
                       <span style={{ color: 'var(--t2)' }}>위약금 (10%)</span>
                       <span style={{ color: 'var(--fail)' }}>-{formatPrice(refundModal.penalty)}</span>
@@ -378,15 +439,15 @@ export default function MyPage() {
                       <span style={{ fontWeight: 800, color: 'var(--ok)' }}>{formatPrice(refundModal.refundAmount)}</span>
                     </div>
                   </>
-                )}
-                {!refundModal.refundable && (
-                  <div style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--fail)', textAlign: 'center', padding: '8px 0' }}>
-                    환불 불가
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                    <div style={{ fontSize: '.9rem', fontWeight: 700, color: 'var(--fail)', marginBottom: '4px' }}>환불 불가</div>
+                    <div style={{ fontSize: '.8rem', color: 'var(--t2)' }}>수강 기간의 1/2을 초과하여 환불이 불가능합니다.</div>
                   </div>
                 )}
               </div>
 
-              {refundModal.refundable ? (
+              {!fullyWatched && refundModal.refundable ? (
                 <>
                   <div className="form-group">
                     <label className="form-label">환불 사유</label>
@@ -403,7 +464,8 @@ export default function MyPage() {
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
     </>
   )
 }

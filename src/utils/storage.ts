@@ -148,3 +148,19 @@ export async function cancelEnrollment(userId: string, courseId: string): Promis
     .eq('user_id', userId).eq('course_id', courseId)
   return !error
 }
+
+export async function updateEnrollmentAdmin(
+  userId: string, courseId: string,
+  updates: { expiryDate?: string; paused?: boolean; pauseCount?: number; remainingDays?: number }
+): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any = {}
+  if (updates.expiryDate !== undefined) data.expiry_date = updates.expiryDate
+  if (updates.paused !== undefined) data.paused = updates.paused
+  if (updates.pauseCount !== undefined) data.pause_count = updates.pauseCount
+  if (updates.remainingDays !== undefined) data.remaining_days = updates.remainingDays
+  const { error } = await supabase.from('enrollments')
+    .update(data)
+    .eq('user_id', userId).eq('course_id', courseId)
+  return !error
+}
