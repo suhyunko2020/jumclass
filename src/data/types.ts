@@ -13,7 +13,7 @@ export interface PauseConfig {
 export interface LessonAttachment {
   name: string;
   ext: string;
-  dataUrl: string;
+  url: string;
 }
 
 export interface LessonItem {

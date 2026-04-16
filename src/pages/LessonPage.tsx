@@ -140,7 +140,7 @@ export default function LessonPage() {
             <div className="attach-list">
               <div className="attach-head">학습 자료</div>
               {lessonAtts.map((a, i) => (
-                <a key={i} href={a.dataUrl} download={`${a.name}.${a.ext}`} className="attach-item" style={{ cursor: 'pointer' }}>
+                <a key={i} href={a.url} download={`${a.name}.${a.ext}`} target="_blank" rel="noopener noreferrer" className="attach-item" style={{ cursor: 'pointer' }}>
                   <span>{a.ext === 'pdf' ? '📄' : '📎'}</span>
                   <span>{a.name}</span>
                   <span style={{ marginLeft: 'auto', fontSize: '.72rem', color: 'var(--purple-2)', fontWeight: 600 }}>다운로드</span>

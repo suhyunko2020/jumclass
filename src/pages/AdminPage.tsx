@@ -11,7 +11,7 @@ import {
 import { formatPrice } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
-import { saveAllLessonAttachments, getLessonAttachments } from '../hooks/useCourses'
+import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
 import { useSiteSettings, type SiteSettings } from '../hooks/useSiteSettings'
 
 type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews' | 'settings'
@@ -28,7 +28,7 @@ interface CurrEditItem {
   duration: string
   vimeo: string
   status: 'free' | 'locked'
-  attachments?: { name: string; ext: string; dataUrl: string }[]
+  attachments?: LessonAtt[]
 }
 interface CurriculumModalState {
   courseId: string
@@ -435,13 +435,13 @@ export default function AdminPage() {
       toast('파일 크기가 10MB를 초과합니다.', 'err')
       return
     }
-    const dataUrl = await new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.readAsDataURL(file)
-    })
-    const ext = file.name.split('.').pop()?.toLowerCase() || ''
-    const att = { name: file.name.replace(/\.[^.]+$/, ''), ext, dataUrl }
+    toast('업로드 중...', 'info')
+    const att = await uploadLessonAttachment(lessonId, file)
+    if (!att) {
+      toast('파일 업로드에 실패했습니다. Storage 버킷을 확인해주세요.', 'err')
+      return
+    }
+    toast('파일이 업로드되었습니다.', 'ok')
     setCurriculumModal(p => {
       if (!p) return null
       return {

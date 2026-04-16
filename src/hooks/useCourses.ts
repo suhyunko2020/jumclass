@@ -24,37 +24,52 @@ function getCachedReviews(): Review[] {
   return getJSON(REVIEWS_KEY, [])
 }
 
-function getAttachmentStore(): Record<string, { name: string; ext: string; dataUrl: string }[]> {
+export interface LessonAtt { name: string; ext: string; url: string }
+
+function getAttachmentMeta(): Record<string, LessonAtt[]> {
   try { const v = localStorage.getItem(ATTACH_KEY); return v ? JSON.parse(v) : {} } catch { return {} }
 }
 
-export function saveLessonAttachments(lessonId: string, attachments: { name: string; ext: string; dataUrl: string }[]) {
-  const store = getAttachmentStore()
-  if (attachments.length > 0) store[lessonId] = attachments
-  else delete store[lessonId]
-  try {
-    localStorage.setItem(ATTACH_KEY, JSON.stringify(store))
-  } catch {
-    console.warn('첨부파일 저장 실패 — 용량 초과. lessonId:', lessonId)
-  }
+function saveAttachmentMeta(store: Record<string, LessonAtt[]>) {
+  try { localStorage.setItem(ATTACH_KEY, JSON.stringify(store)) } catch { /* meta only, small */ }
 }
 
-export function saveAllLessonAttachments(items: { id: string; attachments?: { name: string; ext: string; dataUrl: string }[] }[]) {
-  const store = getAttachmentStore()
+export async function uploadLessonAttachment(lessonId: string, file: File): Promise<LessonAtt | null> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  const fileName = `${lessonId}/${Date.now()}_${file.name}`
+
+  const { error } = await supabase.storage.from('lesson-attachments').upload(fileName, file, {
+    cacheControl: '3600',
+    upsert: false,
+  })
+  if (error) {
+    console.warn('첨부파일 업로드 실패:', error.message)
+    return null
+  }
+
+  const { data: urlData } = supabase.storage.from('lesson-attachments').getPublicUrl(fileName)
+  const att: LessonAtt = { name: file.name.replace(/\.[^.]+$/, ''), ext, url: urlData.publicUrl }
+
+  const store = getAttachmentMeta()
+  if (!store[lessonId]) store[lessonId] = []
+  store[lessonId].push(att)
+  saveAttachmentMeta(store)
+
+  return att
+}
+
+export function saveAllLessonAttachments(items: { id: string; attachments?: LessonAtt[] }[]) {
+  const store = getAttachmentMeta()
   for (const item of items) {
     if (item.attachments && item.attachments.length > 0) {
       store[item.id] = item.attachments
     }
   }
-  try {
-    localStorage.setItem(ATTACH_KEY, JSON.stringify(store))
-  } catch {
-    console.warn('첨부파일 일괄 저장 실패 — 용량 초과')
-  }
+  saveAttachmentMeta(store)
 }
 
-export function getLessonAttachments(lessonId: string): { name: string; ext: string; dataUrl: string }[] {
-  return getAttachmentStore()[lessonId] || []
+export function getLessonAttachments(lessonId: string): LessonAtt[] {
+  return getAttachmentMeta()[lessonId] || []
 }
 
 export function useCourses() {
