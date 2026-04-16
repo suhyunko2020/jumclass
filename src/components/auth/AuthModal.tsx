@@ -55,9 +55,9 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setErr(''); setLoading(true)
-    const ok = await login(loginForm.email, loginForm.password)
+    const err = await login(loginForm.email, loginForm.password)
     setLoading(false)
-    if (!ok) { setErr('이메일 또는 비밀번호가 올바르지 않습니다.'); return }
+    if (err) { setErr(err); return }
     toast('환영합니다! ✦', 'ok')
     onClose()
   }
@@ -65,9 +65,9 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
     setErr(''); setLoading(true)
-    const ok = await signup(signupForm.name, signupForm.email, signupForm.password)
+    const err = await signup(signupForm.name, signupForm.email, signupForm.password)
     setLoading(false)
-    if (!ok) { setErr('이미 사용 중인 이메일이거나 가입에 실패했습니다.'); return }
+    if (err) { setErr(err); return }
     toast('가입 완료! 이메일 인증 후 로그인해주세요 ✦', 'ok')
     setTab('login')
   }

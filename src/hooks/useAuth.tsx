@@ -17,8 +17,8 @@ export interface AppUser {
 interface AuthContextType {
   user: AppUser | null
   loading: boolean
-  login: (email: string, password: string) => Promise<boolean>
-  signup: (name: string, email: string, password: string) => Promise<boolean>
+  login: (email: string, password: string) => Promise<string | null>
+  signup: (name: string, email: string, password: string) => Promise<string | null>
   loginWithGoogle: () => Promise<void>
   logout: () => Promise<void>
   enroll: (courseId: string, days?: number) => Promise<boolean>
@@ -120,27 +120,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session])
 
   // ── 로그인 ────────────────────────────────────────────────
-  const login = useCallback(async (email: string, password: string) => {
+  // null = 성공, string = 에러 메시지
+  const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return !error
+    if (!error) return null
+    if (error.message.includes('Email not confirmed'))
+      return '이메일 인증이 필요합니다. 받은편지함을 확인해주세요.'
+    if (error.message.includes('Invalid login credentials'))
+      return '이메일 또는 비밀번호가 올바르지 않습니다.'
+    return error.message
   }, [])
 
   // ── 회원가입 ──────────────────────────────────────────────
-  const signup = useCallback(async (name: string, email: string, password: string) => {
+  // null = 성공(인증메일 발송), string = 에러 메시지
+  const signup = useCallback(async (name: string, email: string, password: string): Promise<string | null> => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name, avatar: name[0].toUpperCase() } },
     })
-    if (error || !data.user) return false
+    if (error) {
+      if (error.message.includes('already registered') || error.message.includes('already been registered'))
+        return '이미 사용 중인 이메일입니다.'
+      return error.message
+    }
+    if (!data.user) return '가입에 실패했습니다. 다시 시도해주세요.'
 
-    // 프로필 테이블에도 저장 (트리거가 없는 경우 대비)
+    // 이미 가입된 이메일인데 Supabase가 user를 반환하는 경우 (identities 빈 배열)
+    if ((data.user.identities ?? []).length === 0)
+      return '이미 사용 중인 이메일입니다.'
+
+    // 프로필 저장 (이메일 인증 전이라도 저장 시도)
     await supabase.from('profiles').upsert({
       id: data.user.id,
       name,
+      email,
       avatar: name[0].toUpperCase(),
     })
-    return true
+    return null
   }, [])
 
   // ── Google 로그인 ─────────────────────────────────────────
