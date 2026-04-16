@@ -139,18 +139,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: { data: { name, avatar: name[0].toUpperCase() } },
     })
-    if (error) {
-      if (error.message.includes('already registered') || error.message.includes('already been registered'))
-        return '이미 사용 중인 이메일입니다.'
-      return error.message
-    }
+    if (error) return error.message
     if (!data.user) return '가입에 실패했습니다. 다시 시도해주세요.'
 
-    // 이미 가입된 이메일인데 Supabase가 user를 반환하는 경우 (identities 빈 배열)
-    if ((data.user.identities ?? []).length === 0)
-      return '이미 사용 중인 이메일입니다.'
-
-    // 프로필 저장 (이메일 인증 전이라도 저장 시도)
+    // 프로필 저장
     await supabase.from('profiles').upsert({
       id: data.user.id,
       name,
