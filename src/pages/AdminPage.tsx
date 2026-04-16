@@ -1222,7 +1222,7 @@ export default function AdminPage() {
 
       {/* ── 강의 등록/편집 모달 ── */}
       {courseEditModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCourseEditModal(null) }}>
+        <div className="modal-overlay" >
           <div className="modal-box" style={{ position: 'relative', maxWidth: '660px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <button className="modal-close" onClick={() => setCourseEditModal(null)}>✕</button>
             <div className="modal-head" style={{ flexShrink: 0 }}>
@@ -1381,7 +1381,7 @@ export default function AdminPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const enrolled = users.filter(u => (u.enrollments || []).some((e: any) => e.courseId === courseDetailModal.id))
         return (
-          <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCourseDetailModal(null) }}>
+          <div className="modal-overlay" >
             <div className="modal-box" style={{ position: 'relative', maxWidth: '500px' }}>
               <button className="modal-close" onClick={() => setCourseDetailModal(null)}>✕</button>
               <div className="modal-head">
@@ -1422,7 +1422,7 @@ export default function AdminPage() {
 
       {/* ── 문의 답변 모달 ── */}
       {answerModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setAnswerModal(null) }}>
+        <div className="modal-overlay" >
           <div className="modal-box" style={{ position: 'relative', maxWidth: '500px' }}>
             <button className="modal-close" onClick={() => setAnswerModal(null)}>✕</button>
             <div className="modal-head">
@@ -1450,7 +1450,7 @@ export default function AdminPage() {
 
       {/* ── 수동 수강 등록 모달 ── */}
       {enrollModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setEnrollModal(null) }}>
+        <div className="modal-overlay" >
           <div className="modal-box" style={{ position: 'relative' }}>
             <button className="modal-close" onClick={() => setEnrollModal(null)}>✕</button>
             <div className="modal-head">
@@ -1490,7 +1490,7 @@ export default function AdminPage() {
       )}
       {/* ── 강사 편집 모달 ── */}
       {instModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setInstModal(null) }}>
+        <div className="modal-overlay" >
           <div className="modal-box" style={{ position: 'relative', maxWidth: '560px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <button className="modal-close" onClick={() => setInstModal(null)}>✕</button>
             <div className="modal-head" style={{ flexShrink: 0 }}>
@@ -1624,7 +1624,7 @@ export default function AdminPage() {
 
       {/* ── 강사 서비스 편집 모달 ── */}
       {instSvcModal && instSvcModal.service && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setInstSvcModal(null) }}>
+        <div className="modal-overlay" >
           <div className="modal-box" style={{ position: 'relative', maxWidth: '460px' }}>
             <button className="modal-close" onClick={() => setInstSvcModal(null)}>✕</button>
             <div className="modal-head">
@@ -1690,7 +1690,7 @@ export default function AdminPage() {
 
       {/* ── 관리자 리뷰 작성 모달 ── */}
       {adminReviewModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setAdminReviewModal(false) }}>
+        <div className="modal-overlay" >
           <div className="modal-box" style={{ position: 'relative', maxWidth: '460px' }}>
             <button className="modal-close" onClick={() => setAdminReviewModal(false)}>✕</button>
             <div className="modal-head">
@@ -1737,7 +1737,7 @@ export default function AdminPage() {
 
       {/* ── 강의별 수강생 등록 모달 ── */}
       {courseEnrollModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCourseEnrollModal(null) }}>
+        <div className="modal-overlay" >
           <div className="modal-box" style={{ position: 'relative' }}>
             <button className="modal-close" onClick={() => setCourseEnrollModal(null)}>✕</button>
             <div className="modal-head">
@@ -1780,7 +1780,7 @@ export default function AdminPage() {
           ? (enrollment.remainingDays || 0)
           : Math.max(0, Math.ceil((new Date(enrollment.expiryDate).getTime() - Date.now()) / 86400000))
         return (
-          <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setEnrollEditModal(null) }}>
+          <div className="modal-overlay" >
             <div className="modal-box" style={{ position: 'relative', maxWidth: '480px' }}>
               <button className="modal-close" onClick={() => setEnrollEditModal(null)}>✕</button>
               <div className="modal-head">
@@ -1852,7 +1852,7 @@ export default function AdminPage() {
 
       {/* ── 커리큘럼 편집 모달 ── */}
       {curriculumModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCurriculumModal(null) }}>
+        <div className="modal-overlay" >
           <div className="modal-box" style={{ position: 'relative', maxWidth: '720px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <button className="modal-close" onClick={() => setCurriculumModal(null)}>✕</button>
             <div className="modal-head" style={{ flexShrink: 0, textAlign: 'left', padding: '20px 24px 16px' }}>
