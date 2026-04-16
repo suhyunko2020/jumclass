@@ -1,6 +1,7 @@
 import React from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useSiteSettings } from '../hooks/useSiteSettings'
+import { useCourses } from '../hooks/useCourses'
 
 const TITLES: Record<string, string> = {
   privacy: '개인정보처리방침',
@@ -57,6 +58,7 @@ function renderMarkdown(md: string) {
 export default function PolicyPage() {
   const { type } = useParams<{ type: string }>()
   const { get } = useSiteSettings()
+  const { getPublicCourses } = useCourses()
   const settings = get()
   const key = type as keyof typeof settings.policies
   const content = settings.policies?.[key] || ''
@@ -82,9 +84,32 @@ export default function PolicyPage() {
 
       <footer className="footer">
         <div className="container">
-          <div className="footer-bottom" style={{ borderTop: 'none', paddingTop: 0 }}>
-            <Link to="/" style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--t1)' }}>JUMCLASS</Link>
+          <div className="footer-grid">
+            <div className="footer-brand">
+              <span className="logo">JUMCLASS</span>
+              <p>{settings.brandDescription}</p>
+            </div>
+            <div className="footer-col">
+              <h4>강의</h4>
+              {getPublicCourses().map(c => <Link key={c.id} to={`/course/${c.id}`}>{c.title}</Link>)}
+            </div>
+            <div className="footer-col">
+              <h4>플랫폼</h4>
+              <Link to="/classroom">내 강의실</Link>
+              <Link to="/instructors">강사 소개</Link>
+              <a href="/#contact">문의</a>
+            </div>
+            <div className="footer-col">
+              <h4>정책</h4>
+              <Link to="/policy/privacy">개인정보처리방침</Link>
+              <Link to="/policy/terms">이용약관</Link>
+              <Link to="/policy/refund">환불 정책</Link>
+              <Link to="/policy/copyright">저작권 안내</Link>
+            </div>
+          </div>
+          <div className="footer-bottom">
             <span>{settings.copyright}</span>
+            <span>{settings.businessInfo}</span>
           </div>
         </div>
       </footer>
