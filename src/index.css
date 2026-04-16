@@ -582,8 +582,8 @@ select.form-input { appearance: none; -webkit-appearance: none; cursor: pointer;
 .curr-section-head:hover { background: rgba(255,255,255,.055); }
 .curr-section-name { font-size: .9rem; font-weight: 700; }
 .curr-section-meta { font-size: .77rem; color: var(--t3); margin-top: 2px; }
-.curr-arrow { font-size: .7rem; color: var(--t3); transition: transform .25s; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255,255,255,.04); flex-shrink: 0; }
-.curr-section-head:hover .curr-arrow { background: rgba(255,255,255,.08); }
+.curr-arrow { color: var(--t3); transition: transform .25s; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255,255,255,.05); flex-shrink: 0; }
+.curr-section-head:hover .curr-arrow { background: rgba(255,255,255,.1); color: var(--t2); }
 .curr-section-head.open .curr-arrow { transform: rotate(180deg); }
 .curr-items { display: none; border-top: 1px solid var(--line); }
 .curr-items.open { display: block; }
