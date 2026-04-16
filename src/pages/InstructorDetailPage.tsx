@@ -66,10 +66,10 @@ export default function InstructorDetailPage() {
                     </a>
                   )}
                   {inst.kakao && (
-                    <div className="inst-contact-btn">
+                    <a href={inst.kakao} target="_blank" rel="noopener noreferrer" className="inst-contact-btn">
                       <span className="inst-contact-label" style={{ color: '#FEE500' }}>KakaoTalk</span>
-                      <span className="inst-contact-value">{inst.kakao}</span>
-                    </div>
+                      <span className="inst-contact-value">오픈채팅 바로가기</span>
+                    </a>
                   )}
                 </div>
 

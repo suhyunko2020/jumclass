@@ -1451,8 +1451,8 @@ export default function AdminPage() {
                       onChange={e => setInstModal(p => p ? { ...p, instagram: e.target.value } : null)} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">KakaoTalk</label>
-                    <input className="form-input" placeholder="카카오톡 ID" value={instModal.kakao || ''}
+                    <label className="form-label">KakaoTalk 오픈채팅 링크</label>
+                    <input className="form-input" placeholder="https://open.kakao.com/o/..." value={instModal.kakao || ''}
                       onChange={e => setInstModal(p => p ? { ...p, kakao: e.target.value } : null)} />
                   </div>
                   <div className="form-group">
