@@ -67,8 +67,8 @@ export default function CourseDetailPage() {
               <div className="detail-stats">
                 <div className="detail-stat-item">
                   <span style={{ color: 'var(--gold)' }}>★</span>
-                  <strong>{reviewStats ? reviewStats.avg : course.rating}</strong>
-                  <span style={{ color: 'var(--t3)' }}>(수강생 {reviewStats ? reviewStats.count : course.ratingCount}명 평가)</span>
+                  <strong>{reviewStats ? reviewStats.avg : 0}</strong>
+                  <span style={{ color: 'var(--t3)' }}>(수강생 {reviewStats ? reviewStats.count : 0}명 평가)</span>
                 </div>
                 <div className="detail-stat-item">👥 수강생 {getEnrolledCount(course.id)}명</div>
                 <div className="detail-stat-item">🎬 총 {totalLessons}강</div>
@@ -218,7 +218,7 @@ export default function CourseDetailPage() {
                   <div className="purchase-includes mt-16">
                     <div style={{ fontSize: '.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--t3)', marginBottom: '8px' }}>포함 내용</div>
                     <div className="include-item"><span className="ic">🎬</span>{totalLessons}개 영상 강의 ({totalDuration})</div>
-                    <div className="include-item"><span className="ic">📱</span>모바일·PC 무제한 수강</div>
+                    <div className="include-item"><span className="ic">📱</span>모바일·PC 어디서든 수강 가능</div>
                     <div className="include-item"><span className="ic">⏳</span>{formatDays(displayDays)}</div>
                     {course.attachments?.map((a, i) => (
                       <div key={i} className="include-item"><span className="ic">📄</span>{a.name}{a.ext ? ` (${a.ext.toUpperCase()})` : ''}</div>

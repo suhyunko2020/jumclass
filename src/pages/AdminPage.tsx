@@ -739,7 +739,7 @@ export default function AdminPage() {
                                       <span style={{ fontSize: '.62rem', padding: '1px 5px', borderRadius: 'var(--pill)', background: 'rgba(232,156,56,.15)', color: 'var(--warn)' }}>직접등록</span>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{c.lessons}강 · {c.duration}</div>
+                                  <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{c.curriculum.reduce((n, s) => n + s.items.length, 0)}강</div>
                                 </div>
                               </div>
                             </td>

@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
+import { useSiteSettings } from '../hooks/useSiteSettings'
 import CourseCard from '../components/course/CourseCard'
 
 const FILTERS = ['전체', '입문', '중급', '고급', '자격증']
 
 export default function CoursesPage() {
   const { getPublicCourses, getEnrolledCount } = useCourses()
+  const { get: getSettings } = useSiteSettings()
+  const siteSettings = getSettings()
   const [filter, setFilter] = useState('전체')
 
   const all = getPublicCourses()
@@ -88,12 +91,33 @@ export default function CoursesPage() {
         </div>
       </section>
 
-      {/* 미니 푸터 */}
       <footer className="footer">
         <div className="container">
-          <div className="footer-bottom" style={{ borderTop: 'none', paddingTop: 0 }}>
-            <Link to="/" style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--t1)' }}>JUMCLASS</Link>
-            <span>© 2026 JUMCLASS. All rights reserved.</span>
+          <div className="footer-grid">
+            <div className="footer-brand">
+              <span className="logo">JUMCLASS</span>
+              <p>{siteSettings.brandDescription}</p>
+            </div>
+            <div className="footer-col">
+              <h4>강의</h4>
+              {all.map(c => <Link key={c.id} to={`/course/${c.id}`}>{c.title}</Link>)}
+            </div>
+            <div className="footer-col">
+              <h4>플랫폼</h4>
+              <Link to="/classroom">내 강의실</Link>
+              <Link to="/instructors">강사 소개</Link>
+            </div>
+            <div className="footer-col">
+              <h4>정책</h4>
+              <Link to="/policy/privacy">개인정보처리방침</Link>
+              <Link to="/policy/terms">이용약관</Link>
+              <Link to="/policy/refund">환불 정책</Link>
+              <Link to="/policy/copyright">저작권 안내</Link>
+            </div>
+          </div>
+          <div className="footer-bottom">
+            <span>{siteSettings.copyright}</span>
+            <span>{siteSettings.businessInfo}</span>
           </div>
         </div>
       </footer>
