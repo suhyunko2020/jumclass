@@ -1416,7 +1416,7 @@ export default function AdminPage() {
                       const canvas = document.createElement('canvas')
                       const img = new Image()
                       img.onload = () => {
-                        const size = 400
+                        const size = 1500
                         const min = Math.min(img.width, img.height)
                         const sx = (img.width - min) / 2
                         const sy = (img.height - min) / 2
