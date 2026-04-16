@@ -36,7 +36,8 @@ function saveAttachmentMeta(store: Record<string, LessonAtt[]>) {
 
 export async function uploadLessonAttachment(lessonId: string, file: File): Promise<LessonAtt | null> {
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
-  const fileName = `${lessonId}/${Date.now()}_${file.name}`
+  const safeLessonId = lessonId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const fileName = `${safeLessonId}/${Date.now()}.${ext}`
 
   const { error } = await supabase.storage.from('lesson-attachments').upload(fileName, file, {
     cacheControl: '3600',
