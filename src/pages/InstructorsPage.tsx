@@ -1,11 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useInstructors } from '../hooks/useInstructors'
-import { useCourses } from '../hooks/useCourses'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 
 export default function InstructorsPage() {
   const { getPublicInstructors } = useInstructors()
-  const { getPublicCourses } = useCourses()
   const { get: getSettings } = useSiteSettings()
   const siteSettings = getSettings()
   const instructors = getPublicInstructors()

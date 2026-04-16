@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useSiteSettings } from '../hooks/useSiteSettings'
-import { useCourses } from '../hooks/useCourses'
 
 const TITLES: Record<string, string> = {
   privacy: '개인정보처리방침',
@@ -58,7 +57,6 @@ function renderMarkdown(md: string) {
 export default function PolicyPage() {
   const { type } = useParams<{ type: string }>()
   const { get } = useSiteSettings()
-  const { getPublicCourses } = useCourses()
   const settings = get()
   const key = type as keyof typeof settings.policies
   const content = settings.policies?.[key] || ''
