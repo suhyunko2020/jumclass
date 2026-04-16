@@ -944,22 +944,52 @@ export default function AdminPage() {
                           </span>
                         </div>
                         <div style={{ fontSize: '.78rem', color: 'var(--t3)', marginBottom: '8px' }}>{inst.experience} · 서비스 {inst.services.length}개</div>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
                           <button className="btn btn-primary btn-sm" onClick={() => setInstModal({ ...inst })}>편집</button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => {
+                            const copied = { ...inst, id: 'inst-' + Date.now(), name: inst.name + ' (복사)', services: inst.services.map(s => ({ ...s, id: 'svc-' + Date.now() + Math.random().toString(36).slice(2, 6) })) }
+                            saveInstructor(copied)
+                            toast('강사 프로필이 복사되었습니다.', 'ok')
+                          }}>복사</button>
                           <button className="btn btn-ghost btn-sm" onClick={() => {
                             setInstSvcModal({ instId: inst.id, service: { id: 'svc-' + Date.now(), title: '', description: '', price: 0, originalPrice: 0, duration: '', type: 'consultation' } })
                           }}>+ 서비스</button>
-                          {inst.services.map(svc => (
-                            <button key={svc.id} className="btn btn-ghost btn-sm" style={{ fontSize: '.72rem' }}
-                              onClick={() => setInstSvcModal({ instId: inst.id, service: { ...svc } })}>
-                              {svc.title || '서비스'} ({formatPrice(svc.price)})
-                            </button>
-                          ))}
                           <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
                             onClick={() => { if (confirm('삭제하시겠습니까?')) { deleteInstructor(inst.id); toast('삭제 완료', 'ok') } }}>
                             삭제
                           </button>
                         </div>
+                        {inst.services.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {inst.services.map((svc, si) => (
+                              <div key={svc.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <button style={{ fontSize: '.6rem', color: si === 0 ? 'var(--line)' : 'var(--t3)', cursor: si === 0 ? 'default' : 'pointer', padding: '0 2px' }}
+                                    disabled={si === 0}
+                                    onClick={() => {
+                                      const svcs = [...inst.services]
+                                      ;[svcs[si - 1], svcs[si]] = [svcs[si], svcs[si - 1]]
+                                      saveInstructor({ ...inst, services: svcs })
+                                      toast('순서가 변경되었습니다.', 'ok')
+                                    }}>▲</button>
+                                  <button style={{ fontSize: '.6rem', color: si === inst.services.length - 1 ? 'var(--line)' : 'var(--t3)', cursor: si === inst.services.length - 1 ? 'default' : 'pointer', padding: '0 2px' }}
+                                    disabled={si === inst.services.length - 1}
+                                    onClick={() => {
+                                      const svcs = [...inst.services]
+                                      ;[svcs[si], svcs[si + 1]] = [svcs[si + 1], svcs[si]]
+                                      saveInstructor({ ...inst, services: svcs })
+                                      toast('순서가 변경되었습니다.', 'ok')
+                                    }}>▼</button>
+                                </div>
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: '.72rem', flex: 1, justifyContent: 'flex-start' }}
+                                  onClick={() => setInstSvcModal({ instId: inst.id, service: { ...svc } })}>
+                                  {svc.title || '서비스'} ({formatPrice(svc.price)})
+                                  {svc.mode && <span style={{ marginLeft: '6px', fontSize: '.65rem', color: 'var(--t3)' }}>{svc.mode === 'online' ? '비대면' : svc.mode === 'offline' ? '대면' : '대면&비대면'}</span>}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1569,7 +1599,7 @@ export default function AdminPage() {
                       <option value="">미지정</option>
                       <option value="offline">대면 강의</option>
                       <option value="online">비대면 (Zoom)</option>
-                      <option value="both">대면 + 비대면</option>
+                      <option value="both">대면 &amp; 비대면(Zoom)</option>
                     </select>
                   </div>
                 </div>

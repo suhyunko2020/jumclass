@@ -117,7 +117,7 @@ export default function CheckoutPage() {
                     '이후 일정과 스케줄은 모두 개인 맞춤으로 진행됩니다',
                     ...(service!.mode === 'offline' ? ['대면 강의로 진행됩니다'] :
                         service!.mode === 'online' ? ['비대면 강의 (Zoom)로 진행됩니다'] :
-                        service!.mode === 'both' ? ['대면 또는 비대면 (Zoom) 선택 가능'] :
+                        service!.mode === 'both' ? ['대면 & 비대면(Zoom) 선택 가능'] :
                         []),
                   ]
                 : ['결제 즉시 수강 시작 가능', '365일 수강 기간', '학습 자료 다운로드 포함', '7일 환불 보장']

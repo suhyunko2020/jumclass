@@ -149,7 +149,7 @@ export default function InstructorDetailPage() {
                               }</span>
                               {svc.mode && (
                                 <span style={{ fontSize: '.68rem', fontWeight: 600, padding: '2px 7px', borderRadius: 'var(--pill)', background: svc.mode === 'online' ? 'rgba(52,196,124,.08)' : svc.mode === 'offline' ? 'rgba(232,156,56,.08)' : 'rgba(124,111,205,.08)', color: svc.mode === 'online' ? 'var(--ok)' : svc.mode === 'offline' ? 'var(--warn)' : 'var(--purple-2)' }}>
-                                  {svc.mode === 'online' ? '비대면(Zoom)' : svc.mode === 'offline' ? '대면' : '대면+비대면'}
+                                  {svc.mode === 'online' ? '비대면(Zoom)' : svc.mode === 'offline' ? '대면' : '대면&비대면(Zoom)'}
                                 </span>
                               )}
                             </div>
