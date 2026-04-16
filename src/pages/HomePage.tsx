@@ -199,7 +199,9 @@ export default function HomePage() {
             </div>
             <div className="footer-col">
               <h4>강의</h4>
-              {getPublicCourses().map(c => <Link key={c.id} to={`/course/${c.id}`}>{c.title}</Link>)}
+              <Link to="/courses">전체 강의</Link>
+              <Link to="/courses" onClick={() => setTimeout(() => document.querySelector<HTMLButtonElement>('.tab:nth-child(5)')?.click(), 100)}>자격증 과정</Link>
+              <Link to="/instructors">강사 소개</Link>
             </div>
             <div className="footer-col">
               <h4>플랫폼</h4>

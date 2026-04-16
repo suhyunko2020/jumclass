@@ -100,7 +100,8 @@ export default function CoursesPage() {
             </div>
             <div className="footer-col">
               <h4>강의</h4>
-              {all.map(c => <Link key={c.id} to={`/course/${c.id}`}>{c.title}</Link>)}
+              <Link to="/courses">전체 강의</Link>
+              <Link to="/instructors">강사 소개</Link>
             </div>
             <div className="footer-col">
               <h4>플랫폼</h4>
