@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
+import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useToast } from '../components/ui/Toast'
+import { useSiteSettings } from '../hooks/useSiteSettings'
 import CourseCard from '../components/course/CourseCard'
 import { TESTIMONIALS } from '../data/courses'
 import { useState } from 'react'
@@ -10,7 +12,10 @@ import HeroBg from '../components/ui/HeroBg'
 export default function HomePage() {
   const { getPublicCourses, getEnrolledCount } = useCourses()
   const { openAuth } = useAuthModal()
+  const { user } = useAuth()
   const toast = useToast()
+  const { get: getSettings } = useSiteSettings()
+  const siteSettings = getSettings()
   const courses = getPublicCourses().slice(0, 3)
 
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
@@ -125,12 +130,25 @@ export default function HomePage() {
           }}>
             <div style={{ position: 'absolute', top: '-100px', left: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(124,111,205,.12) 0%,transparent 70%)', pointerEvents: 'none' }} />
             <div style={{ position: 'absolute', bottom: '-80px', right: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(201,168,76,.09) 0%,transparent 70%)', pointerEvents: 'none' }} />
-            <span className="section-kicker">지금 시작하세요</span>
-            <h2 style={{ fontSize: 'clamp(1.7rem,3.5vw,2.4rem)', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>타로를 배울 준비가 됐나요?</h2>
-            <p style={{ color: 'var(--t2)', maxWidth: '420px', margin: '0 auto 28px', lineHeight: 1.75 }}>3,800명이 선택한 JUMCLASS에서 첫 강의를 무료로 시작하세요.</p>
+            <span className="section-kicker">{user ? '강의 둘러보기' : '지금 시작하세요'}</span>
+            <h2 style={{ fontSize: 'clamp(1.7rem,3.5vw,2.4rem)', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>
+              {user ? '새로운 강의를 확인해보세요' : '타로를 배울 준비가 됐나요?'}
+            </h2>
+            <p style={{ color: 'var(--t2)', maxWidth: '420px', margin: '0 auto 28px', lineHeight: 1.75 }}>
+              {user ? '체계적인 커리큘럼으로 다음 단계의 실력을 키우세요.' : '3,800명이 선택한 JUMCLASS에서 첫 강의를 무료로 시작하세요.'}
+            </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button className="btn btn-gold btn-xl" onClick={() => openAuth('signup')}>무료 회원가입</button>
-              <Link to="/courses" className="btn btn-ghost btn-xl">강의 보기</Link>
+              {user ? (
+                <>
+                  <Link to="/courses" className="btn btn-gold btn-xl">강의 둘러보기 →</Link>
+                  <Link to="/classroom" className="btn btn-ghost btn-xl">내 강의실</Link>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-gold btn-xl" onClick={() => openAuth('signup')}>무료 회원가입</button>
+                  <Link to="/courses" className="btn btn-ghost btn-xl">강의 보기</Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -178,7 +196,7 @@ export default function HomePage() {
           <div className="footer-grid">
             <div className="footer-brand">
               <span className="logo">JUMCLASS</span>
-              <p>타로를 제대로 배우고 싶은 분들을 위한 프리미엄 인터넷 강의 플랫폼. 전문 강사진과 체계적인 커리큘럼으로 진짜 실력을 키우세요.</p>
+              <p>{siteSettings.brandDescription}</p>
             </div>
             <div className="footer-col">
               <h4>강의</h4>
@@ -187,19 +205,20 @@ export default function HomePage() {
             <div className="footer-col">
               <h4>플랫폼</h4>
               <Link to="/classroom">내 강의실</Link>
-              <button style={{ textAlign: 'left', fontSize: '.83rem', color: 'var(--t2)', display: 'block', marginBottom: '9px' }} onClick={() => openAuth('signup')}>무료 시작</button>
+              <Link to="/instructors">강사 소개</Link>
+              {!user && <button style={{ textAlign: 'left', fontSize: '.83rem', color: 'var(--t2)', display: 'block', marginBottom: '9px' }} onClick={() => openAuth('signup')}>무료 시작</button>}
               <a href="#contact">문의</a>
             </div>
             <div className="footer-col">
               <h4>정책</h4>
-              <a href="#">개인정보처리방침</a>
-              <a href="#">이용약관</a>
-              <a href="#">환불 정책</a>
+              <Link to="/policy/privacy">개인정보처리방침</Link>
+              <Link to="/policy/terms">이용약관</Link>
+              <Link to="/policy/refund">환불 정책</Link>
             </div>
           </div>
           <div className="footer-bottom">
-            <span>© 2026 JUMCLASS. All rights reserved.</span>
-            <span>사업자등록번호: 000-00-00000</span>
+            <span>{siteSettings.copyright}</span>
+            <span>{siteSettings.businessInfo}</span>
           </div>
         </div>
       </footer>

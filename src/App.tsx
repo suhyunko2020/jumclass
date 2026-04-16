@@ -13,6 +13,8 @@ import AdminPage from './pages/AdminPage'
 import MyPage from './pages/MyPage'
 import InstructorsPage from './pages/InstructorsPage'
 import InstructorDetailPage from './pages/InstructorDetailPage'
+import PolicyPage from './pages/PolicyPage'
+import SeoHead from './components/ui/SeoHead'
 
 export default function App() {
   const location = useLocation()
@@ -20,6 +22,7 @@ export default function App() {
 
   return (
     <AuthModalProvider>
+      <SeoHead />
       <div className="page-bg" />
       {!isAdmin && <Navbar />}
       <Routes>
@@ -34,6 +37,7 @@ export default function App() {
         <Route path="/my" element={<MyPage />} />
         <Route path="/instructors" element={<InstructorsPage />} />
         <Route path="/instructor/:instructorId" element={<InstructorDetailPage />} />
+        <Route path="/policy/:type" element={<PolicyPage />} />
         <Route path="/admin2026" element={<AdminPage />} />
       </Routes>
     </AuthModalProvider>

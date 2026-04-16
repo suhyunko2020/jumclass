@@ -11,8 +11,9 @@ import {
 import { formatPrice } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
+import { useSiteSettings, type SiteSettings } from '../hooks/useSiteSettings'
 
-type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews'
+type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews' | 'settings'
 
 // ── 커리큘럼 편집 상태 타입 ──────────────────────────────────
 interface CurrEditSection {
@@ -65,6 +66,8 @@ export default function AdminPage() {
   const { isAdminLoggedIn, adminLogin, adminLogout, enrollManual } = useAuth()
   const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview } = useCourses()
   const { getAll: getAllInstructors, saveInstructor, deleteInstructor } = useInstructors()
+  const { get: getSettings, save: saveSettings } = useSiteSettings()
+  const [siteSettingsForm, setSiteSettingsForm] = useState<SiteSettings | null>(null)
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -186,6 +189,7 @@ export default function AdminPage() {
     { sec: 'payments',    icon: '💳', label: '결제 내역' },
     { sec: 'inquiries',   icon: '💬', label: '문의 관리', badge: pendingCount },
     { sec: 'reviews',     icon: '⭐', label: '리뷰 관리' },
+    { sec: 'settings',    icon: '⚙', label: '설정' },
   ]
 
   function openNewInstructor() {
@@ -1011,6 +1015,92 @@ export default function AdminPage() {
               )}
             </div>
           )}
+
+          {/* ═══ 설정 ═══ */}
+          {sec === 'settings' && (() => {
+            const form = siteSettingsForm || getSettings()
+            if (!siteSettingsForm) setTimeout(() => setSiteSettingsForm(form), 0)
+            return (
+              <div>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '28px' }}>사이트 설정</h1>
+
+                {/* 기본 정보 */}
+                <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '16px' }}>기본 정보</div>
+                  <div className="form-group">
+                    <label className="form-label">카피라이트</label>
+                    <input className="form-input" value={form.copyright}
+                      onChange={e => setSiteSettingsForm(p => p ? { ...p, copyright: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">사업자 정보</label>
+                    <input className="form-input" value={form.businessInfo}
+                      onChange={e => setSiteSettingsForm(p => p ? { ...p, businessInfo: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">브랜드 소개 (푸터)</label>
+                    <textarea className="form-input" rows={2} value={form.brandDescription}
+                      onChange={e => setSiteSettingsForm(p => p ? { ...p, brandDescription: e.target.value } : null)} />
+                  </div>
+                </div>
+
+                {/* SEO */}
+                <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '16px' }}>SEO 설정</div>
+                  <div className="form-group">
+                    <label className="form-label">페이지 타이틀 (title 태그)</label>
+                    <input className="form-input" value={form.seoTitle}
+                      onChange={e => setSiteSettingsForm(p => p ? { ...p, seoTitle: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">메타 설명 (description)</label>
+                    <textarea className="form-input" rows={2} value={form.seoDescription}
+                      onChange={e => setSiteSettingsForm(p => p ? { ...p, seoDescription: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">키워드 (쉼표 구분)</label>
+                    <input className="form-input" value={form.seoKeywords}
+                      onChange={e => setSiteSettingsForm(p => p ? { ...p, seoKeywords: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">OG 이미지 URL</label>
+                    <input className="form-input" placeholder="https://..." value={form.ogImage}
+                      onChange={e => setSiteSettingsForm(p => p ? { ...p, ogImage: e.target.value } : null)} />
+                  </div>
+                </div>
+
+                {/* 정책 관리 */}
+                <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '16px' }}>정책 관리</div>
+                  {(['privacy', 'terms', 'refund'] as const).map(key => (
+                    <div className="form-group" key={key}>
+                      <label className="form-label">
+                        {key === 'privacy' ? '개인정보처리방침' : key === 'terms' ? '이용약관' : '환불 정책'}
+                        <a href={`/policy/${key}`} target="_blank" rel="noopener noreferrer"
+                          style={{ marginLeft: '8px', fontSize: '.72rem', color: 'var(--purple-2)' }}>미리보기 →</a>
+                      </label>
+                      <textarea className="form-input" rows={6} style={{ fontFamily: 'monospace', fontSize: '.78rem' }}
+                        value={form.policies[key]}
+                        onChange={e => setSiteSettingsForm(p => {
+                          if (!p) return null
+                          return { ...p, policies: { ...p.policies, [key]: e.target.value } }
+                        })} />
+                    </div>
+                  ))}
+                  <div style={{ fontSize: '.75rem', color: 'var(--t3)', marginTop: '-8px' }}>
+                    마크다운 형식을 지원합니다. # 제목, ## 소제목, - 목록, | 표 |
+                  </div>
+                </div>
+
+                <button className="btn btn-primary btn-lg w-full" onClick={() => {
+                  if (siteSettingsForm) {
+                    saveSettings(siteSettingsForm)
+                    toast('설정이 저장되었습니다.', 'ok')
+                  }
+                }}>설정 저장</button>
+              </div>
+            )
+          })()}
 
         </div>
       </div>
