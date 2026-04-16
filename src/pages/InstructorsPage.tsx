@@ -35,21 +35,37 @@ export default function InstructorsPage() {
                   </div>
                 </div>
                 <div className="inst-card-body">
-                  <div className="inst-card-specialties">
-                    {inst.specialties.slice(0, 3).map(s => (
-                      <span key={s} className="inst-tag">{s}</span>
-                    ))}
+                  {/* 전문분야 + 경력 */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <div className="inst-card-specialties" style={{ marginBottom: 0 }}>
+                      {inst.specialties.slice(0, 3).map(s => (
+                        <span key={s} className="inst-tag">{s}</span>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: '.75rem', color: 'var(--t3)', flexShrink: 0 }}>{inst.experience}</span>
                   </div>
-                  <p className="inst-card-bio">{inst.bio.slice(0, 80)}{inst.bio.length > 80 ? '...' : ''}</p>
-                  <div className="inst-card-links">
-                    {inst.phone && <span className="inst-social" style={{ background: 'rgba(52,196,124,.06)', color: 'var(--ok)', borderColor: 'rgba(52,196,124,.15)' }}>Phone</span>}
-                    {inst.instagram && <span className="inst-social" style={{ background: 'rgba(225,48,108,.08)', color: '#E1306C', borderColor: 'rgba(225,48,108,.2)' }}>Instagram</span>}
-                    {inst.kakao && <span className="inst-social" style={{ background: 'rgba(254,229,0,.06)', color: '#FEE500', borderColor: 'rgba(254,229,0,.15)' }}>KakaoTalk</span>}
-                    {inst.consultOnline && <span className="inst-social" style={{ background: 'rgba(52,196,124,.06)', color: 'var(--ok)', borderColor: 'rgba(52,196,124,.15)' }}>온라인</span>}
-                    {inst.consultOffline && <span className="inst-social" style={{ background: 'rgba(124,111,205,.06)', color: 'var(--purple-2)', borderColor: 'rgba(124,111,205,.15)' }}>오프라인</span>}
+
+                  {/* 연락처 + 상담 아이콘 라인 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '.78rem', color: 'var(--t3)', marginBottom: '12px' }}>
+                    {inst.phone && <span style={{ color: 'var(--ok)' }}>Phone</span>}
+                    {inst.instagram && <span style={{ background: 'linear-gradient(135deg, #E1306C, #F77737)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Instagram</span>}
+                    {inst.kakao && <span style={{ color: '#FEE500' }}>KakaoTalk</span>}
                   </div>
+
+                  {/* 하단: 상담 방식 + 서비스 수 */}
                   <div className="inst-card-footer">
-                    <span className="inst-card-exp">{inst.experience}</span>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      {inst.consultOnline && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '.72rem', color: 'var(--ok)' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ok)' }} />온라인
+                        </span>
+                      )}
+                      {inst.consultOffline && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '.72rem', color: 'var(--purple-2)' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--purple-2)' }} />오프라인
+                        </span>
+                      )}
+                    </div>
                     <span className="inst-card-services">{inst.services.length}개 서비스</span>
                   </div>
                 </div>
