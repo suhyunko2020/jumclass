@@ -87,6 +87,7 @@ export default function AdminPage() {
   const [reviews, setReviews] = useState<{ id: string; courseId: string; userId: string; userName: string; userAvatar: string; rating: number; text: string; date: string; source?: string }[]>([])
   const [adminReviewModal, setAdminReviewModal] = useState(false)
   const [arForm, setArForm] = useState({ courseId: '', userName: '', rating: 5, text: '' })
+  const [studentSearch, setStudentSearch] = useState('')
 
   useEffect(() => { document.title = '관리자 대시보드 — JUMCLASS' }, [])
 
@@ -612,8 +613,15 @@ export default function AdminPage() {
                                 <button className="btn btn-primary btn-sm" onClick={() => openCourseEdit(c)}>편집</button>
                                 <button className="btn btn-ghost btn-sm" onClick={() => openCurriculumEdit(c)}>커리큘럼</button>
                                 <Link to={`/course/${c.id}`} className="btn btn-ghost btn-sm">보기</Link>
-                                {isCustom && (
+                                {isCustom ? (
                                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }} onClick={() => handleDeleteCourse(c.id)}>삭제</button>
+                                ) : (
+                                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }} onClick={() => {
+                                    if (!confirm(`"${c.title}" 강의를 비공개 처리하시겠습니까?`)) return
+                                    saveCourseOverride(c.id, { status: 'private' })
+                                    toast('강의가 비공개 처리되었습니다.', 'ok')
+                                    refresh()
+                                  }}>비공개</button>
                                 )}
                               </div>
                             </td>
@@ -628,19 +636,31 @@ export default function AdminPage() {
           })()}
 
           {/* ═══ 수강생 관리 ═══ */}
-          {sec === 'students' && (
+          {sec === 'students' && (() => {
+            const q = studentSearch.toLowerCase().trim()
+            const filteredUsers = q ? users.filter(u =>
+              (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)
+            ) : users
+            return (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>수강생 ({users.length}명)</h1>
               </div>
+              <div style={{ marginBottom: '16px' }}>
+                <input className="form-input" type="text" placeholder="이름 또는 이메일로 검색..."
+                  style={{ maxWidth: '360px', fontSize: '.875rem' }}
+                  value={studentSearch} onChange={e => setStudentSearch(e.target.value)} />
+              </div>
               <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', overflow: 'hidden' }}>
-                {users.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--t2)' }}>등록된 수강생이 없습니다.</div>
+                {filteredUsers.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--t2)' }}>
+                    {q ? '검색 결과가 없습니다.' : '등록된 수강생이 없습니다.'}
+                  </div>
                 ) : (
                   <table className="admin-table">
                     <thead><tr><th>이름</th><th>이메일</th><th>수강 강의</th><th>가입일</th><th>액션</th></tr></thead>
                     <tbody>
-                      {users.map(u => (
+                      {filteredUsers.map(u => (
                         <tr key={u.uid}>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -688,7 +708,8 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
-          )}
+            )
+          })()}
 
           {/* ═══ 결제 내역 ═══ */}
           {sec === 'payments' && (
@@ -807,7 +828,7 @@ export default function AdminPage() {
                         {inq.type === 'refund' && inq.status !== 'answered' && (
                           <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
                             onClick={async () => {
-                              if (inq.metadata?.courseId) await handleCancelEnroll(inq.userId, inq.metadata.courseId)
+                              if (!confirm('환불 처리 하시겠습니까? (수강 내역은 유지됩니다)')) return
                               await answerInquiry(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
                               toast('환불 처리 완료', 'ok')
                               refresh()

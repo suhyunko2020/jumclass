@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
-import { formatPrice } from '../utils/format'
+import { formatPrice, calcRefund } from '../utils/format'
 import {
   getMyInquiries, addInquiry, editInquiry as editInquiryStorage,
 } from '../utils/storage'
@@ -77,18 +77,35 @@ export default function MyPage() {
     setModalOpen(true)
   }
 
+  const [refundModal, setRefundModal] = useState<{
+    courseId: string; courseTitle: string; orderDate: string;
+    refundable: boolean; refundAmount: number; penalty: number; reason: string;
+    price: number; badge: string;
+  } | null>(null)
+  const [refundReason, setRefundReason] = useState('')
+
   function openRefundRequest(courseId: string, orderDate: string) {
     const course = getCourse(courseId)
-    setForm({
-      id: '',
-      type: 'refund',
-      subject: '결제 환불 요청합니다.',
-      message: `결제일: ${orderDate}\n강의: ${course?.title || courseId}\n\n환불 사유: `,
-      metadata: { courseId, orderDate },
+    if (!course) return
+    const enrollment = user!.enrollments.find(e => e.courseId === courseId)
+    if (!enrollment) return
+    const totalLessons = course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
+    const result = calcRefund(course, enrollment, totalLessons)
+    setRefundModal({
+      courseId, courseTitle: course.title, orderDate,
+      ...result, price: course.price, badge: course.badge,
     })
-    setModalTitle('환불 요청서 작성')
+    setRefundReason('')
+  }
+
+  async function submitRefund() {
+    if (!refundModal || !refundReason.trim()) return
+    const msg = `결제일: ${refundModal.orderDate}\n강의: ${refundModal.courseTitle}\n환불 예상 금액: ${formatPrice(refundModal.refundAmount)}\n\n환불 사유: ${refundReason}`
+    await addInquiry(user!.uid, user!.name, user!.email, '결제 환불 요청합니다.', msg, 'refund', { courseId: refundModal.courseId, orderDate: refundModal.orderDate })
+    toast('환불 요청이 접수되었습니다.', 'ok')
+    setRefundModal(null)
     setTab('inquiries')
-    setModalOpen(true)
+    await loadInquiries()
   }
 
   function openEditInquiry(q: Inquiry) {
@@ -321,6 +338,68 @@ export default function MyPage() {
                 </div>
                 <button type="submit" className="btn btn-primary w-full mt-16">등록하기</button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 환불 요청 모달 ── */}
+      {refundModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setRefundModal(null) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '500px' }}>
+            <button className="modal-close" onClick={() => setRefundModal(null)}>✕</button>
+            <div className="modal-head">
+              <h2>환불 요청</h2>
+              <p style={{ fontSize: '.85rem', color: 'var(--t2)' }}>{refundModal.courseTitle}</p>
+            </div>
+            <div className="modal-body">
+              {/* 환불 정책 안내 */}
+              <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(124,111,205,.06)', border: '1px solid rgba(124,111,205,.15)', marginBottom: '16px' }}>
+                <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--purple-2)', marginBottom: '8px' }}>
+                  {refundModal.badge === '자격증' ? '자격증 과정 환불 정책' : '인터넷 강의 환불 정책'}
+                </div>
+                <div style={{ fontSize: '.8rem', color: 'var(--t2)', lineHeight: 1.7 }}>{refundModal.reason}</div>
+              </div>
+
+              {/* 환불 금액 */}
+              <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: refundModal.refundable ? 'rgba(52,196,124,.06)' : 'rgba(224,82,82,.06)', border: `1px solid ${refundModal.refundable ? 'rgba(52,196,124,.15)' : 'rgba(224,82,82,.15)'}`, marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '.82rem' }}>
+                  <span style={{ color: 'var(--t2)' }}>결제 금액</span>
+                  <span style={{ fontWeight: 700 }}>{formatPrice(refundModal.price)}</span>
+                </div>
+                {refundModal.refundable && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '.82rem' }}>
+                      <span style={{ color: 'var(--t2)' }}>위약금 (10%)</span>
+                      <span style={{ color: 'var(--fail)' }}>-{formatPrice(refundModal.penalty)}</span>
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--line)', paddingTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '.9rem' }}>
+                      <span style={{ fontWeight: 700 }}>환불 예상 금액</span>
+                      <span style={{ fontWeight: 800, color: 'var(--ok)' }}>{formatPrice(refundModal.refundAmount)}</span>
+                    </div>
+                  </>
+                )}
+                {!refundModal.refundable && (
+                  <div style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--fail)', textAlign: 'center', padding: '8px 0' }}>
+                    환불 불가
+                  </div>
+                )}
+              </div>
+
+              {refundModal.refundable ? (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">환불 사유</label>
+                    <textarea className="form-input" rows={3} placeholder="환불 사유를 입력해주세요." required
+                      value={refundReason} onChange={e => setRefundReason(e.target.value)} />
+                  </div>
+                  <button className="btn btn-primary w-full" onClick={submitRefund} disabled={!refundReason.trim()}>
+                    환불 요청하기
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-ghost w-full" onClick={() => setRefundModal(null)}>닫기</button>
+              )}
             </div>
           </div>
         </div>

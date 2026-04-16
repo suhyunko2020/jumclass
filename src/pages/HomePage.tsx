@@ -8,10 +8,10 @@ import { useState } from 'react'
 import HeroBg from '../components/ui/HeroBg'
 
 export default function HomePage() {
-  const { getAllCourses, getEnrolledCount } = useCourses()
+  const { getPublicCourses, getEnrolledCount } = useCourses()
   const { openAuth } = useAuthModal()
   const toast = useToast()
-  const courses = getAllCourses().slice(0, 3)
+  const courses = getPublicCourses().slice(0, 3)
 
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
 
@@ -182,7 +182,7 @@ export default function HomePage() {
             </div>
             <div className="footer-col">
               <h4>강의</h4>
-              {getAllCourses().map(c => <Link key={c.id} to={`/course/${c.id}`}>{c.title}</Link>)}
+              {getPublicCourses().map(c => <Link key={c.id} to={`/course/${c.id}`}>{c.title}</Link>)}
             </div>
             <div className="footer-col">
               <h4>플랫폼</h4>

@@ -40,6 +40,10 @@ export function useCourses() {
     return [...base, ...getCachedCustomCourses()]
   }, [getCourse])
 
+  const getPublicCourses = useCallback((): Course[] => {
+    return getAllCourses().filter(c => c.status !== 'private')
+  }, [getAllCourses])
+
   // ── override 저장 (로컬 즉시 + Supabase 백그라운드) ────────
   const saveCourseOverride = useCallback((id: string, data: Partial<Course>) => {
     const overrides = getCachedOverrides()
@@ -164,7 +168,7 @@ export function useCourses() {
   }, [])
 
   return {
-    getCourse, getAllCourses,
+    getCourse, getAllCourses, getPublicCourses,
     saveCourseOverride, saveCustomCourse, deleteCustomCourse,
     syncFromSupabase,
     getEnrolledCount,

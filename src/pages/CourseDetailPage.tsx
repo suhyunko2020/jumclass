@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
-import { formatPrice, discountRate, formatDays, formatDaysShort } from '../utils/format'
+import { formatPrice, discountRate, formatDays, formatDaysShort, maskName } from '../utils/format'
 
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>()
@@ -167,7 +167,7 @@ export default function CourseDetailPage() {
                       <div className="review-header">
                         <div className="review-avatar">{r.userAvatar}</div>
                         <div>
-                          <div className="review-name">{r.userName}</div>
+                          <div className="review-name">{maskName(r.userName)}</div>
                           <div className="review-date">{new Date(r.date).toLocaleDateString()} &nbsp;·&nbsp; {'★'.repeat(r.rating)}</div>
                         </div>
                       </div>

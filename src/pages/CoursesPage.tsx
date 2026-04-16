@@ -6,10 +6,10 @@ import CourseCard from '../components/course/CourseCard'
 const FILTERS = ['전체', '입문', '중급', '고급']
 
 export default function CoursesPage() {
-  const { getAllCourses, getEnrolledCount } = useCourses()
+  const { getPublicCourses, getEnrolledCount } = useCourses()
   const [filter, setFilter] = useState('전체')
 
-  const all = getAllCourses()
+  const all = getPublicCourses()
   const filtered = filter === '전체' ? all : all.filter(c => c.level === filter)
 
   return (
