@@ -55,7 +55,7 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setErr(''); setLoading(true)
-    const ok = login(loginForm.email, loginForm.password)
+    const ok = await login(loginForm.email, loginForm.password)
     setLoading(false)
     if (!ok) { setErr('이메일 또는 비밀번호가 올바르지 않습니다.'); return }
     toast('환영합니다! ✦', 'ok')
@@ -65,16 +65,15 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
     setErr(''); setLoading(true)
-    const ok = signup(signupForm.name, signupForm.email, signupForm.password)
+    const ok = await signup(signupForm.name, signupForm.email, signupForm.password)
     setLoading(false)
-    if (!ok) { setErr('이미 사용 중인 이메일입니다.'); return }
-    toast('회원가입 완료! 환영합니다 ✦', 'ok')
-    onClose()
+    if (!ok) { setErr('이미 사용 중인 이메일이거나 가입에 실패했습니다.'); return }
+    toast('가입 완료! 이메일 인증 후 로그인해주세요 ✦', 'ok')
+    setTab('login')
   }
 
-  function handleGoogle() {
-    loginWithGoogle()
-    toast('Google 계정으로 로그인됐습니다 ✦', 'ok')
+  async function handleGoogle() {
+    await loginWithGoogle()
     onClose()
   }
 
