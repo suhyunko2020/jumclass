@@ -127,8 +127,12 @@ input, textarea, select { font-family: inherit; }
   box-shadow: 0 4px 12px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .nav-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.hamburger { display: none; flex-direction: column; gap: 4.5px; padding: 6px; cursor: pointer; margin-left: auto; }
-.hamburger span { display: block; width: 20px; height: 1.5px; background: var(--t1); border-radius: 2px; transition: var(--t); }
+.hamburger { display: none; flex-direction: column; gap: 5px; padding: 8px; cursor: pointer; margin-left: auto; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: var(--r2); transition: var(--t); }
+.hamburger:hover { background: rgba(255,255,255,.06); }
+.hamburger span { display: block; width: 18px; height: 2px; background: var(--t1); border-radius: 2px; transition: transform .25s ease, opacity .2s ease; transform-origin: center; }
+.hamburger.is-open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.is-open span:nth-child(2) { opacity: 0; }
+.hamburger.is-open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 .mobile-menu {
   display: none; position: fixed; top: var(--nav-h); left: 0; right: 0; bottom: 0;
   background: rgba(6,7,15,.97); backdrop-filter: blur(40px) saturate(180%);

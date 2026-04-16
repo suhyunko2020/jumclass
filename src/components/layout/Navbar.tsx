@@ -141,11 +141,8 @@ export default function Navbar() {
         </div>
 
         {/* 모바일 우측: 햄버거만 */}
-        <button className="hamburger" onClick={() => setMobileOpen(p => !p)}>
-          {mobileOpen
-            ? <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>✕</span>
-            : <><span /><span /><span /></>
-          }
+        <button className={`hamburger ${mobileOpen ? 'is-open' : ''}`} onClick={() => setMobileOpen(p => !p)}>
+          <span /><span /><span />
         </button>
       </nav>
 
@@ -199,9 +196,9 @@ export default function Navbar() {
         ) : (
           <>
             <div className="mobile-menu-divider" />
-            <div style={{ display: 'flex', gap: '8px', padding: '12px 16px' }}>
-              <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => { openAuth('login'); setMobileOpen(false) }}>로그인</button>
-              <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => { openAuth('signup'); setMobileOpen(false) }}>무료 시작</button>
+            <div style={{ padding: '16px 16px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button className="btn btn-primary w-full" style={{ padding: '13px', fontSize: '.9rem' }} onClick={() => { openAuth('signup'); setMobileOpen(false) }}>무료로 시작하기</button>
+              <button className="btn btn-ghost w-full" style={{ padding: '13px', fontSize: '.9rem' }} onClick={() => { openAuth('login'); setMobileOpen(false) }}>이미 계정이 있으신가요? 로그인</button>
             </div>
           </>
         )}
