@@ -52,6 +52,12 @@ export default function InstructorDetailPage() {
 
                 {/* 연락처 */}
                 <div className="inst-detail-contacts">
+                  {inst.phone && (
+                    <a href={`tel:${inst.phone.replace(/[^0-9+]/g, '')}`} className="inst-contact-btn">
+                      <span className="inst-contact-label" style={{ color: 'var(--ok)' }}>Phone</span>
+                      <span className="inst-contact-value">{inst.phone}</span>
+                    </a>
+                  )}
                   {inst.instagram && (
                     <a href={`https://instagram.com/${inst.instagram.replace('@', '')}`}
                       target="_blank" rel="noopener noreferrer" className="inst-contact-btn">
@@ -65,13 +71,47 @@ export default function InstructorDetailPage() {
                       <span className="inst-contact-value">{inst.kakao}</span>
                     </div>
                   )}
-                  {inst.email && (
-                    <a href={`mailto:${inst.email}`} className="inst-contact-btn">
-                      <span className="inst-contact-label" style={{ color: 'var(--purple-2)' }}>Email</span>
-                      <span className="inst-contact-value">{inst.email}</span>
-                    </a>
-                  )}
                 </div>
+
+                {/* 상담 가능 여부 */}
+                {(inst.consultOnline || inst.consultOffline) && (
+                  <div style={{ marginTop: '16px' }}>
+                    <div style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--t3)', marginBottom: '8px', letterSpacing: '.06em', textTransform: 'uppercase' }}>상담 방식</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {inst.consultOnline && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: 'var(--r2)', background: 'rgba(52,196,124,.06)', border: '1px solid rgba(52,196,124,.15)' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--ok)', flexShrink: 0 }} />
+                          <span style={{ fontSize: '.82rem', color: 'var(--t1)' }}>온라인 상담 가능</span>
+                        </div>
+                      )}
+                      {inst.consultOffline && (
+                        <div style={{ borderRadius: 'var(--r2)', background: 'rgba(124,111,205,.06)', border: '1px solid rgba(124,111,205,.15)', overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--purple-2)', flexShrink: 0 }} />
+                            <span style={{ fontSize: '.82rem', color: 'var(--t1)' }}>오프라인 상담 가능</span>
+                          </div>
+                          {inst.offlineAddress && (
+                            <>
+                              <div style={{ padding: '0 12px 10px', fontSize: '.8rem', color: 'var(--t2)' }}>{inst.offlineAddress}</div>
+                              <a href={`https://map.naver.com/p/search/${encodeURIComponent(inst.offlineAddress)}`}
+                                target="_blank" rel="noopener noreferrer"
+                                style={{ display: 'block', borderTop: '1px solid rgba(124,111,205,.1)' }}>
+                                <iframe
+                                  title="지도"
+                                  style={{ width: '100%', height: '180px', border: 'none', pointerEvents: 'none' }}
+                                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(inst.offlineAddress)}&layer=mapnik`}
+                                />
+                                <div style={{ padding: '8px 12px', fontSize: '.78rem', color: 'var(--purple-2)', fontWeight: 600, textAlign: 'center' }}>
+                                  네이버 지도에서 보기 →
+                                </div>
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* 전문 분야 */}
                 <div style={{ marginTop: '20px' }}>

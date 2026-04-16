@@ -42,9 +42,11 @@ export default function InstructorsPage() {
                   </div>
                   <p className="inst-card-bio">{inst.bio.slice(0, 80)}{inst.bio.length > 80 ? '...' : ''}</p>
                   <div className="inst-card-links">
+                    {inst.phone && <span className="inst-social" style={{ background: 'rgba(52,196,124,.06)', color: 'var(--ok)', borderColor: 'rgba(52,196,124,.15)' }}>Phone</span>}
                     {inst.instagram && <span className="inst-social" style={{ background: 'rgba(225,48,108,.08)', color: '#E1306C', borderColor: 'rgba(225,48,108,.2)' }}>Instagram</span>}
                     {inst.kakao && <span className="inst-social" style={{ background: 'rgba(254,229,0,.06)', color: '#FEE500', borderColor: 'rgba(254,229,0,.15)' }}>KakaoTalk</span>}
-                    {inst.email && <span className="inst-social" style={{ background: 'rgba(124,111,205,.06)', color: 'var(--purple-2)', borderColor: 'rgba(124,111,205,.15)' }}>Email</span>}
+                    {inst.consultOnline && <span className="inst-social" style={{ background: 'rgba(52,196,124,.06)', color: 'var(--ok)', borderColor: 'rgba(52,196,124,.15)' }}>온라인</span>}
+                    {inst.consultOffline && <span className="inst-social" style={{ background: 'rgba(124,111,205,.06)', color: 'var(--purple-2)', borderColor: 'rgba(124,111,205,.15)' }}>오프라인</span>}
                   </div>
                   <div className="inst-card-footer">
                     <span className="inst-card-exp">{inst.experience}</span>

@@ -195,7 +195,8 @@ export default function AdminPage() {
   function openNewInstructor() {
     setInstModal({
       id: 'inst-' + Date.now(), name: '', photo: '', title: '', bio: '',
-      specialties: [], experience: '', instagram: '', kakao: '', email: '',
+      specialties: [], experience: '', instagram: '', kakao: '', phone: '',
+      consultOnline: false, consultOffline: false, offlineAddress: '',
       services: [], courseIds: [], status: 'public',
     })
   }
@@ -1454,9 +1455,9 @@ export default function AdminPage() {
                       onChange={e => setInstModal(p => p ? { ...p, kakao: e.target.value } : null)} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">이메일</label>
-                    <input className="form-input" type="email" value={instModal.email || ''}
-                      onChange={e => setInstModal(p => p ? { ...p, email: e.target.value } : null)} />
+                    <label className="form-label">전화번호</label>
+                    <input className="form-input" type="tel" placeholder="010-0000-0000" value={instModal.phone || ''}
+                      onChange={e => setInstModal(p => p ? { ...p, phone: e.target.value } : null)} />
                   </div>
                 </div>
                 <div className="form-group">
@@ -1477,6 +1478,26 @@ export default function AdminPage() {
                     })}
                   </div>
                 </div>
+                <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)', marginTop: '8px' }}>상담 설정</div>
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '.85rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={instModal.consultOnline || false}
+                      onChange={e => setInstModal(p => p ? { ...p, consultOnline: e.target.checked } : null)} />
+                    온라인 상담
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '.85rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={instModal.consultOffline || false}
+                      onChange={e => setInstModal(p => p ? { ...p, consultOffline: e.target.checked } : null)} />
+                    오프라인 상담
+                  </label>
+                </div>
+                {instModal.consultOffline && (
+                  <div className="form-group">
+                    <label className="form-label">오프라인 상담 주소</label>
+                    <input className="form-input" placeholder="서울특별시 강남구 테헤란로 123" value={instModal.offlineAddress || ''}
+                      onChange={e => setInstModal(p => p ? { ...p, offlineAddress: e.target.value } : null)} />
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">상태</label>
                   <select className="form-input" value={instModal.status || 'public'}

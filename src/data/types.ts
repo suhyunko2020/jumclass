@@ -110,7 +110,10 @@ export interface Instructor {
   experience: string;
   instagram?: string;
   kakao?: string;
-  email?: string;
+  phone?: string;
+  consultOnline?: boolean;
+  consultOffline?: boolean;
+  offlineAddress?: string;
   services: InstructorService[];
   courseIds: string[];
   status?: 'public' | 'private';
