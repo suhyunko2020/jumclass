@@ -18,7 +18,10 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // lesson 페이지는 별도 레이아웃
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname])
+
   const isLesson = location.pathname === '/lesson'
   if (isLesson) {
     return (
@@ -49,6 +52,7 @@ export default function Navbar() {
   function handleLogout() {
     logout()
     setDropdownOpen(false)
+    setMobileOpen(false)
     navigate('/')
   }
 
@@ -57,6 +61,7 @@ export default function Navbar() {
       <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
         <Link to="/" className="nav-logo">JUM<span className="dot">CLASS</span></Link>
 
+        {/* 데스크톱 네비 */}
         <div className="nav-center">
           <div className="nav-center-pill">
             <Link to="/" className={`nav-link ${path === '/' ? 'active' : ''}`}>Home</Link>
@@ -65,7 +70,8 @@ export default function Navbar() {
           </div>
         </div>
 
-        <div className="nav-right">
+        {/* 데스크톱 우측 */}
+        <div className="nav-right nav-desktop">
           {user ? (
             <div style={{ position: 'relative' }}>
               <button
@@ -118,12 +124,8 @@ export default function Navbar() {
                       width: '100%', padding: '11px 16px', fontSize: '.875rem',
                       textAlign: 'left', transition: 'var(--t)', color: 'var(--t2)',
                     }}
-                      onMouseEnter={e => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,.05)'
-                      }}
-                      onMouseLeave={e => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent'
-                      }}>
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,.05)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}>
                       로그아웃
                     </button>
                   </div>
@@ -138,28 +140,70 @@ export default function Navbar() {
           )}
         </div>
 
+        {/* 모바일 우측: 햄버거만 */}
         <button className="hamburger" onClick={() => setMobileOpen(p => !p)}>
-          <span /><span /><span />
+          {mobileOpen
+            ? <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>✕</span>
+            : <><span /><span /><span /></>
+          }
         </button>
       </nav>
 
-      {/* Mobile Menu */}
+      {/* 모바일 메뉴 */}
       <div className={`mobile-menu ${mobileOpen ? 'open' : ''}`}>
-        <Link to="/" className={`nav-link ${path === '/' ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>Home</Link>
-        <Link to="/courses" className={`nav-link ${isActive('/courses') ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>Course</Link>
-        <a href="#contact" className="nav-link" onClick={handleContact}>Contact Us</a>
+        {/* 프로필 영역 */}
+        {user && (
+          <div className="mobile-profile">
+            <div className="mobile-profile-avatar">{user.avatar}</div>
+            <div>
+              <div className="mobile-profile-name">{user.name}</div>
+              <div className="mobile-profile-email">{user.email}</div>
+            </div>
+          </div>
+        )}
+
+        {/* 네비게이션 */}
+        <div className="mobile-nav-section">
+          <Link to="/" className={`mobile-nav-item ${path === '/' ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>
+            <span className="mobile-nav-icon">🏠</span> Home
+          </Link>
+          <Link to="/courses" className={`mobile-nav-item ${isActive('/courses') ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>
+            <span className="mobile-nav-icon">📚</span> Course
+          </Link>
+          <a href="#contact" className="mobile-nav-item" onClick={handleContact}>
+            <span className="mobile-nav-icon">✉️</span> Contact Us
+          </a>
+        </div>
+
         {user ? (
           <>
-            <Link to="/classroom" className="nav-link" onClick={() => setMobileOpen(false)}>📚 내 강의실</Link>
-            <Link to="/my?tab=payments" className="nav-link" onClick={() => setMobileOpen(false)}>💳 결제내역</Link>
-            <Link to="/my?tab=inquiries" className="nav-link" onClick={() => setMobileOpen(false)}>💬 문의하기</Link>
-            <button className="nav-link" style={{ textAlign: 'left' }} onClick={() => { handleLogout(); setMobileOpen(false) }}>로그아웃</button>
+            <div className="mobile-menu-divider" />
+            <div className="mobile-nav-section">
+              <Link to="/classroom" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
+                <span className="mobile-nav-icon">🎬</span> 내 강의실
+              </Link>
+              <Link to="/my?tab=payments" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
+                <span className="mobile-nav-icon">💳</span> 결제/환불 내역
+              </Link>
+              <Link to="/my?tab=inquiries" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
+                <span className="mobile-nav-icon">💬</span> 1:1 문의
+              </Link>
+            </div>
+            <div className="mobile-menu-divider" />
+            <div className="mobile-nav-section">
+              <button className="mobile-nav-item" style={{ width: '100%', color: 'var(--t3)' }} onClick={handleLogout}>
+                로그아웃
+              </button>
+            </div>
           </>
         ) : (
-          <div style={{ display: 'flex', gap: '8px', padding: '8px 14px' }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => { openAuth('login'); setMobileOpen(false) }}>로그인</button>
-            <button className="btn btn-primary btn-sm" onClick={() => { openAuth('signup'); setMobileOpen(false) }}>무료 시작</button>
-          </div>
+          <>
+            <div className="mobile-menu-divider" />
+            <div style={{ display: 'flex', gap: '8px', padding: '12px 16px' }}>
+              <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => { openAuth('login'); setMobileOpen(false) }}>로그인</button>
+              <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => { openAuth('signup'); setMobileOpen(false) }}>무료 시작</button>
+            </div>
+          </>
         )}
       </div>
     </>
