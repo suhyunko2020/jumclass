@@ -11,7 +11,7 @@ import {
 import { formatPrice } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
-import { saveLessonAttachments, getLessonAttachments } from '../hooks/useCourses'
+import { saveAllLessonAttachments, getLessonAttachments } from '../hooks/useCourses'
 import { useSiteSettings, type SiteSettings } from '../hooks/useSiteSettings'
 
 type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews' | 'settings'
@@ -430,20 +430,24 @@ export default function AdminPage() {
     } catch { /* ignore */ }
   }
 
-  function currAddAttachment(sectionKey: string, lessonId: string, file: File) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const ext = file.name.split('.').pop()?.toLowerCase() || ''
-      const att = { name: file.name.replace(/\.[^.]+$/, ''), ext, dataUrl: reader.result as string }
-      setCurriculumModal(p => p ? {
+  async function currAddAttachment(sectionKey: string, lessonId: string, file: File) {
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.readAsDataURL(file)
+    })
+    const ext = file.name.split('.').pop()?.toLowerCase() || ''
+    const att = { name: file.name.replace(/\.[^.]+$/, ''), ext, dataUrl }
+    setCurriculumModal(p => {
+      if (!p) return null
+      return {
         ...p,
         sections: p.sections.map(s => s._key !== sectionKey ? s : {
           ...s,
           items: s.items.map(i => i.id !== lessonId ? i : { ...i, attachments: [...(i.attachments || []), att] }),
         }),
-      } : null)
-    }
-    reader.readAsDataURL(file)
+      }
+    })
   }
 
   function currRemoveAttachment(sectionKey: string, lessonId: string, attIdx: number) {
@@ -458,12 +462,9 @@ export default function AdminPage() {
 
   function handleSaveCurriculum() {
     if (!curriculumModal) return
-    // 첨부파일은 별도 저장소에 저장 (localStorage 용량 분리)
-    for (const s of curriculumModal.sections) {
-      for (const i of s.items) {
-        saveLessonAttachments(i.id, i.attachments || [])
-      }
-    }
+    // 첨부파일은 별도 저장소에 일괄 저장 (localStorage 용량 분리)
+    const allItems = curriculumModal.sections.flatMap(s => s.items)
+    saveAllLessonAttachments(allItems)
 
     const curriculum: CurriculumSection[] = curriculumModal.sections
       .filter(s => s.section.trim())
