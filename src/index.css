@@ -749,7 +749,7 @@ select.form-input { appearance: none; -webkit-appearance: none; cursor: pointer;
 
 /* ── Responsive ── */
 @media (max-width: 1024px) {
-  .detail-two-col { grid-template-columns: 1fr; }
+  .detail-two-col { grid-template-columns: 1fr; gap: 32px; }
   .detail-right { position: static; }
   .checkout-grid { grid-template-columns: 1fr; }
   .lesson-wrap { grid-template-columns: 1fr; height: auto; }
@@ -758,13 +758,51 @@ select.form-input { appearance: none; -webkit-appearance: none; cursor: pointer;
   .hero-stats { gap: 28px; }
 }
 @media (max-width: 768px) {
+  .container { padding: 0 16px; }
   .navbar { padding: 0 16px; }
   .nav-center { display: none; }
   .hamburger { display: flex; }
   .nav-right .btn { display: none; }
   .learn-grid { grid-template-columns: 1fr; }
-  .footer-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr; gap: 28px; }
   .courses-grid { grid-template-columns: 1fr; }
-  .hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .section { padding: 56px 0; }
+  .hero { min-height: auto; padding: calc(var(--nav-h) + 48px) 0 56px; }
+  .hero-inner { max-width: 100%; }
+  .hero h1 { font-size: clamp(1.8rem, 7vw, 2.6rem); }
+  .hero-desc { font-size: .92rem; }
+  .hero-cta .btn-xl { padding: 12px 24px; font-size: .88rem; width: 100%; justify-content: center; }
+  .hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; padding-top: 20px; }
+  .hero-stat .num { font-size: 1.25rem; }
+  .section { padding: 48px 0; }
+  .section-header { margin-bottom: 32px; }
+  .section-header h2 { font-size: 1.5rem; }
+  .page-hero { padding: calc(var(--nav-h) + 32px) 0 32px; }
+  .page-hero h1 { font-size: 1.6rem; }
+  .detail-two-col { padding: 24px 0 48px; gap: 24px; }
+  .detail-title { font-size: 1.4rem; }
+  .detail-stats { font-size: .78rem; gap: 10px; }
+  .purchase-body { padding: 18px; }
+  .purchase-price .now { font-size: 1.6rem; }
+  .lesson-main { padding: 16px; }
+  .lesson-title { font-size: 1.1rem; }
+  .my-card { flex-direction: column; min-height: auto; }
+  .my-card-thumb { width: 100%; height: 80px; }
+  .my-card-body { padding: 14px 16px; }
+  .my-card-title { font-size: .9rem; }
+  .mypage-layout { gap: 20px; }
+  .mypage-profile { padding: 18px 16px 16px; }
+  .mypage-avatar { width: 44px; height: 44px; font-size: 1.1rem; }
+  .payment-item { flex-direction: column; }
+  .payment-item-thumb { width: 100%; height: 56px; }
+  .payment-item-body { padding: 14px 16px; }
+  .checkout-grid { gap: 24px; }
+  .modal-overlay { padding: 12px; align-items: flex-end; }
+  .modal-box { max-height: 90vh; overflow-y: auto; border-radius: var(--r3) var(--r3) 0 0; }
+  .modal-head { padding: 20px 18px 0; }
+  .modal-body { padding: 0 18px 18px; }
+  .instructor-card { flex-direction: column; align-items: center; text-align: center; }
+  .feat-grid { grid-template-columns: 1fr; }
+  .testi-grid { grid-template-columns: 1fr; }
+  .toast-container { bottom: 12px; right: 12px; left: 12px; }
+  .btn-xl { padding: 12px 24px; font-size: .9rem; }
 }

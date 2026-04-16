@@ -51,7 +51,7 @@ export default function CoursesPage() {
       {/* 자격증 섹션 */}
       <section className="section" style={{ background: 'rgba(255,255,255,.018)', borderTop: '1px solid var(--line)' }}>
         <div className="container">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'center', maxWidth: '920px', margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'clamp(28px, 5vw, 60px)', alignItems: 'center', maxWidth: '920px', margin: '0 auto' }}>
             <div>
               <span className="section-kicker">자격증 과정</span>
               <h2 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>

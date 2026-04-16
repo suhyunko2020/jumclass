@@ -120,7 +120,7 @@ export default function HomePage() {
       <section style={{ padding: '16px 0 80px' }}>
         <div className="container">
           <div style={{
-            padding: '56px 48px', textAlign: 'center', borderRadius: 'var(--r4)',
+            padding: 'clamp(32px, 5vw, 56px) clamp(20px, 4vw, 48px)', textAlign: 'center', borderRadius: 'var(--r4)',
             background: 'var(--bg-3)', border: '1px solid var(--line)', position: 'relative', overflow: 'hidden',
           }}>
             <div style={{ position: 'absolute', top: '-100px', left: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(124,111,205,.12) 0%,transparent 70%)', pointerEvents: 'none' }} />
@@ -139,7 +139,7 @@ export default function HomePage() {
       {/* 문의 */}
       <section className="section" id="contact" style={{ paddingTop: 0 }}>
         <div className="container">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'clamp(28px, 5vw, 60px)', alignItems: 'center' }}>
             <div>
               <span className="section-kicker">문의</span>
               <h2 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>궁금한 점이 있으신가요?</h2>
