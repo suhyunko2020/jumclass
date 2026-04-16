@@ -11,6 +11,7 @@ import {
 import { formatPrice } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
+import { saveLessonAttachments, getLessonAttachments } from '../hooks/useCourses'
 import { useSiteSettings, type SiteSettings } from '../hooks/useSiteSettings'
 
 type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews' | 'settings'
@@ -354,7 +355,7 @@ export default function AdminPage() {
       sections: (c.curriculum || []).map(s => ({
         _key: Math.random().toString(36).slice(2),
         section: s.section,
-        items: s.items.map(i => ({ ...i })),
+        items: s.items.map(i => ({ ...i, attachments: getLessonAttachments(i.id) })),
       })),
     })
   }
@@ -457,6 +458,13 @@ export default function AdminPage() {
 
   function handleSaveCurriculum() {
     if (!curriculumModal) return
+    // 첨부파일은 별도 저장소에 저장 (localStorage 용량 분리)
+    for (const s of curriculumModal.sections) {
+      for (const i of s.items) {
+        saveLessonAttachments(i.id, i.attachments || [])
+      }
+    }
+
     const curriculum: CurriculumSection[] = curriculumModal.sections
       .filter(s => s.section.trim())
       .map(s => ({
@@ -467,7 +475,6 @@ export default function AdminPage() {
           duration: i.duration || '00:00',
           vimeo: i.vimeo || '',
           status: i.status as LessonItem['status'],
-          ...(i.attachments && i.attachments.length > 0 ? { attachments: i.attachments } : {}),
         })),
       }))
 

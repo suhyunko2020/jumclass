@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 const OVERRIDE_KEY = 'arcana_course_overrides'
 const CUSTOM_KEY   = 'arcana_custom_courses'
 const REVIEWS_KEY  = 'arcana_reviews'
+const ATTACH_KEY   = 'arcana_lesson_attachments'
 
 function getJSON<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback }
@@ -21,6 +22,21 @@ function getCachedCustomCourses(): Course[] {
 }
 function getCachedReviews(): Review[] {
   return getJSON(REVIEWS_KEY, [])
+}
+
+function getAttachmentStore(): Record<string, { name: string; ext: string; dataUrl: string }[]> {
+  try { const v = localStorage.getItem(ATTACH_KEY); return v ? JSON.parse(v) : {} } catch { return {} }
+}
+
+export function saveLessonAttachments(lessonId: string, attachments: { name: string; ext: string; dataUrl: string }[]) {
+  const store = getAttachmentStore()
+  if (attachments.length > 0) store[lessonId] = attachments
+  else delete store[lessonId]
+  try { localStorage.setItem(ATTACH_KEY, JSON.stringify(store)) } catch { /* quota */ }
+}
+
+export function getLessonAttachments(lessonId: string): { name: string; ext: string; dataUrl: string }[] {
+  return getAttachmentStore()[lessonId] || []
 }
 
 export function useCourses() {

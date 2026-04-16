@@ -4,6 +4,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/ui/Toast'
 import { calcTotalDuration } from '../utils/format'
+import { getLessonAttachments } from '../hooks/useCourses'
 
 export default function LessonPage() {
   const [params] = useSearchParams()
@@ -133,18 +134,21 @@ export default function LessonPage() {
         <p className="lesson-sub">강의를 충분히 살펴보며 학습하세요. 첨부된 학습 자료를 활용하면 이해를 더 깊게 할 수 있습니다.</p>
 
         {/* 강의별 첨부 파일 */}
-        {cur.attachments && cur.attachments.length > 0 && (
-          <div className="attach-list">
-            <div className="attach-head">학습 자료</div>
-            {cur.attachments.map((a, i) => (
-              <a key={i} href={a.dataUrl} download={`${a.name}.${a.ext}`} className="attach-item" style={{ cursor: 'pointer' }}>
-                <span>{a.ext === 'pdf' ? '📄' : '📎'}</span>
-                <span>{a.name}</span>
-                <span style={{ marginLeft: 'auto', fontSize: '.72rem', color: 'var(--purple-2)', fontWeight: 600 }}>다운로드</span>
-              </a>
-            ))}
-          </div>
-        )}
+        {(() => {
+          const lessonAtts = getLessonAttachments(cur.id)
+          return lessonAtts.length > 0 ? (
+            <div className="attach-list">
+              <div className="attach-head">학습 자료</div>
+              {lessonAtts.map((a, i) => (
+                <a key={i} href={a.dataUrl} download={`${a.name}.${a.ext}`} className="attach-item" style={{ cursor: 'pointer' }}>
+                  <span>{a.ext === 'pdf' ? '📄' : '📎'}</span>
+                  <span>{a.name}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: '.72rem', color: 'var(--purple-2)', fontWeight: 600 }}>다운로드</span>
+                </a>
+              ))}
+            </div>
+          ) : null
+        })()}
 
         {/* 강의 전체 첨부 파일 */}
         {course.attachments && course.attachments.length > 0 && (
