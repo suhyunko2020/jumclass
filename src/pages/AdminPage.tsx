@@ -769,6 +769,13 @@ export default function AdminPage() {
                                 <button className="btn btn-primary btn-sm" onClick={() => openCourseEdit(c)}>편집</button>
                                 <button className="btn btn-ghost btn-sm" onClick={() => openCurriculumEdit(c)}>커리큘럼</button>
                                 <button className="btn btn-ghost btn-sm" onClick={() => setCourseEnrollModal(c.id)}>+ 수강생</button>
+                                <button className="btn btn-ghost btn-sm" onClick={() => {
+                                  const newId = 'course-' + Date.now()
+                                  const copied = { ...c, id: newId, title: c.title + ' (복사)', curriculum: c.curriculum.map(s => ({ ...s, items: s.items.map(i => ({ ...i, id: 'l_' + Date.now() + '_' + Math.random().toString(36).slice(2) })) })) }
+                                  saveCustomCourse(copied)
+                                  toast('강의가 복사되었습니다.', 'ok')
+                                  refresh()
+                                }}>복사</button>
                                 <Link to={`/course/${c.id}`} className="btn btn-ghost btn-sm">보기</Link>
                                 {isCustom ? (
                                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }} onClick={() => handleDeleteCourse(c.id)}>삭제</button>
