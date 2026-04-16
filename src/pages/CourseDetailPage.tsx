@@ -10,7 +10,7 @@ export default function CourseDetailPage() {
   const navigate = useNavigate()
   const { getCourse, getEnrolledCount, getReviewsByCourse, getReviewStats } = useCourses()
   const { isEnrolled } = useAuth()
-  const { openAuth } = useAuthModal()
+  useAuthModal()
 
   const course = getCourse(courseId || '')
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({ 0: true })
@@ -119,9 +119,9 @@ export default function CourseDetailPage() {
                           return (
                             <div key={item.id}
                               className={`curr-item ${isLocked ? 'locked' : ''}`}
+                              style={{ cursor: isLocked ? 'default' : 'pointer' }}
                               onClick={() => {
                                 if (isFree || enrolled) navigate(`/lesson?course=${course.id}&lesson=${item.id}`)
-                                else openAuth('login')
                               }}
                             >
                               <div className={`curr-item-icon ${isFree ? 'ic-free' : 'ic-lock'}`}>{isFree ? '▶' : '🔒'}</div>

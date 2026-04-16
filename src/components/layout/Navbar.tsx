@@ -35,6 +35,17 @@ export default function Navbar() {
   const path = location.pathname
   const isActive = (p: string) => path === p || (p !== '/' && path.startsWith(p))
 
+  function handleContact(e: React.MouseEvent) {
+    e.preventDefault()
+    if (path === '/') {
+      document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })
+    } else {
+      navigate('/')
+      setTimeout(() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' }), 300)
+    }
+    setMobileOpen(false)
+  }
+
   function handleLogout() {
     logout()
     setDropdownOpen(false)
@@ -48,9 +59,9 @@ export default function Navbar() {
 
         <div className="nav-center">
           <div className="nav-center-pill">
-            <Link to="/" className={`nav-link ${isActive('/') && path === '/' ? 'active' : ''}`}>Home</Link>
+            <Link to="/" className={`nav-link ${path === '/' ? 'active' : ''}`}>Home</Link>
             <Link to="/courses" className={`nav-link ${isActive('/courses') || isActive('/course') ? 'active' : ''}`}>Course</Link>
-            <Link to="/#contact" className="nav-link">Contact Us</Link>
+            <a href="#contact" className="nav-link" onClick={handleContact}>Contact Us</a>
           </div>
         </div>
 
@@ -136,7 +147,7 @@ export default function Navbar() {
       <div className={`mobile-menu ${mobileOpen ? 'open' : ''}`}>
         <Link to="/" className={`nav-link ${path === '/' ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>Home</Link>
         <Link to="/courses" className={`nav-link ${isActive('/courses') ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>Course</Link>
-        <Link to="/#contact" className="nav-link" onClick={() => setMobileOpen(false)}>Contact Us</Link>
+        <a href="#contact" className="nav-link" onClick={handleContact}>Contact Us</a>
         {user ? (
           <>
             <Link to="/classroom" className="nav-link" onClick={() => setMobileOpen(false)}>📚 내 강의실</Link>

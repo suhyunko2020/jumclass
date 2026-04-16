@@ -5,6 +5,7 @@ import { useToast } from '../components/ui/Toast'
 import CourseCard from '../components/course/CourseCard'
 import { TESTIMONIALS } from '../data/courses'
 import { useState } from 'react'
+import HeroBg from '../components/ui/HeroBg'
 
 export default function HomePage() {
   const { getAllCourses, getEnrolledCount } = useCourses()
@@ -23,8 +24,9 @@ export default function HomePage() {
   return (
     <>
       {/* Hero */}
-      <section className="hero">
-        <div className="container">
+      <section className="hero" style={{ position: 'relative', overflow: 'hidden' }}>
+        <HeroBg />
+        <div className="container" style={{ position: 'relative', zIndex: 1 }}>
           <div className="hero-inner page-enter">
             <div className="hero-kicker">✦ &nbsp;국내 1위 타로 강의 플랫폼</div>
             <h1>타로의 언어를<br /><em>내 것으로</em> 만드세요</h1>
