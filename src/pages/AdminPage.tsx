@@ -389,7 +389,7 @@ export default function AdminPage() {
         ...s,
         items: [...s.items, {
           id: `l_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          title: '', duration: '', vimeo: '', status: 'locked' as const,
+          title: '', duration: '', vimeo: '', status: 'locked' as const, attachments: [],
         }],
       }),
     } : null)
@@ -462,9 +462,6 @@ export default function AdminPage() {
 
   function handleSaveCurriculum() {
     if (!curriculumModal) return
-    // 첨부파일은 별도 저장소에 일괄 저장 (localStorage 용량 분리)
-    const allItems = curriculumModal.sections.flatMap(s => s.items)
-    saveAllLessonAttachments(allItems)
 
     const curriculum: CurriculumSection[] = curriculumModal.sections
       .filter(s => s.section.trim())
@@ -478,6 +475,12 @@ export default function AdminPage() {
           status: i.status as LessonItem['status'],
         })),
       }))
+
+    // 첨부파일은 별도 저장소에 일괄 저장 — 유효한 강의 항목만
+    const validItems = curriculumModal.sections.flatMap(s =>
+      s.items.filter(i => i.title.trim()).map(i => ({ id: i.id, attachments: i.attachments }))
+    )
+    saveAllLessonAttachments(validItems)
 
     const totalLessons = curriculum.reduce((n, s) => n + s.items.length, 0)
 

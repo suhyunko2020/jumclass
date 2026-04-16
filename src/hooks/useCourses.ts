@@ -42,8 +42,9 @@ export function saveLessonAttachments(lessonId: string, attachments: { name: str
 export function saveAllLessonAttachments(items: { id: string; attachments?: { name: string; ext: string; dataUrl: string }[] }[]) {
   const store = getAttachmentStore()
   for (const item of items) {
-    if (item.attachments && item.attachments.length > 0) store[item.id] = item.attachments
-    else delete store[item.id]
+    if (item.attachments && item.attachments.length > 0) {
+      store[item.id] = item.attachments
+    }
   }
   try {
     localStorage.setItem(ATTACH_KEY, JSON.stringify(store))

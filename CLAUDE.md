@@ -5,6 +5,7 @@ React 19 + Vite 8 + TS + Tailwind v4 + Supabase + Vercel
 관리자: `/admin2026` (admin / admin123!)
 
 ## 핵심 규칙
+
 - 강의 조회: `useCourses().getCourse(id)` / `getPublicCourses()` — COURSES 직접 참조 금지
 - 데이터: localStorage 캐시 읽기(동기) → Supabase 쓰기(비동기) — 캐시 우선 패턴
 - 인증: `useAuth()` — Supabase Auth 기반, `AppUser` 타입
