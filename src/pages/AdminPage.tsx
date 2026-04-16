@@ -1,0 +1,1223 @@
+import React, { useState, useEffect, useCallback } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
+import { useCourses } from '../hooks/useCourses'
+import { useToast } from '../components/ui/Toast'
+import {
+  getCustomCourses,
+  getInquiries, answerInquiry,
+  getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment,
+} from '../utils/storage'
+import { formatPrice } from '../utils/format'
+import type { Inquiry, Course, LessonItem, CurriculumSection } from '../data/types'
+
+type Section = 'overview' | 'courses' | 'students' | 'payments' | 'inquiries' | 'reviews'
+
+// ── 커리큘럼 편집 상태 타입 ──────────────────────────────────
+interface CurrEditSection {
+  _key: string   // React key용 임시 ID
+  section: string
+  items: CurrEditItem[]
+}
+interface CurrEditItem {
+  id: string
+  title: string
+  duration: string
+  vimeo: string
+  status: 'free' | 'locked'
+}
+interface CurriculumModalState {
+  courseId: string
+  courseTitle: string
+  isCustom: boolean
+  sections: CurrEditSection[]
+}
+
+// ── 강의 등록/편집 폼 타입 ──────────────────────────────────
+interface CourseEditForm {
+  _isNew: boolean
+  _isCustom: boolean
+  id: string
+  emoji: string
+  title: string
+  subtitle: string
+  description: string
+  level: string
+  duration: string
+  lessons: number
+  badge: string
+  status: 'public' | 'private'
+  instructor: string
+  instructorAvatar: string
+  instructorBio: string
+  tiers: { days: number; price: number; originalPrice: number }[]
+  whatYouLearnText: string
+}
+
+const DEFAULT_TIERS = [
+  { days: 30, price: 0, originalPrice: 0 },
+  { days: 90, price: 0, originalPrice: 0 },
+  { days: 9999, price: 0, originalPrice: 0 },
+]
+
+export default function AdminPage() {
+  const { isAdminLoggedIn, adminLogin, adminLogout, enrollManual } = useAuth()
+  const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById } = useCourses()
+  const toast = useToast()
+  const navigate = useNavigate()
+
+  const [sec, setSec] = useState<Section>('overview')
+  const [aid, setAid] = useState('')
+  const [apw, setApw] = useState('')
+  const [loginErr, setLoginErr] = useState(false)
+
+  // 모달 상태
+  const [answerModal, setAnswerModal] = useState<{ inq: Inquiry; text: string } | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [enrollModal, setEnrollModal] = useState<{ user: any; courseId: string; days: number } | null>(null)
+  const [courseEditModal, setCourseEditModal] = useState<CourseEditForm | null>(null)
+  const [courseDetailModal, setCourseDetailModal] = useState<Course | null>(null)
+  const [curriculumModal, setCurriculumModal] = useState<CurriculumModalState | null>(null)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [users, setUsers] = useState<any[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [allEnrollments, setAllEnrollments] = useState<any[]>([])
+  const [inquiries, setInquiries] = useState<Inquiry[]>([])
+  const [reviews, setReviews] = useState<{ id: string; courseId: string; userId: string; userName: string; userAvatar: string; rating: number; text: string; date: string }[]>([])
+
+  useEffect(() => { document.title = '관리자 대시보드 — JUMCLASS' }, [])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [courses, setCourses] = useState<Course[]>([])
+
+  useEffect(() => {
+    if (!isAdminLoggedIn) return
+    setCourses(getAllCourses())
+    loadAdminData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminLoggedIn])
+
+  // reload on tick (after mutations)
+  const [, setTick] = useState(0)
+  const refresh = useCallback(() => {
+    setTick(t => t + 1)
+    if (isAdminLoggedIn) {
+      setCourses(getAllCourses())
+      loadAdminData()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminLoggedIn])
+
+  async function loadAdminData() {
+    const [dbUsers, dbEnrollments, dbInquiries] = await Promise.all([
+      getAllUsers(),
+      getAllEnrollmentsAdmin(),
+      getInquiries(),
+    ])
+    setUsers(dbUsers)
+    setAllEnrollments(dbEnrollments)
+    setInquiries(dbInquiries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))
+    // reviews come from localStorage cache (synced from Supabase at app start via syncFromSupabase)
+    try {
+      const raw = localStorage.getItem('arcana_reviews')
+      const cached = raw ? JSON.parse(raw) : []
+      setReviews(cached.sort((a: { date: string }, b: { date: string }) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()))
+    } catch { setReviews([]) }
+  }
+
+  // ── 로그인 게이트 ───────────────────────────────────────────
+  if (!isAdminLoggedIn) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+        <div style={{ background: 'var(--bg-3)', border: '1px solid var(--line-2)', borderRadius: 'var(--r4)', padding: '44px 40px', maxWidth: '400px', width: '100%' }}>
+          <div style={{ textAlign: 'center', marginBottom: '26px' }}>
+            <div style={{ fontSize: '2.2rem', marginBottom: '10px' }}>🔐</div>
+            <div style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-.02em', marginBottom: '4px' }}>JUMCLASS</div>
+            <div style={{ fontSize: '.82rem', color: 'var(--t3)' }}>관리자 전용 접근</div>
+          </div>
+          <form onSubmit={e => {
+            e.preventDefault()
+            if (!adminLogin(aid, apw)) setLoginErr(true)
+          }}>
+            <div className="form-group">
+              <label className="form-label">관리자 ID</label>
+              <input className="form-input" type="text" placeholder="admin" required
+                value={aid} onChange={e => { setAid(e.target.value); setLoginErr(false) }} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">비밀번호</label>
+              <input className="form-input" type="password" placeholder="••••••••" required
+                value={apw} onChange={e => { setApw(e.target.value); setLoginErr(false) }} />
+            </div>
+            {loginErr && <div className="err-msg">아이디 또는 비밀번호가 올바르지 않습니다.</div>}
+            <button type="submit" className="btn btn-primary w-full">대시보드 접속</button>
+          </form>
+          <div style={{ textAlign: 'center', marginTop: '14px' }}>
+            <Link to="/" style={{ fontSize: '.8rem', color: 'var(--t3)' }}>← 메인 사이트로</Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const pendingCount = inquiries.filter(i => i.status === 'pending').length
+
+  const navItems: { sec: Section; icon: string; label: string; badge?: number }[] = [
+    { sec: 'overview',  icon: '📊', label: '대시보드' },
+    { sec: 'courses',   icon: '📚', label: '강의 관리' },
+    { sec: 'students',  icon: '👥', label: '수강생' },
+    { sec: 'payments',  icon: '💳', label: '결제 내역' },
+    { sec: 'inquiries', icon: '💬', label: '문의 관리', badge: pendingCount },
+    { sec: 'reviews',   icon: '⭐', label: '리뷰 관리' },
+  ]
+
+  // ── 문의 답변 저장 ──────────────────────────────────────────
+  async function handleAnswer(e: React.FormEvent) {
+    e.preventDefault()
+    if (!answerModal) return
+    await answerInquiry(answerModal.inq.id, answerModal.text)
+    toast('답변이 등록되었습니다.', 'ok')
+    setAnswerModal(null)
+    refresh()
+  }
+
+  // ── 수동 수강 등록 ──────────────────────────────────────────
+  async function handleEnroll(e: React.FormEvent) {
+    e.preventDefault()
+    if (!enrollModal) return
+    const ok = await enrollManual(enrollModal.user.uid, enrollModal.courseId, enrollModal.days)
+    if (ok) toast(`${enrollModal.user.name}님 수동 등록 완료`, 'ok')
+    else toast('등록 실패', 'err')
+    setEnrollModal(null)
+    refresh()
+  }
+
+  // ── 수강 취소 ──────────────────────────────────────────────
+  async function handleCancelEnroll(uid: string, courseId: string) {
+    if (!confirm('수강을 취소하시겠습니까?')) return
+    const ok = await cancelEnrollment(uid, courseId)
+    if (ok) toast('수강이 취소되었습니다.', 'ok')
+    else toast('취소 실패', 'err')
+    refresh()
+  }
+
+  // ── 강의 등록/편집 저장 ────────────────────────────────────
+  function handleCourseEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!courseEditModal) return
+    const { _isNew, _isCustom, whatYouLearnText, tiers, id, ...rest } = courseEditModal
+    const whatYouLearn = whatYouLearnText.split('\n').map(s => s.trim()).filter(Boolean)
+    const pricingTiers = tiers.filter(t => t.price > 0)
+    const price = pricingTiers[0]?.price || 0
+    const originalPrice = pricingTiers[0]?.originalPrice || 0
+
+    if (_isNew || _isCustom) {
+      const existing = courses.find(c => c.id === id)
+      const course: Course = {
+        id,
+        ...rest,
+        price,
+        originalPrice,
+        pricingTiers,
+        whatYouLearn,
+        curriculum: existing?.curriculum || [],
+        rating: existing?.rating ?? 4.5,
+        ratingCount: existing?.ratingCount ?? 0,
+        students: existing?.students ?? 0,
+        pauseConfig: existing?.pauseConfig || { maxPauses: 2, maxDays: 30 },
+      }
+      saveCustomCourse(course)
+      toast(_isNew ? '강의가 등록되었습니다.' : '강의가 수정되었습니다.', 'ok')
+    } else {
+      saveCourseOverride(id, { ...rest, price, originalPrice, pricingTiers, whatYouLearn })
+      toast('강의 정보가 업데이트되었습니다.', 'ok')
+    }
+    setCourseEditModal(null)
+    refresh()
+  }
+
+  function openCourseEdit(c: Course) {
+    const isCustom = getCustomCourses().some(x => x.id === c.id)
+    setCourseEditModal({
+      _isNew: false,
+      _isCustom: isCustom,
+      id: c.id,
+      emoji: c.emoji || '📚',
+      title: c.title,
+      subtitle: c.subtitle || '',
+      description: c.description || '',
+      level: c.level,
+      duration: c.duration || '',
+      lessons: c.lessons || 0,
+      badge: c.badge || '',
+      status: c.status || 'public',
+      instructor: c.instructor || '',
+      instructorAvatar: c.instructorAvatar || '🎓',
+      instructorBio: c.instructorBio || '',
+      tiers: c.pricingTiers?.length ? c.pricingTiers.map(t => ({ ...t })) : DEFAULT_TIERS.map(t => ({ ...t, price: c.price, originalPrice: c.originalPrice })),
+      whatYouLearnText: (c.whatYouLearn || []).join('\n'),
+    })
+  }
+
+  function openNewCourse() {
+    setCourseEditModal({
+      _isNew: true,
+      _isCustom: false,
+      id: 'course_' + Date.now(),
+      emoji: '📚',
+      title: '',
+      subtitle: '',
+      description: '',
+      level: '입문',
+      duration: '',
+      lessons: 0,
+      badge: '',
+      status: 'public',
+      instructor: '',
+      instructorAvatar: '🎓',
+      instructorBio: '',
+      tiers: DEFAULT_TIERS.map(t => ({ ...t })),
+      whatYouLearnText: '',
+    })
+  }
+
+  // ── 커스텀 강의 삭제 ────────────────────────────────────────
+  function handleDeleteCourse(id: string) {
+    if (!confirm('강의를 삭제하시겠습니까? 수강 내역은 유지됩니다.')) return
+    deleteCustomCourse(id)
+    toast('강의가 삭제되었습니다.', 'ok')
+    refresh()
+  }
+
+  // ── 커리큘럼 편집 열기 ─────────────────────────────────────
+  function openCurriculumEdit(c: Course) {
+    const isCustom = getCustomCourses().some(x => x.id === c.id)
+    setCurriculumModal({
+      courseId: c.id,
+      courseTitle: c.title,
+      isCustom,
+      sections: (c.curriculum || []).map(s => ({
+        _key: Math.random().toString(36).slice(2),
+        section: s.section,
+        items: s.items.map(i => ({ ...i })),
+      })),
+    })
+  }
+
+  function currAddSection() {
+    setCurriculumModal(p => p ? {
+      ...p,
+      sections: [...p.sections, {
+        _key: Math.random().toString(36).slice(2),
+        section: '',
+        items: [],
+      }],
+    } : null)
+  }
+
+  function currDeleteSection(key: string) {
+    setCurriculumModal(p => p ? { ...p, sections: p.sections.filter(s => s._key !== key) } : null)
+  }
+
+  function currUpdateSection(key: string, name: string) {
+    setCurriculumModal(p => p ? {
+      ...p,
+      sections: p.sections.map(s => s._key === key ? { ...s, section: name } : s),
+    } : null)
+  }
+
+  function currAddLesson(sectionKey: string) {
+    setCurriculumModal(p => p ? {
+      ...p,
+      sections: p.sections.map(s => s._key !== sectionKey ? s : {
+        ...s,
+        items: [...s.items, {
+          id: `l_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          title: '', duration: '', vimeo: '', status: 'locked' as const,
+        }],
+      }),
+    } : null)
+  }
+
+  function currDeleteLesson(sectionKey: string, lessonId: string) {
+    setCurriculumModal(p => p ? {
+      ...p,
+      sections: p.sections.map(s => s._key !== sectionKey ? s : {
+        ...s, items: s.items.filter(i => i.id !== lessonId),
+      }),
+    } : null)
+  }
+
+  function currUpdateLesson(sectionKey: string, lessonId: string, field: keyof CurrEditItem, value: string) {
+    setCurriculumModal(p => p ? {
+      ...p,
+      sections: p.sections.map(s => s._key !== sectionKey ? s : {
+        ...s,
+        items: s.items.map(i => i.id !== lessonId ? i : { ...i, [field]: value }),
+      }),
+    } : null)
+  }
+
+  function handleSaveCurriculum() {
+    if (!curriculumModal) return
+    const curriculum: CurriculumSection[] = curriculumModal.sections
+      .filter(s => s.section.trim())
+      .map(s => ({
+        section: s.section.trim(),
+        items: s.items.filter(i => i.title.trim()).map(i => ({
+          id: i.id,
+          title: i.title.trim(),
+          duration: i.duration || '00:00',
+          vimeo: i.vimeo || '',
+          status: i.status as LessonItem['status'],
+        })),
+      }))
+
+    const totalLessons = curriculum.reduce((n, s) => n + s.items.length, 0)
+
+    if (curriculumModal.isCustom) {
+      const c = courses.find(x => x.id === curriculumModal.courseId)
+      if (c) saveCustomCourse({ ...c, curriculum, lessons: totalLessons })
+    } else {
+      saveCourseOverride(curriculumModal.courseId, { curriculum, lessons: totalLessons })
+    }
+    toast('커리큘럼이 저장되었습니다.', 'ok')
+    setCurriculumModal(null)
+    refresh()
+  }
+
+  // ── 리뷰 삭제 ──────────────────────────────────────────────
+  async function handleDeleteReview(id: string) {
+    if (!confirm('리뷰를 삭제하시겠습니까?')) return
+    await deleteReviewById(id)
+    toast('리뷰가 삭제되었습니다.', 'ok')
+    refresh()
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // render
+  // ─────────────────────────────────────────────────────────────
+  return (
+    <>
+      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+
+        {/* ── 사이드바 ── */}
+        <div style={{
+          width: '220px', flexShrink: 0, background: 'rgba(6,7,15,.95)',
+          borderRight: '1px solid var(--line)', display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ padding: '20px', borderBottom: '1px solid var(--line)', fontSize: '1.05rem', fontWeight: 800 }}>
+            JUM<span style={{ color: 'var(--purple-2)' }}>CLASS</span>
+            <div style={{ fontSize: '.68rem', color: 'var(--t3)', fontWeight: 400, marginTop: '2px' }}>관리자 콘솔</div>
+          </div>
+          <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+            {navItems.map(n => (
+              <button key={n.sec} onClick={() => setSec(n.sec)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px',
+                  borderRadius: 'var(--r2)', fontSize: '.875rem', fontWeight: 600,
+                  background: sec === n.sec ? 'rgba(124,111,205,.15)' : 'transparent',
+                  color: sec === n.sec ? 'var(--purple-2)' : 'var(--t2)',
+                  transition: 'var(--t)', width: '100%', textAlign: 'left',
+                }}
+              >
+                <span>{n.icon}</span>
+                <span style={{ flex: 1 }}>{n.label}</span>
+                {(n.badge ?? 0) > 0 && (
+                  <span style={{ fontSize: '.68rem', fontWeight: 700, padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(232,156,56,.2)', color: 'var(--warn)' }}>
+                    {n.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+          <div style={{ padding: '16px', borderTop: '1px solid var(--line)' }}>
+            <div style={{ fontSize: '.76rem', color: 'var(--t3)', marginBottom: '8px' }}>관리자: admin</div>
+            <button className="btn btn-ghost btn-sm w-full" onClick={() => { adminLogout(); navigate('/') }}>로그아웃</button>
+          </div>
+        </div>
+
+        {/* ── 메인 콘텐츠 ── */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
+
+          {/* ═══ 대시보드 ═══ */}
+          {sec === 'overview' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>대시보드</h1>
+                <div style={{ fontSize: '.82rem', color: 'var(--t3)' }}>
+                  {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </div>
+              </div>
+
+              {/* 통계 카드 */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '16px', marginBottom: '28px' }}>
+                {[
+                  { ico: '👥', val: String(users.length), lbl: '총 회원 수', sub: '가입 회원' },
+                  { ico: '💳', val: String(allEnrollments.length), lbl: '총 수강 등록', sub: '전체 건수' },
+                  { ico: '💬', val: String(pendingCount), lbl: '미처리 문의', sub: '답변 대기', warn: pendingCount > 0 },
+                  { ico: '⭐', val: String(reviews.length), lbl: '등록 리뷰', sub: '전체 리뷰 수' },
+                ].map(s => (
+                  <div key={s.lbl} style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '20px' }}>
+                    <div style={{ fontSize: '1.6rem', marginBottom: '10px' }}>{s.ico}</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 800, letterSpacing: '-.04em', marginBottom: '2px' }}>{s.val}</div>
+                    <div style={{ fontSize: '.8rem', fontWeight: 600, marginBottom: '2px' }}>{s.lbl}</div>
+                    <div style={{ fontSize: '.72rem', color: s.warn ? 'var(--warn)' : 'var(--t3)' }}>{s.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 강의별 현황 */}
+              <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', overflow: 'hidden', marginBottom: '20px' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '.95rem', fontWeight: 700 }}>강의별 수강 현황</h3>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setSec('courses')}>전체 보기 →</button>
+                </div>
+                <table className="admin-table">
+                  <thead><tr><th>강의명</th><th>강사</th><th>수강생</th><th>가격</th><th>리뷰</th></tr></thead>
+                  <tbody>
+                    {courses.map(c => {
+                      const courseReviews = reviews.filter(r => r.courseId === c.id)
+                      const avg = courseReviews.length
+                        ? (courseReviews.reduce((s, r) => s + r.rating, 0) / courseReviews.length).toFixed(1)
+                        : '-'
+                      return (
+                        <tr key={c.id}>
+                          <td style={{ fontWeight: 600 }}>{c.emoji} {c.title}</td>
+                          <td style={{ color: 'var(--t2)' }}>{c.instructor}</td>
+                          <td>{getEnrolledCount(c.id)}명</td>
+                          <td>{formatPrice(c.price)}</td>
+                          <td>★ {avg} ({courseReviews.length}개)</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 최근 수강 등록 */}
+              <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', overflow: 'hidden' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '.95rem', fontWeight: 700 }}>최근 수강 등록</h3>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setSec('payments')}>전체 보기 →</button>
+                </div>
+                {allEnrollments.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--t3)' }}>수강 등록 내역이 없습니다.</div>
+                ) : (
+                  <table className="admin-table">
+                    <thead><tr><th>수강생</th><th>강의</th><th>등록일</th><th>수강 기간</th><th>타입</th></tr></thead>
+                    <tbody>
+                      {allEnrollments.slice(0, 8).map((e, i) => {
+                        const c = courses.find(x => x.id === e.courseId)
+                        const daysLeft = e.paused
+                          ? `${e.remainingDays || 0}일 (휴강)`
+                          : `${Math.max(0, Math.ceil((new Date(e.expiryDate).getTime() - Date.now()) / 86400000))}일 남음`
+                        return (
+                          <tr key={i}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'linear-gradient(135deg,var(--purple),var(--purple-sat))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.68rem', fontWeight: 700 }}>{e.user.avatar}</div>
+                                <span style={{ fontSize: '.855rem', fontWeight: 600 }}>{e.user.name}</span>
+                              </div>
+                            </td>
+                            <td style={{ fontSize: '.855rem' }}>{c ? `${c.emoji} ${c.title}` : e.courseId}</td>
+                            <td style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{new Date(e.enrolledAt).toLocaleDateString()}</td>
+                            <td style={{ fontSize: '.8rem', color: e.paused ? 'var(--warn)' : 'var(--t2)' }}>{daysLeft}</td>
+                            <td>
+                              <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: e.type === 'manual' ? 'rgba(232,156,56,.12)' : 'rgba(52,196,124,.12)', color: e.type === 'manual' ? 'var(--warn)' : 'var(--ok)' }}>
+                                {e.type === 'manual' ? '수동' : '결제'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ 강의 관리 ═══ */}
+          {sec === 'courses' && (() => {
+            const customIds = new Set(getCustomCourses().map(c => c.id))
+            return (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                  <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>강의 관리 ({courses.length}개)</h1>
+                  <button className="btn btn-primary btn-sm" onClick={openNewCourse}>+ 새 강의 등록</button>
+                </div>
+                <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', overflow: 'hidden' }}>
+                  <table className="admin-table">
+                    <thead>
+                      <tr><th>강의명</th><th>강사</th><th>수강생</th><th>가격</th><th>레벨</th><th>상태</th><th>액션</th></tr>
+                    </thead>
+                    <tbody>
+                      {courses.map(c => {
+                        const isCustom = customIds.has(c.id)
+                        return (
+                          <tr key={c.id}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '1.2rem' }}>{c.emoji}</span>
+                                <div>
+                                  <div style={{ fontWeight: 600, fontSize: '.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {c.title}
+                                    {isCustom && (
+                                      <span style={{ fontSize: '.62rem', padding: '1px 5px', borderRadius: 'var(--pill)', background: 'rgba(232,156,56,.15)', color: 'var(--warn)' }}>직접등록</span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{c.lessons}강 · {c.duration}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ fontSize: '.875rem', color: 'var(--t2)' }}>{c.instructor}</td>
+                            <td>
+                              <button
+                                style={{ background: 'none', color: 'var(--purple-2)', fontSize: '.855rem', cursor: 'pointer', textDecoration: 'underline' }}
+                                onClick={() => setCourseDetailModal(c)}
+                              >
+                                {getEnrolledCount(c.id)}명
+                              </button>
+                            </td>
+                            <td>
+                              <div style={{ fontSize: '.875rem' }}>{formatPrice(c.price)}</div>
+                              <div style={{ fontSize: '.72rem', color: 'var(--t3)', textDecoration: 'line-through' }}>{formatPrice(c.originalPrice)}</div>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '.72rem', padding: '2px 8px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)' }}>{c.level}</span>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '.72rem', padding: '2px 8px', borderRadius: 'var(--pill)', background: c.status === 'private' ? 'rgba(224,82,82,.1)' : 'rgba(52,196,124,.1)', color: c.status === 'private' ? 'var(--fail)' : 'var(--ok)' }}>
+                                {c.status === 'private' ? '비공개' : '공개'}
+                              </span>
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                <button className="btn btn-primary btn-sm" onClick={() => openCourseEdit(c)}>편집</button>
+                                <button className="btn btn-ghost btn-sm" onClick={() => openCurriculumEdit(c)}>커리큘럼</button>
+                                <Link to={`/course/${c.id}`} className="btn btn-ghost btn-sm">보기</Link>
+                                {isCustom && (
+                                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }} onClick={() => handleDeleteCourse(c.id)}>삭제</button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ═══ 수강생 관리 ═══ */}
+          {sec === 'students' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>수강생 ({users.length}명)</h1>
+              </div>
+              <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', overflow: 'hidden' }}>
+                {users.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--t2)' }}>등록된 수강생이 없습니다.</div>
+                ) : (
+                  <table className="admin-table">
+                    <thead><tr><th>이름</th><th>이메일</th><th>수강 강의</th><th>가입일</th><th>액션</th></tr></thead>
+                    <tbody>
+                      {users.map(u => (
+                        <tr key={u.uid}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg,var(--purple),var(--purple-sat))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.75rem', fontWeight: 700 }}>
+                                {u.avatar}
+                              </div>
+                              <span style={{ fontWeight: 600 }}>{u.name}</span>
+                            </div>
+                          </td>
+                          <td style={{ fontSize: '.855rem', color: 'var(--t2)' }}>{u.email}</td>
+                          <td>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {(u.enrollments || []).length === 0
+                                ? <span style={{ color: 'var(--t3)', fontSize: '.8rem' }}>없음</span>
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                : (u.enrollments || []).map((e: any) => {
+                                  const c = courses.find(x => x.id === e.courseId)
+                                  return (
+                                    <div key={e.courseId} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                      <span style={{ fontSize: '.72rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)' }}>
+                                        {c ? `${c.emoji} ${c.title.slice(0, 8)}` : e.courseId}
+                                      </span>
+                                      <button
+                                        title="수강 취소"
+                                        style={{ fontSize: '.65rem', color: 'var(--fail)', cursor: 'pointer', padding: '1px 4px', borderRadius: '3px', background: 'rgba(224,82,82,.1)' }}
+                                        onClick={() => handleCancelEnroll(u.uid, e.courseId)}
+                                      >✕</button>
+                                    </div>
+                                  )
+                                })
+                              }
+                            </div>
+                          </td>
+                          <td style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{new Date(u.createdAt).toLocaleDateString()}</td>
+                          <td>
+                            <button className="btn btn-primary btn-sm"
+                              onClick={() => setEnrollModal({ user: u, courseId: courses[0]?.id || '', days: 365 })}>
+                              + 수강 등록
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ 결제 내역 ═══ */}
+          {sec === 'payments' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>결제 내역 ({allEnrollments.length}건)</h1>
+              </div>
+              <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', overflow: 'hidden' }}>
+                {allEnrollments.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--t2)' }}>결제 내역이 없습니다.</div>
+                ) : (
+                  <table className="admin-table">
+                    <thead>
+                      <tr><th>수강생</th><th>강의</th><th>등록일</th><th>수강 기간</th><th>진도</th><th>타입</th><th>상태</th></tr>
+                    </thead>
+                    <tbody>
+                      {allEnrollments.map((e, i) => {
+                        const c = courses.find(x => x.id === e.courseId)
+                        const expired = !e.paused && new Date(e.expiryDate) <= new Date()
+                        const daysLeft = e.paused
+                          ? `${e.remainingDays || 0}일 (휴강)`
+                          : expired
+                          ? '만료됨'
+                          : `${Math.ceil((new Date(e.expiryDate).getTime() - Date.now()) / 86400000)}일`
+                        return (
+                          <tr key={i}>
+                            <td>
+                              <div>
+                                <div style={{ fontWeight: 600, fontSize: '.875rem' }}>{e.user.name}</div>
+                                <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{e.user.email}</div>
+                              </div>
+                            </td>
+                            <td style={{ fontSize: '.855rem' }}>{c ? `${c.emoji} ${c.title}` : e.courseId}</td>
+                            <td style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{new Date(e.enrolledAt).toLocaleDateString()}</td>
+                            <td style={{ fontSize: '.8rem', color: expired ? 'var(--fail)' : e.paused ? 'var(--warn)' : 'var(--t2)' }}>{daysLeft}</td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div style={{ width: '60px', height: '4px', borderRadius: '99px', background: 'rgba(255,255,255,.1)', overflow: 'hidden' }}>
+                                  <div style={{ width: `${e.progress || 0}%`, height: '100%', background: 'var(--purple)', borderRadius: '99px' }} />
+                                </div>
+                                <span style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{e.progress || 0}%</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: e.type === 'manual' ? 'rgba(232,156,56,.12)' : 'rgba(52,196,124,.12)', color: e.type === 'manual' ? 'var(--warn)' : 'var(--ok)' }}>
+                                {e.type === 'manual' ? '수동' : '결제'}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: expired ? 'rgba(224,82,82,.1)' : e.paused ? 'rgba(232,156,56,.1)' : 'rgba(52,196,124,.1)', color: expired ? 'var(--fail)' : e.paused ? 'var(--warn)' : 'var(--ok)' }}>
+                                {expired ? '만료' : e.paused ? '휴강' : '수강중'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ 문의 관리 ═══ */}
+          {sec === 'inquiries' && (
+            <div>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '28px' }}>
+                문의 관리
+                {pendingCount > 0 && <span style={{ fontSize: '.85rem', color: 'var(--warn)', fontWeight: 400, marginLeft: '8px' }}>({pendingCount}건 대기)</span>}
+              </h1>
+              {inquiries.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>접수된 문의가 없습니다.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {inquiries.map(inq => (
+                    <div key={inq.id} style={{ background: 'var(--glass-1)', border: `1px solid ${inq.status === 'pending' ? 'rgba(232,156,56,.25)' : 'var(--line)'}`, borderRadius: 'var(--r3)', padding: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {inq.type === 'refund' && (
+                              <span style={{ fontSize: '.7rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.12)', color: 'var(--fail)' }}>환불 요청</span>
+                            )}
+                            {inq.subject}
+                          </div>
+                          <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>
+                            {inq.userName} ({inq.userEmail}) · {new Date(inq.date).toLocaleDateString()}
+                            {inq.metadata?.courseId && (() => {
+                              const c = courses.find(x => x.id === inq.metadata?.courseId)
+                              return c ? <span style={{ marginLeft: '8px', color: 'var(--purple-2)' }}>· {c.emoji} {c.title}</span> : null
+                            })()}
+                          </div>
+                        </div>
+                        <span style={{
+                          fontSize: '.72rem', padding: '3px 10px', borderRadius: 'var(--pill)', flexShrink: 0,
+                          background: inq.status === 'answered' ? 'rgba(52,196,124,.1)' : 'rgba(232,156,56,.1)',
+                          color: inq.status === 'answered' ? 'var(--ok)' : 'var(--warn)',
+                          border: `1px solid ${inq.status === 'answered' ? 'rgba(52,196,124,.2)' : 'rgba(232,156,56,.2)'}`,
+                        }}>
+                          {inq.status === 'answered' ? '답변 완료' : '답변 대기'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '.875rem', color: 'var(--t2)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: '12px' }}>{inq.message}</p>
+                      {inq.status === 'answered' && (
+                        <div style={{ padding: '12px 16px', background: 'rgba(52,196,124,.05)', border: '1px solid rgba(52,196,124,.15)', borderRadius: 'var(--r2)', marginBottom: '12px' }}>
+                          <div style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--ok)', marginBottom: '6px' }}>
+                            ✓ 관리자 답변 ({inq.answeredAt ? new Date(inq.answeredAt).toLocaleDateString() : ''})
+                          </div>
+                          <div style={{ fontSize: '.855rem', color: 'var(--t1)', whiteSpace: 'pre-wrap' }}>{inq.answer}</div>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className={`btn btn-sm ${inq.status !== 'answered' ? 'btn-primary' : 'btn-ghost'}`}
+                          onClick={() => setAnswerModal({ inq, text: inq.answer || '' })}>
+                          {inq.status !== 'answered' ? '답변 작성' : '답변 수정'}
+                        </button>
+                        {inq.type === 'refund' && inq.status !== 'answered' && (
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
+                            onClick={async () => {
+                              if (inq.metadata?.courseId) await handleCancelEnroll(inq.userId, inq.metadata.courseId)
+                              await answerInquiry(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
+                              toast('환불 처리 완료', 'ok')
+                              refresh()
+                            }}>
+                            환불 처리
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ 리뷰 관리 ═══ */}
+          {sec === 'reviews' && (
+            <div>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '28px' }}>
+                리뷰 관리 ({reviews.length}개)
+              </h1>
+              {reviews.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>등록된 리뷰가 없습니다.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {reviews.map(r => {
+                    const c = courses.find(x => x.id === r.courseId)
+                    return (
+                      <div key={r.id} style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg,var(--purple),var(--purple-sat))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                          {r.userAvatar}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <span style={{ fontWeight: 700, fontSize: '.875rem' }}>{r.userName}</span>
+                            <span style={{ fontSize: '.77rem', color: 'var(--gold)' }}>{'★'.repeat(r.rating)}</span>
+                            <span style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{new Date(r.date).toLocaleDateString()}</span>
+                          </div>
+                          {c && <div style={{ fontSize: '.75rem', color: 'var(--purple-2)', marginBottom: '6px' }}>{c.emoji} {c.title}</div>}
+                          <p style={{ fontSize: '.875rem', color: 'var(--t2)', lineHeight: 1.6 }}>{r.text}</p>
+                        </div>
+                        <button
+                          style={{ fontSize: '.75rem', padding: '5px 10px', borderRadius: 'var(--r1)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', cursor: 'pointer', flexShrink: 0 }}
+                          onClick={() => handleDeleteReview(r.id)}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* ── 강의 등록/편집 모달 ── */}
+      {courseEditModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCourseEditModal(null) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '660px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <button className="modal-close" onClick={() => setCourseEditModal(null)}>✕</button>
+            <div className="modal-head" style={{ flexShrink: 0 }}>
+              <h2>{courseEditModal._isNew ? '새 강의 등록' : '강의 편집'}</h2>
+              <p style={{ fontSize: '.82rem', color: 'var(--t3)' }}>
+                {courseEditModal._isNew ? '새 강의를 등록합니다.' : '변경 사항은 즉시 사용자 화면에 반영됩니다.'}
+              </p>
+            </div>
+            <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
+              <form onSubmit={handleCourseEdit}>
+
+                {/* ① 기본 정보 */}
+                <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)' }}>기본 정보</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: '0 12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">이모지</label>
+                    <input className="form-input" type="text" placeholder="📚"
+                      value={courseEditModal.emoji}
+                      onChange={e => setCourseEditModal(p => p ? { ...p, emoji: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">강의명 *</label>
+                    <input className="form-input" type="text" placeholder="강의명을 입력하세요" required
+                      value={courseEditModal.title}
+                      onChange={e => setCourseEditModal(p => p ? { ...p, title: e.target.value } : null)} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">부제목</label>
+                  <input className="form-input" type="text" placeholder="한 줄 설명"
+                    value={courseEditModal.subtitle}
+                    onChange={e => setCourseEditModal(p => p ? { ...p, subtitle: e.target.value } : null)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">강의 소개</label>
+                  <textarea className="form-input" rows={3} placeholder="강의에 대한 상세 설명을 입력하세요."
+                    value={courseEditModal.description}
+                    onChange={e => setCourseEditModal(p => p ? { ...p, description: e.target.value } : null)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 1fr', gap: '0 12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">레벨</label>
+                    <select className="form-input"
+                      value={courseEditModal.level}
+                      onChange={e => setCourseEditModal(p => p ? { ...p, level: e.target.value } : null)}>
+                      {['입문', '중급', '고급'].map(l => <option key={l}>{l}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">총 시간</label>
+                    <input className="form-input" type="text" placeholder="예: 12시간"
+                      value={courseEditModal.duration}
+                      onChange={e => setCourseEditModal(p => p ? { ...p, duration: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">강수</label>
+                    <input className="form-input" type="number" min={0} placeholder="0"
+                      value={courseEditModal.lessons || ''}
+                      onChange={e => setCourseEditModal(p => p ? { ...p, lessons: Number(e.target.value) } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">상태</label>
+                    <select className="form-input"
+                      value={courseEditModal.status}
+                      onChange={e => setCourseEditModal(p => p ? { ...p, status: e.target.value as 'public' | 'private' } : null)}>
+                      <option value="public">공개</option>
+                      <option value="private">비공개</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">뱃지 <span style={{ color: 'var(--t3)', fontWeight: 400 }}>(예: 베스트셀러, 인기, 자격증)</span></label>
+                  <input className="form-input" type="text" placeholder="빈칸이면 뱃지 없음"
+                    value={courseEditModal.badge}
+                    onChange={e => setCourseEditModal(p => p ? { ...p, badge: e.target.value } : null)} />
+                </div>
+
+                {/* ② 강사 정보 */}
+                <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', margin: '20px 0 12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)' }}>강사 정보</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: '0 12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">아바타</label>
+                    <input className="form-input" type="text" placeholder="🎓"
+                      value={courseEditModal.instructorAvatar}
+                      onChange={e => setCourseEditModal(p => p ? { ...p, instructorAvatar: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">강사명</label>
+                    <input className="form-input" type="text" placeholder="강사 이름"
+                      value={courseEditModal.instructor}
+                      onChange={e => setCourseEditModal(p => p ? { ...p, instructor: e.target.value } : null)} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">강사 소개</label>
+                  <textarea className="form-input" rows={2} placeholder="강사 경력 및 소개"
+                    value={courseEditModal.instructorBio}
+                    onChange={e => setCourseEditModal(p => p ? { ...p, instructorBio: e.target.value } : null)} />
+                </div>
+
+                {/* ③ 가격 & 수강 기간 */}
+                <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', margin: '20px 0 12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)' }}>가격 & 수강 기간</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr', gap: '6px 10px', alignItems: 'center', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '.72rem', color: 'var(--t3)', fontWeight: 700 }}>기간</div>
+                  <div style={{ fontSize: '.72rem', color: 'var(--t3)', fontWeight: 700 }}>판매가 (원)</div>
+                  <div style={{ fontSize: '.72rem', color: 'var(--t3)', fontWeight: 700 }}>정가 (원)</div>
+                  {courseEditModal.tiers.map((tier, i) => (
+                    <React.Fragment key={i}>
+                      <select className="form-input" value={tier.days}
+                        onChange={e => {
+                          const tiers = courseEditModal.tiers.map((t, j) => j === i ? { ...t, days: Number(e.target.value) } : t)
+                          setCourseEditModal(p => p ? { ...p, tiers } : null)
+                        }}>
+                        <option value={30}>30일</option>
+                        <option value={60}>60일</option>
+                        <option value={90}>90일</option>
+                        <option value={180}>180일</option>
+                        <option value={365}>365일</option>
+                        <option value={9999}>무제한</option>
+                      </select>
+                      <input className="form-input" type="number" min={0} placeholder="판매가"
+                        value={tier.price || ''}
+                        onChange={e => {
+                          const tiers = courseEditModal.tiers.map((t, j) => j === i ? { ...t, price: Number(e.target.value) } : t)
+                          setCourseEditModal(p => p ? { ...p, tiers } : null)
+                        }} />
+                      <input className="form-input" type="number" min={0} placeholder="정가"
+                        value={tier.originalPrice || ''}
+                        onChange={e => {
+                          const tiers = courseEditModal.tiers.map((t, j) => j === i ? { ...t, originalPrice: Number(e.target.value) } : t)
+                          setCourseEditModal(p => p ? { ...p, tiers } : null)
+                        }} />
+                    </React.Fragment>
+                  ))}
+                </div>
+                <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginBottom: '4px' }}>첫 번째 기간이 기본 가격(목록 표시가)으로 사용됩니다. 가격 0은 제외됩니다.</div>
+
+                {/* ④ 학습 목표 */}
+                <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', margin: '20px 0 12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)' }}>학습 목표 (이수 후 얻는 것)</div>
+                <div className="form-group">
+                  <textarea className="form-input" rows={5}
+                    placeholder={'한 줄에 하나씩 입력하세요.\n예:\n메이저 아르카나 22장 완벽 해석\n마이너 아르카나 4수트 심층 이해'}
+                    value={courseEditModal.whatYouLearnText}
+                    onChange={e => setCourseEditModal(p => p ? { ...p, whatYouLearnText: e.target.value } : null)} />
+                  <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '4px' }}>강의 상세 페이지 "이런 것을 배워요" 섹션에 표시됩니다.</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                  <button type="button" className="btn btn-ghost w-full" onClick={() => setCourseEditModal(null)}>취소</button>
+                  <button type="submit" className="btn btn-primary w-full">
+                    {courseEditModal._isNew ? '강의 등록하기' : '저장하기'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 강의 수강생 상세 모달 ── */}
+      {courseDetailModal && (() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const enrolled = users.filter(u => (u.enrollments || []).some((e: any) => e.courseId === courseDetailModal.id))
+        return (
+          <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCourseDetailModal(null) }}>
+            <div className="modal-box" style={{ position: 'relative', maxWidth: '500px' }}>
+              <button className="modal-close" onClick={() => setCourseDetailModal(null)}>✕</button>
+              <div className="modal-head">
+                <h2>{courseDetailModal.emoji} {courseDetailModal.title}</h2>
+                <p>수강생 {enrolled.length}명</p>
+              </div>
+              <div className="modal-body">
+                {enrolled.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--t3)', padding: '20px' }}>수강생이 없습니다.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {enrolled.map(u => {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const e = (u.enrollments || []).find((x: any) => x.courseId === courseDetailModal.id)!
+                      const expired = !e.paused && new Date(e.expiryDate) <= new Date()
+                      return (
+                        <div key={u.uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(255,255,255,.03)', borderRadius: 'var(--r2)', border: '1px solid var(--line)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,var(--purple),var(--purple-sat))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 700 }}>{u.avatar}</div>
+                            <div>
+                              <div style={{ fontSize: '.875rem', fontWeight: 600 }}>{u.name}</div>
+                              <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{e.progress || 0}% 진도</div>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: expired ? 'rgba(224,82,82,.1)' : 'rgba(52,196,124,.1)', color: expired ? 'var(--fail)' : 'var(--ok)' }}>
+                            {expired ? '만료' : e.paused ? '휴강' : '수강중'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── 문의 답변 모달 ── */}
+      {answerModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setAnswerModal(null) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '500px' }}>
+            <button className="modal-close" onClick={() => setAnswerModal(null)}>✕</button>
+            <div className="modal-head">
+              <h2>문의 답변</h2>
+              <p style={{ fontSize: '.82rem', color: 'var(--t2)', marginTop: '4px' }}>{answerModal.inq.subject}</p>
+            </div>
+            <div className="modal-body">
+              <div style={{ padding: '12px', background: 'rgba(255,255,255,.03)', borderRadius: 'var(--r2)', marginBottom: '16px', fontSize: '.83rem', color: 'var(--t2)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {answerModal.inq.message}
+              </div>
+              <form onSubmit={handleAnswer}>
+                <div className="form-group">
+                  <label className="form-label">답변 내용</label>
+                  <textarea className="form-input" rows={6} required
+                    placeholder="답변 내용을 입력해주세요."
+                    value={answerModal.text}
+                    onChange={e => setAnswerModal(p => p ? { ...p, text: e.target.value } : null)} />
+                </div>
+                <button type="submit" className="btn btn-primary w-full">답변 등록</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 수동 수강 등록 모달 ── */}
+      {enrollModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setEnrollModal(null) }}>
+          <div className="modal-box" style={{ position: 'relative' }}>
+            <button className="modal-close" onClick={() => setEnrollModal(null)}>✕</button>
+            <div className="modal-head">
+              <h2>수강 수동 등록</h2>
+              <p>{enrollModal.user.name} ({enrollModal.user.email})</p>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleEnroll}>
+                <div className="form-group">
+                  <label className="form-label">강의 선택</label>
+                  <select className="form-input"
+                    value={enrollModal.courseId}
+                    onChange={e => setEnrollModal(p => p ? { ...p, courseId: e.target.value } : null)}>
+                    {courses.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.title}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">수강 기간</label>
+                  <select className="form-input"
+                    value={enrollModal.days}
+                    onChange={e => setEnrollModal(p => p ? { ...p, days: Number(e.target.value) } : null)}>
+                    <option value={30}>30일</option>
+                    <option value={90}>90일</option>
+                    <option value={180}>180일</option>
+                    <option value={365}>365일</option>
+                    <option value={9999}>무제한</option>
+                  </select>
+                  <div style={{ fontSize: '.75rem', color: 'var(--t3)', marginTop: '4px' }}>
+                    {enrollModal.days >= 9999 ? '무제한' : `${enrollModal.days}일`} 수강 가능
+                  </div>
+                </div>
+                <button type="submit" className="btn btn-primary w-full">등록하기</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── 커리큘럼 편집 모달 ── */}
+      {curriculumModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCurriculumModal(null) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '720px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <button className="modal-close" onClick={() => setCurriculumModal(null)}>✕</button>
+            <div className="modal-head" style={{ flexShrink: 0, textAlign: 'left', padding: '20px 24px 16px' }}>
+              <h2 style={{ fontSize: '1.05rem' }}>커리큘럼 편집</h2>
+              <p style={{ fontSize: '.82rem', color: 'var(--t3)', margin: 0 }}>{curriculumModal.courseTitle}</p>
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1, padding: '0 24px 24px' }}>
+              {curriculumModal.sections.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--t3)', fontSize: '.875rem' }}>
+                  섹션이 없습니다. 아래 버튼으로 첫 섹션을 추가하세요.
+                </div>
+              )}
+
+              {curriculumModal.sections.map((sec, si) => (
+                <div key={sec._key} style={{ marginBottom: '16px', border: '1px solid var(--line)', borderRadius: 'var(--r3)', overflow: 'hidden' }}>
+                  {/* 섹션 헤더 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'rgba(109,86,224,.08)', borderBottom: '1px solid var(--line)' }}>
+                    <span style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--purple-2)', flexShrink: 0 }}>섹션 {si + 1}</span>
+                    <input
+                      className="form-input"
+                      style={{ flex: 1, padding: '5px 10px', fontSize: '.875rem' }}
+                      placeholder="섹션 이름"
+                      value={sec.section}
+                      onChange={e => currUpdateSection(sec._key, e.target.value)}
+                    />
+                    <button
+                      style={{ fontSize: '.72rem', padding: '4px 10px', borderRadius: 'var(--r1)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', cursor: 'pointer', flexShrink: 0 }}
+                      onClick={() => currDeleteSection(sec._key)}
+                    >
+                      섹션 삭제
+                    </button>
+                  </div>
+
+                  {/* 강의 목록 */}
+                  <div style={{ padding: '8px 14px' }}>
+                    {sec.items.length === 0 && (
+                      <div style={{ fontSize: '.78rem', color: 'var(--t3)', padding: '8px 0' }}>강의가 없습니다.</div>
+                    )}
+                    {sec.items.map((item, ii) => (
+                      <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 80px 120px 80px 28px', gap: '6px', alignItems: 'center', padding: '6px 0', borderBottom: ii < sec.items.length - 1 ? '1px solid rgba(255,255,255,.05)' : 'none' }}>
+                        <span style={{ fontSize: '.72rem', color: 'var(--t3)', textAlign: 'center' }}>{ii + 1}</span>
+                        <input className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
+                          placeholder="강의 제목" value={item.title}
+                          onChange={e => currUpdateLesson(sec._key, item.id, 'title', e.target.value)} />
+                        <input className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
+                          placeholder="시간 (00:00)" value={item.duration}
+                          onChange={e => currUpdateLesson(sec._key, item.id, 'duration', e.target.value)} />
+                        <input className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
+                          placeholder="Vimeo ID" value={item.vimeo}
+                          onChange={e => currUpdateLesson(sec._key, item.id, 'vimeo', e.target.value)} />
+                        <select className="form-input" style={{ padding: '5px 8px', fontSize: '.82rem' }}
+                          value={item.status}
+                          onChange={e => currUpdateLesson(sec._key, item.id, 'status', e.target.value)}>
+                          <option value="free">무료</option>
+                          <option value="locked">잠금</option>
+                        </select>
+                        <button
+                          style={{ width: '28px', height: '28px', borderRadius: 'var(--r1)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', cursor: 'pointer', fontSize: '.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={() => currDeleteLesson(sec._key, item.id)}
+                        >✕</button>
+                      </div>
+                    ))}
+                    <button
+                      style={{ marginTop: '8px', fontSize: '.78rem', padding: '5px 12px', borderRadius: 'var(--r1)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)', cursor: 'pointer' }}
+                      onClick={() => currAddLesson(sec._key)}
+                    >
+                      + 강의 추가
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                style={{ width: '100%', padding: '10px', borderRadius: 'var(--r2)', border: '1px dashed var(--line)', color: 'var(--t3)', fontSize: '.875rem', cursor: 'pointer', marginBottom: '16px' }}
+                onClick={currAddSection}
+              >
+                + 섹션 추가
+              </button>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn btn-ghost w-full" onClick={() => setCurriculumModal(null)}>취소</button>
+                <button className="btn btn-primary w-full" onClick={handleSaveCurriculum}>저장하기</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
