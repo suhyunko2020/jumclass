@@ -8,6 +8,7 @@ React 19 + Vite 8 + TS + Tailwind v4 + Supabase + Vercel
 - 강의 조회: `useCourses().getCourse(id)` / `getPublicCourses()` — COURSES 직접 참조 금지
 - 데이터: localStorage 캐시 읽기(동기) → Supabase 쓰기(비동기) — 캐시 우선 패턴
 - 인증: `useAuth()` — Supabase Auth 기반, `AppUser` 타입
-- CSS: `index.css` 컴포넌트 클래스 + `var(--purple)` 등 CSS 변수
+- CSS: `index.css` 컴포넌트 클래스 + `var(--purple)` 등 CSS 변수. 과도한 그라디언트/글로우/블러 지양
 - **반응형 필수**: 모든 UI 변경은 PC + 모바일(768px) 모두 대응. clamp()/auto-fit 우선, @media 규칙 병행
+- **톤**: AI스러운 과장 문구 지양. 자연스럽고 간결한 표현 사용
 - 세부 사항은 각 폴더의 CLAUDE.md 참조

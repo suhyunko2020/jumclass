@@ -13,5 +13,15 @@ Supabase Auth 기반. `AppUser: { uid, name, email, avatar, createdAt, enrollmen
 - getPublicCourses(): status!='private' 필터링 — 사용자 화면용
 - getAllCourses(): 관리자용 (비공개 포함)
 - addReview(courseId, userId, ..., source): source='user'|'admin'
-- hasReviewed(courseId, userId): 중복 체크
 - syncFromSupabase(): Supabase → localStorage 동기화
+
+## useInstructors.ts
+localStorage 키: `arcana_instructors`
+- getPublicInstructors(): status!='private' 필터링
+- saveInstructor/deleteInstructor: CRUD
+
+## useSiteSettings.ts
+localStorage 키: `arcana_site_settings`
+- 기본 정보: copyright, businessInfo, brandDescription
+- SEO: seoTitle, seoDescription, seoKeywords, ogImage
+- 정책: privacy, terms, refund, copyright (마크다운)

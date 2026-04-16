@@ -33,9 +33,9 @@ export default function HomePage() {
         <HeroBg />
         <div className="container" style={{ position: 'relative', zIndex: 1 }}>
           <div className="hero-inner page-enter">
-            <div className="hero-kicker">✦ &nbsp;국내 1위 타로 강의 플랫폼</div>
+            <div className="hero-kicker">타로 전문 교육 플랫폼</div>
             <h1>타로의 언어를<br /><em>내 것으로</em> 만드세요</h1>
-            <p className="hero-desc">전문 강사의 HD 영상 강의로 입문부터 공인 자격증까지. 체계적인 커리큘럼으로 진짜 타로 실력을 키우세요.</p>
+            <p className="hero-desc">입문부터 자격증까지, 현직 리더의 영상 강의로 배우는 타로. 혼자 공부하다 막힐 때, 여기서 답을 찾으세요.</p>
             <div className="hero-cta">
               <Link to="/courses" className="btn btn-gold btn-xl">강의 둘러보기 →</Link>
               <button className="btn btn-ghost btn-xl" onClick={() => openAuth('signup')}>무료로 시작하기</button>
@@ -48,7 +48,6 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-        <div className="hero-glow" />
       </section>
 
       {/* 인기 강의 */}
@@ -57,7 +56,7 @@ export default function HomePage() {
           <div className="section-header">
             <span className="section-kicker">인기 강의</span>
             <h2>지금 가장 많이 듣는 강의</h2>
-            <p>체계적인 영상 강의로 타로 입문부터 자격증까지 한 번에 해결하세요.</p>
+            <p>수강생들이 실제로 선택한 강의를 확인해보세요.</p>
           </div>
           <div className="courses-grid">
             {courses.map(c => (
@@ -74,18 +73,18 @@ export default function HomePage() {
       <section className="section" style={{ background: 'rgba(255,255,255,.018)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
         <div className="container">
           <div className="section-header">
-            <span className="section-kicker">JUMCLASS가 다른 이유</span>
-            <h2>제대로 된 타로 교육의 기준</h2>
-            <p>수천 명의 수강생이 선택한 방법으로 타로를 배우세요.</p>
+            <span className="section-kicker">왜 JUMCLASS인가</span>
+            <h2>이런 점이 다릅니다</h2>
+            <p>독학이 어려운 타로, 제대로 배울 수 있는 환경을 만들었습니다.</p>
           </div>
           <div className="feat-grid">
             {[
-              { ic: '🎬', t: '고화질 영상 강의', d: '전문 스튜디오에서 제작된 선명한 HD 강의. PC, 모바일 어디서든 편하게 수강하세요.' },
-              { ic: '📜', t: '공인 자격증 과정', d: '타로 업계에서 인정받는 전문 리더 자격증 과정. 수료 후 바로 활동 가능합니다.' },
-              { ic: '🔮', t: '10년+ 현직 강사진', d: '수천 번의 실제 리딩 경험을 가진 현직 전문 리더들이 직접 가르칩니다.' },
-              { ic: '⏳', t: '365일 무제한 수강', d: '한 번 결제로 1년간 무제한 반복 수강. 업데이트된 콘텐츠도 추가 비용 없이 제공됩니다.' },
-              { ic: '📱', t: '모바일 최적화', d: 'PC, 태블릿, 스마트폰 어디서든 끊김 없이 수강할 수 있습니다.' },
-              { ic: '📎', t: '학습 자료 제공', d: '모든 강의에 PDF 참고 자료, 워크시트, 저널링 템플릿이 포함되어 있습니다.' },
+              { ic: '🎬', t: 'HD 영상 강의', d: '촬영 퀄리티에 신경 쓴 깨끗한 영상. PC, 모바일 어디서든 수강 가능합니다.' },
+              { ic: '📜', t: '자격증 과정', d: '수료 후 바로 활동할 수 있는 전문 리더 자격증 과정을 운영합니다.' },
+              { ic: '🔮', t: '현직 강사진', d: '실제 리딩 현장에서 활동 중인 강사들이 직접 가르칩니다.' },
+              { ic: '⏳', t: '넉넉한 수강 기간', d: '한 번 결제하면 수강 기간 내 무제한 반복. 업데이트 영상도 추가 비용 없이 제공.' },
+              { ic: '📱', t: '어디서든 수강', d: 'PC, 태블릿, 스마트폰 — 기기 제한 없이 이어서 볼 수 있습니다.' },
+              { ic: '📎', t: '학습 자료 포함', d: 'PDF 자료, 워크시트, 저널링 템플릿이 강의에 포함되어 있습니다.' },
             ].map(f => (
               <div key={f.t} className="feat-card">
                 <span className="feat-ic">{f.ic}</span>
@@ -102,7 +101,7 @@ export default function HomePage() {
         <div className="container">
           <div className="section-header">
             <span className="section-kicker">수강생 후기</span>
-            <h2>실제 수강생의 변화</h2>
+            <h2>수강생들의 이야기</h2>
           </div>
           <div className="testi-grid">
             {TESTIMONIALS.map((t, i) => (
@@ -130,12 +129,12 @@ export default function HomePage() {
           }}>
             <div style={{ position: 'absolute', top: '-100px', left: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(124,111,205,.12) 0%,transparent 70%)', pointerEvents: 'none' }} />
             <div style={{ position: 'absolute', bottom: '-80px', right: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(201,168,76,.09) 0%,transparent 70%)', pointerEvents: 'none' }} />
-            <span className="section-kicker">{user ? '강의 둘러보기' : '지금 시작하세요'}</span>
+            <span className="section-kicker">{user ? '다음 강의' : '시작하기'}</span>
             <h2 style={{ fontSize: 'clamp(1.7rem,3.5vw,2.4rem)', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>
-              {user ? '새로운 강의를 확인해보세요' : '타로를 배울 준비가 됐나요?'}
+              {user ? '다음 강의를 찾고 계신가요?' : '타로, 한번 배워볼까요?'}
             </h2>
             <p style={{ color: 'var(--t2)', maxWidth: '420px', margin: '0 auto 28px', lineHeight: 1.75 }}>
-              {user ? '체계적인 커리큘럼으로 다음 단계의 실력을 키우세요.' : '3,800명이 선택한 JUMCLASS에서 첫 강의를 무료로 시작하세요.'}
+              {user ? '새로운 강의가 기다리고 있습니다.' : '회원가입 후 무료 미리보기 강의를 바로 들어보세요.'}
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
               {user ? (
@@ -160,8 +159,8 @@ export default function HomePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'clamp(28px, 5vw, 60px)', alignItems: 'center' }}>
             <div>
               <span className="section-kicker">문의</span>
-              <h2 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>궁금한 점이 있으신가요?</h2>
-              <p style={{ color: 'var(--t2)', marginBottom: '22px', lineHeight: 1.75 }}>어떤 강의를 들어야 할지 모르겠거나 강의 관련 문의가 있으시면 언제든 연락 주세요. 24시간 내로 답변드립니다.</p>
+              <h2 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>궁금한 게 있으신가요?</h2>
+              <p style={{ color: 'var(--t2)', marginBottom: '22px', lineHeight: 1.75 }}>어떤 강의를 들어야 할지 잘 모르겠다면 편하게 문의해주세요. 영업일 기준 24시간 내로 답변드립니다.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ fontSize: '.875rem', color: 'var(--t2)' }}>📧 &nbsp;hello@jumclass.kr</div>
                 <div style={{ fontSize: '.875rem', color: 'var(--t2)' }}>💬 &nbsp;평일 오전 9시 – 오후 6시 (채팅 상담)</div>
