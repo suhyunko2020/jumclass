@@ -1422,7 +1422,7 @@ export default function AdminPage() {
                         const sy = (img.height - min) / 2
                         canvas.width = size; canvas.height = size
                         canvas.getContext('2d')!.drawImage(img, sx, sy, min, min, 0, 0, size, size)
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
                         setInstModal(p => p ? { ...p, photo: dataUrl } : null)
                       }
                       img.src = URL.createObjectURL(file)
@@ -1440,8 +1440,9 @@ export default function AdminPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">전문 분야 (쉼표 구분)</label>
-                  <input className="form-input" placeholder="타로, 오라클, 수비학" value={instModal.specialties.join(', ')}
-                    onChange={e => setInstModal(p => p ? { ...p, specialties: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } : null)} />
+                  <input className="form-input" placeholder="타로, 오라클, 수비학"
+                    defaultValue={instModal.specialties.join(', ')}
+                    onBlur={e => setInstModal(p => p ? { ...p, specialties: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } : null)} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 12px' }}>
                   <div className="form-group">
