@@ -35,35 +35,28 @@ export default function InstructorsPage() {
                   </div>
                 </div>
                 <div className="inst-card-body">
-                  {/* 전문분야 + 경력 */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div className="inst-card-specialties" style={{ marginBottom: 0 }}>
-                      {inst.specialties.slice(0, 3).map(s => (
-                        <span key={s} className="inst-tag">{s}</span>
-                      ))}
-                    </div>
-                    <span style={{ fontSize: '.75rem', color: 'var(--t3)', flexShrink: 0 }}>{inst.experience}</span>
+                  {/* 전문분야 */}
+                  <div className="inst-card-specialties">
+                    {inst.specialties.slice(0, 3).map(s => (
+                      <span key={s} className="inst-tag">{s}</span>
+                    ))}
                   </div>
 
-                  {/* 연락처 + 상담 아이콘 라인 */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '.78rem', color: 'var(--t3)', marginBottom: '12px' }}>
-                    {inst.phone && <span style={{ color: 'var(--ok)' }}>Phone</span>}
-                    {inst.instagram && <span style={{ background: 'linear-gradient(135deg, #E1306C, #F77737)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Instagram</span>}
-                    {inst.kakao && <span style={{ color: '#FEE500' }}>KakaoTalk</span>}
-                  </div>
-
-                  {/* 하단: 상담 방식 + 서비스 수 */}
-                  <div className="inst-card-footer">
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      {inst.consultOnline && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '.72rem', color: 'var(--ok)' }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ok)' }} />온라인
-                        </span>
-                      )}
-                      {inst.consultOffline && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '.72rem', color: 'var(--purple-2)' }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--purple-2)' }} />오프라인
-                        </span>
+                  {/* 하단 */}
+                  <div className="inst-card-footer" style={{ marginTop: 'auto' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '.75rem' }}>
+                      <span style={{ color: 'var(--t3)' }}>{inst.experience}</span>
+                      {(inst.consultOnline || inst.consultOffline) && (
+                        <>
+                          <span style={{ color: 'var(--line-2)' }}>·</span>
+                          {inst.consultOnline && inst.consultOffline ? (
+                            <span style={{ color: 'var(--purple-2)' }}>온·오프라인 상담</span>
+                          ) : inst.consultOnline ? (
+                            <span style={{ color: 'var(--ok)' }}>온라인 상담</span>
+                          ) : (
+                            <span style={{ color: 'var(--warn)' }}>오프라인 상담</span>
+                          )}
+                        </>
                       )}
                     </div>
                     <span className="inst-card-services">{inst.services.length}개 서비스</span>

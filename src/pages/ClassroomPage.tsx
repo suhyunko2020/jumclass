@@ -187,23 +187,27 @@ export default function ClassroomPage() {
 
         {/* 수강 종료 */}
         {tab === 'expired' && (
-          <div className="my-grid">
+          <div className="my-list">
             {expired.map(e => {
               const c = getCourse(e.courseId)
               if (!c) return null
               return (
-                <div key={e.courseId} className="my-card expired">
-                  <div className="my-card-thumb">
+                <div key={e.courseId} className="my-card" style={{ opacity: .7, cursor: 'default' }}>
+                  <div className="my-card-thumb" style={{ position: 'relative' }}>
                     {c.emoji}
                     <div className="expired-cover">수강 종료</div>
                   </div>
                   <div className="my-card-body">
                     <div className="my-card-top">
                       <div className="my-card-title">{c.title}</div>
+                      <span style={{ flexShrink: 0, fontSize: '.68rem', fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', border: '1px solid rgba(224,82,82,.2)', whiteSpace: 'nowrap' }}>수강 종료</span>
                     </div>
-                    <div className="my-card-meta">{c.instructor} · {c.lessons}강</div>
+                    <div className="my-card-meta">{c.instructor} · {c.lessons}강 · {c.duration}</div>
                     <div className="my-card-actions">
-                      <Link to={`/checkout?course=${c.id}`} className="btn btn-ghost btn-sm">재수강 신청</Link>
+                      <Link to={`/checkout?course=${c.id}`} className="btn btn-primary btn-sm"
+                        onClick={e2 => e2.stopPropagation()}>
+                        재수강 신청 →
+                      </Link>
                     </div>
                   </div>
                 </div>
