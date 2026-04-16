@@ -40,8 +40,8 @@ export default function InstructorsPage() {
                   </div>
                   <p className="inst-card-bio">{inst.bio.slice(0, 80)}{inst.bio.length > 80 ? '...' : ''}</p>
                   <div className="inst-card-links">
-                    {inst.instagram && <span className="inst-social">Instagram</span>}
-                    {inst.kakao && <span className="inst-social">KakaoTalk</span>}
+                    {inst.instagram && <span className="inst-social" style={{ background: 'rgba(225,48,108,.08)', color: '#E1306C', borderColor: 'rgba(225,48,108,.2)' }}>Instagram</span>}
+                    {inst.kakao && <span className="inst-social" style={{ background: 'rgba(254,229,0,.06)', color: '#FEE500', borderColor: 'rgba(254,229,0,.15)' }}>KakaoTalk</span>}
                   </div>
                   <div className="inst-card-footer">
                     <span className="inst-card-exp">{inst.experience}</span>

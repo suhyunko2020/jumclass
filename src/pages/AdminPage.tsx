@@ -1312,9 +1312,32 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">프로필 사진 URL</label>
-                  <input className="form-input" placeholder="https://..." value={instModal.photo}
-                    onChange={e => setInstModal(p => p ? { ...p, photo: e.target.value } : null)} />
+                  <label className="form-label">프로필 사진</label>
+                  {instModal.photo && (
+                    <div style={{ marginBottom: '8px', width: '80px', height: '80px', borderRadius: 'var(--r2)', overflow: 'hidden', border: '1px solid var(--line)' }}>
+                      <img src={instModal.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" style={{ fontSize: '.82rem', color: 'var(--t2)' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      const canvas = document.createElement('canvas')
+                      const img = new Image()
+                      img.onload = () => {
+                        const max = 400
+                        let w = img.width, h = img.height
+                        if (w > max || h > max) {
+                          if (w > h) { h = Math.round(h * max / w); w = max }
+                          else { w = Math.round(w * max / h); h = max }
+                        }
+                        canvas.width = w; canvas.height = h
+                        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+                        setInstModal(p => p ? { ...p, photo: dataUrl } : null)
+                      }
+                      img.src = URL.createObjectURL(file)
+                    }} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">경력</label>

@@ -55,14 +55,21 @@ export default function InstructorDetailPage() {
                   {inst.instagram && (
                     <a href={`https://instagram.com/${inst.instagram.replace('@', '')}`}
                       target="_blank" rel="noopener noreferrer" className="inst-contact-btn">
-                      Instagram {inst.instagram}
+                      <span className="inst-contact-label" style={{ background: 'linear-gradient(135deg, #E1306C, #F77737)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Instagram</span>
+                      <span className="inst-contact-value">{inst.instagram}</span>
                     </a>
                   )}
                   {inst.kakao && (
-                    <div className="inst-contact-btn">KakaoTalk {inst.kakao}</div>
+                    <div className="inst-contact-btn">
+                      <span className="inst-contact-label" style={{ color: '#FEE500' }}>KakaoTalk</span>
+                      <span className="inst-contact-value">{inst.kakao}</span>
+                    </div>
                   )}
                   {inst.email && (
-                    <a href={`mailto:${inst.email}`} className="inst-contact-btn">{inst.email}</a>
+                    <a href={`mailto:${inst.email}`} className="inst-contact-btn">
+                      <span className="inst-contact-label" style={{ color: 'var(--purple-2)' }}>Email</span>
+                      <span className="inst-contact-value">{inst.email}</span>
+                    </a>
                   )}
                 </div>
 
