@@ -137,7 +137,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name, avatar: name[0].toUpperCase() } },
+      options: {
+        data: { name, avatar: name[0].toUpperCase() },
+        emailRedirectTo: window.location.origin,
+      },
     })
     if (error) return error.message
     if (!data.user) return '가입에 실패했습니다. 다시 시도해주세요.'

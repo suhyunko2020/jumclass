@@ -79,61 +79,51 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   if (verifyEmail) {
     return (
       <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-        <div className="modal-box" style={{ position: 'relative', textAlign: 'center' }}>
+        <div className="modal-box" style={{ position: 'relative' }}>
           <button className="modal-close" onClick={onClose}>✕</button>
 
-          <div style={{ padding: '12px 0 8px' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📬</div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '8px' }}>
-              인증 메일을 보냈습니다
-            </h2>
-            <p style={{ fontSize: '.9rem', color: 'var(--t2)', marginBottom: '24px', lineHeight: 1.7 }}>
-              <strong style={{ color: 'var(--t1)' }}>{verifyEmail}</strong>으로<br />
-              인증 링크를 발송했습니다.
+          {/* 헤더 */}
+          <div className="modal-head" style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '2.4rem', marginBottom: '12px' }}>📬</div>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>인증 메일을 발송했습니다</h2>
+            <p style={{ marginTop: '8px', lineHeight: 1.7 }}>
+              <strong style={{ color: 'var(--purple-2)' }}>{verifyEmail}</strong><br />
+              위 주소로 인증 링크를 보냈습니다.
             </p>
           </div>
 
-          {/* 안내 단계 */}
-          <div style={{
-            background: 'var(--glass-1)', border: '1px solid var(--line)',
-            borderRadius: 'var(--r3)', padding: '20px', textAlign: 'left',
-            marginBottom: '24px',
-          }}>
-            <div style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', marginBottom: '14px' }}>
-              VERIFICATION STEPS
-            </div>
-            {[
-              { n: '1', text: '이메일 받은편지함을 열어주세요' },
-              { n: '2', text: 'JUMCLASS 또는 Supabase 발신 메일을 찾아주세요' },
-              { n: '3', text: '메일 내 "Confirm your email" 링크를 클릭해주세요' },
-              { n: '4', text: '인증 완료 후 아래 버튼으로 로그인해주세요' },
-            ].map(step => (
-              <div key={step.n} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '10px' }}>
-                <div style={{
-                  width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
-                  background: 'linear-gradient(135deg, var(--purple), var(--purple-sat))',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '.7rem', fontWeight: 700,
-                }}>
-                  {step.n}
+          <div className="modal-body">
+            {/* 안내 단계 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+              {[
+                '받은편지함을 열어주세요',
+                'JUMCLASS 발신 메일을 확인해주세요',
+                '메일 내 인증 링크를 클릭해주세요',
+                '인증 완료 후 로그인해주세요',
+              ].map((text, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+                    background: 'linear-gradient(135deg, var(--purple), var(--purple-sat))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '.75rem', fontWeight: 700,
+                  }}>
+                    {i + 1}
+                  </div>
+                  <span style={{ fontSize: '.875rem', color: 'var(--t2)' }}>{text}</span>
                 </div>
-                <span style={{ fontSize: '.875rem', color: 'var(--t2)', lineHeight: 1.5, paddingTop: '2px' }}>
-                  {step.text}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div style={{ fontSize: '.8rem', color: 'var(--t3)', marginBottom: '20px' }}>
-            메일이 보이지 않으면 <strong>스팸 폴더</strong>도 확인해주세요.
-          </div>
+            <p style={{ fontSize: '.8rem', color: 'var(--t3)', textAlign: 'center', marginBottom: '20px' }}>
+              메일이 보이지 않으면 스팸 폴더를 확인해주세요.
+            </p>
 
-          <button
-            className="btn btn-primary w-full"
-            onClick={() => { setVerifyEmail(''); setTab('login') }}
-          >
-            인증 완료 후 로그인하기 →
-          </button>
+            <button className="btn btn-primary w-full"
+              onClick={() => { setVerifyEmail(''); setTab('login') }}>
+              인증 완료 후 로그인하기 →
+            </button>
+          </div>
         </div>
       </div>
     )
