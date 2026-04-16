@@ -217,13 +217,22 @@ export default function CourseDetailPage() {
 
                   <div className="purchase-includes mt-16">
                     <div style={{ fontSize: '.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--t3)', marginBottom: '8px' }}>포함 내용</div>
-                    <div className="include-item"><span className="ic">🎬</span>{totalLessons}개 영상 강의 ({totalDuration})</div>
-                    <div className="include-item"><span className="ic">📱</span>모바일·PC 어디서든 수강 가능</div>
-                    <div className="include-item"><span className="ic">⏳</span>{formatDays(displayDays)}</div>
+                    {course.level === '자격증' ? (
+                      <>
+                        <div className="include-item"><span className="ic">👤</span>1:1 맞춤 수업</div>
+                        <div className="include-item"><span className="ic">🏫</span>대면 &amp; 비대면 수업 가능</div>
+                        <div className="include-item"><span className="ic">📜</span>수료증 발급</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="include-item"><span className="ic">🎬</span>{totalLessons}개 영상 강의 ({totalDuration})</div>
+                        <div className="include-item"><span className="ic">📱</span>모바일·PC 어디서든 수강 가능</div>
+                        <div className="include-item"><span className="ic">⏳</span>{formatDays(displayDays)}</div>
+                      </>
+                    )}
                     {course.attachments?.map((a, i) => (
                       <div key={i} className="include-item"><span className="ic">📄</span>{a.name}{a.ext ? ` (${a.ext.toUpperCase()})` : ''}</div>
                     ))}
-                    {course.badge === '자격증' && <div className="include-item"><span className="ic">📜</span>수료증 발급</div>}
                   </div>
 
                   {freeLessons > 0 && !enrolled && (
