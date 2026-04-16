@@ -37,6 +37,7 @@ export interface Review {
   rating: number;
   text: string;
   date: string;
+  source?: 'user' | 'admin';
 }
 
 export interface Course {

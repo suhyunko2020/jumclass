@@ -440,16 +440,15 @@ select.form-input { appearance: none; -webkit-appearance: none; cursor: pointer;
 .mypage-nav { padding: 10px 10px; display: flex; flex-direction: column; gap: 2px; }
 .mypage-nav-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; border-radius: var(--r2); text-align: left;
+  padding: 10px 14px; border-radius: var(--r2); text-align: left;
   font-size: .875rem; font-weight: 600; color: var(--t2);
   transition: var(--t); cursor: pointer; width: 100%;
-  border-left: 3px solid transparent;
 }
 .mypage-nav-item:hover { background: rgba(255,255,255,.05); color: var(--t1); }
-.mypage-nav-item.active { background: rgba(124,111,205,.12); color: var(--purple-2); border-left-color: var(--purple); }
+.mypage-nav-item.active { background: rgba(124,111,205,.1); color: var(--purple-2); font-weight: 700; }
 .mypage-nav-icon { font-size: 1rem; }
 .mypage-side-footer { padding: 12px 10px; border-top: 1px solid var(--line); }
-.mypage-content { min-width: 0; }
+.mypage-content { min-width: 0; animation: fadeUp .3s ease forwards; }
 .mypage-section-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line);

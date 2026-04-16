@@ -1,17 +1,20 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
-import { useAuthModal } from '../components/auth/AuthModal'
 import { useToast } from '../components/ui/Toast'
 
 export default function LessonPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { getCourse } = useCourses()
-  const { isEnrolled, getEnrollment, completeLesson } = useAuth()
-  const { openAuth } = useAuthModal()
+  const { getCourse, addReview, hasReviewed } = useCourses()
+  const { user, isEnrolled, getEnrollment, completeLesson } = useAuth()
   const toast = useToast()
+
+  const [reviewModal, setReviewModal] = useState(false)
+  const [reviewRating, setReviewRating] = useState(5)
+  const [reviewText, setReviewText] = useState('')
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
 
   const courseId = params.get('course') || ''
   const lessonId = params.get('lesson') || ''
@@ -74,9 +77,30 @@ export default function LessonPage() {
     navigate(`/lesson?course=${courseId}&lesson=${id}`)
   }
 
-  function markDone(id: string) {
-    completeLesson(courseId, id)
+  async function markDone(id: string) {
+    await completeLesson(courseId, id)
     toast('완료 처리됐습니다! ✦', 'ok')
+
+    const updatedDone = new Set([...done, id])
+    const allComplete = allLessons.every(l => updatedDone.has(l.id))
+    if (allComplete && user && !hasReviewed(courseId, user.uid)) {
+      setTimeout(() => setReviewModal(true), 600)
+    }
+  }
+
+  async function submitReview(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user) return
+    setReviewSubmitting(true)
+    const result = await addReview(courseId, user.uid, user.name, user.avatar, reviewRating, reviewText, 'user')
+    setReviewSubmitting(false)
+    if (result) {
+      toast('리뷰가 등록되었습니다! 감사합니다 ✦', 'ok')
+      setReviewModal(false)
+    } else {
+      toast('이미 리뷰를 작성했습니다.', 'info')
+      setReviewModal(false)
+    }
   }
 
   return (
@@ -165,7 +189,8 @@ export default function LessonPage() {
               return (
                 <div key={item.id}
                   className={`curr-sidebar-item ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
-                  onClick={() => isLocked ? openAuth('login') : goTo(item.id)}
+                  style={{ cursor: isLocked ? 'default' : 'pointer' }}
+                  onClick={() => { if (!isLocked) goTo(item.id) }}
                 >
                   <div className={`s-icon ${iconClass}`}>{iconChar}</div>
                   <span className="s-title">{item.title}</span>
@@ -176,6 +201,52 @@ export default function LessonPage() {
           </div>
         ))}
       </div>
+
+      {/* 리뷰 작성 모달 */}
+      {reviewModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setReviewModal(false) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '460px' }}>
+            <button className="modal-close" onClick={() => setReviewModal(false)}>✕</button>
+            <div className="modal-head" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🎉</div>
+              <h2>강의를 완료했습니다!</h2>
+              <p style={{ fontSize: '.85rem', color: 'var(--t2)' }}>수강 경험을 공유해주세요.</p>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={submitReview}>
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '.8rem', color: 'var(--t3)', marginBottom: '8px' }}>별점을 선택하세요</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button key={n} type="button"
+                        onClick={() => setReviewRating(n)}
+                        style={{
+                          fontSize: '1.8rem', cursor: 'pointer', transition: 'transform .15s',
+                          transform: reviewRating >= n ? 'scale(1.1)' : 'scale(1)',
+                          filter: reviewRating >= n ? 'none' : 'grayscale(1) opacity(.3)',
+                        }}
+                      >★</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="form-group">
+                  <textarea className="form-input" rows={4}
+                    placeholder="어떤 점이 좋았나요? 다른 수강생에게 도움이 될 리뷰를 남겨주세요."
+                    required value={reviewText}
+                    onChange={e => setReviewText(e.target.value)} />
+                </div>
+                <button type="submit" className="btn btn-gold w-full btn-lg" disabled={reviewSubmitting}>
+                  {reviewSubmitting ? '등록 중...' : '리뷰 등록하기'}
+                </button>
+                <button type="button" className="btn btn-ghost w-full btn-sm" style={{ marginTop: '8px' }}
+                  onClick={() => setReviewModal(false)}>
+                  나중에 작성하기
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

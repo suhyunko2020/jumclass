@@ -62,7 +62,7 @@ const DEFAULT_TIERS = [
 
 export default function AdminPage() {
   const { isAdminLoggedIn, adminLogin, adminLogout, enrollManual } = useAuth()
-  const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById } = useCourses()
+  const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview } = useCourses()
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -84,7 +84,9 @@ export default function AdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [allEnrollments, setAllEnrollments] = useState<any[]>([])
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
-  const [reviews, setReviews] = useState<{ id: string; courseId: string; userId: string; userName: string; userAvatar: string; rating: number; text: string; date: string }[]>([])
+  const [reviews, setReviews] = useState<{ id: string; courseId: string; userId: string; userName: string; userAvatar: string; rating: number; text: string; date: string; source?: string }[]>([])
+  const [adminReviewModal, setAdminReviewModal] = useState(false)
+  const [arForm, setArForm] = useState({ courseId: '', userName: '', rating: 5, text: '' })
 
   useEffect(() => { document.title = '관리자 대시보드 — JUMCLASS' }, [])
 
@@ -393,6 +395,17 @@ export default function AdminPage() {
     if (!confirm('리뷰를 삭제하시겠습니까?')) return
     await deleteReviewById(id)
     toast('리뷰가 삭제되었습니다.', 'ok')
+    refresh()
+  }
+
+  // ── 관리자 리뷰 작성 ──────────────────────────────────────
+  async function handleAdminReview(e: React.FormEvent) {
+    e.preventDefault()
+    if (!arForm.courseId || !arForm.userName || !arForm.text) return
+    await addReview(arForm.courseId, 'admin-' + Date.now(), arForm.userName, '✍', arForm.rating, arForm.text, 'admin')
+    toast('리뷰가 등록되었습니다.', 'ok')
+    setAdminReviewModal(false)
+    setArForm({ courseId: '', userName: '', rating: 5, text: '' })
     refresh()
   }
 
@@ -813,15 +826,19 @@ export default function AdminPage() {
           {/* ═══ 리뷰 관리 ═══ */}
           {sec === 'reviews' && (
             <div>
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '28px' }}>
-                리뷰 관리 ({reviews.length}개)
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', margin: 0 }}>
+                  리뷰 관리 ({reviews.length}개)
+                </h1>
+                <button className="btn btn-primary btn-sm" onClick={() => setAdminReviewModal(true)}>+ 리뷰 작성</button>
+              </div>
               {reviews.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>등록된 리뷰가 없습니다.</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {reviews.map(r => {
                     const c = courses.find(x => x.id === r.courseId)
+                    const isAdmin = r.source === 'admin'
                     return (
                       <div key={r.id} style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
                         <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg,var(--purple),var(--purple-sat))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
@@ -830,6 +847,11 @@ export default function AdminPage() {
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                             <span style={{ fontWeight: 700, fontSize: '.875rem' }}>{r.userName}</span>
+                            <span style={{
+                              fontSize: '.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 'var(--pill)',
+                              background: isAdmin ? 'rgba(232,156,56,.12)' : 'rgba(52,196,124,.12)',
+                              color: isAdmin ? 'var(--warn)' : 'var(--ok)',
+                            }}>{isAdmin ? '관리자' : '수강생'}</span>
                             <span style={{ fontSize: '.77rem', color: 'var(--gold)' }}>{'★'.repeat(r.rating)}</span>
                             <span style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{new Date(r.date).toLocaleDateString()}</span>
                           </div>
@@ -1127,6 +1149,53 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      {/* ── 관리자 리뷰 작성 모달 ── */}
+      {adminReviewModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setAdminReviewModal(false) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '460px' }}>
+            <button className="modal-close" onClick={() => setAdminReviewModal(false)}>✕</button>
+            <div className="modal-head">
+              <h2>리뷰 수동 작성</h2>
+              <p style={{ fontSize: '.82rem', color: 'var(--t3)' }}>관리자가 작성한 리뷰로 표시됩니다.</p>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleAdminReview}>
+                <div className="form-group">
+                  <label className="form-label">강의 선택 *</label>
+                  <select className="form-input" required value={arForm.courseId}
+                    onChange={e => setArForm(p => ({ ...p, courseId: e.target.value }))}>
+                    <option value="">강의를 선택하세요</option>
+                    {courses.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.title}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">작성자 이름 *</label>
+                  <input className="form-input" type="text" placeholder="이름을 입력하세요" required
+                    value={arForm.userName} onChange={e => setArForm(p => ({ ...p, userName: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">별점</label>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button key={n} type="button" onClick={() => setArForm(p => ({ ...p, rating: n }))}
+                        style={{ fontSize: '1.5rem', cursor: 'pointer', filter: arForm.rating >= n ? 'none' : 'grayscale(1) opacity(.3)' }}>
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">리뷰 내용 *</label>
+                  <textarea className="form-input" rows={4} placeholder="리뷰 내용을 입력하세요" required
+                    value={arForm.text} onChange={e => setArForm(p => ({ ...p, text: e.target.value }))} />
+                </div>
+                <button type="submit" className="btn btn-primary w-full">리뷰 등록</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 커리큘럼 편집 모달 ── */}
       {curriculumModal && (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCurriculumModal(null) }}>

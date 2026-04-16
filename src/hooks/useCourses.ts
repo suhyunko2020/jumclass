@@ -99,6 +99,7 @@ export function useCourses() {
         id: r.id, courseId: r.course_id, userId: r.user_id,
         userName: r.user_name, userAvatar: r.user_avatar ?? '',
         rating: r.rating, text: r.text, date: r.created_at,
+        source: r.source ?? 'user',
       }))
       localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews))
     }
@@ -116,15 +117,16 @@ export function useCourses() {
 
   const addReview = useCallback(async (
     courseId: string, userId: string, userName: string,
-    userAvatar: string, rating: number, text: string
+    userAvatar: string, rating: number, text: string,
+    source: 'user' | 'admin' = 'user'
   ): Promise<Review | null> => {
     const all = getCachedReviews()
-    if (all.some(r => r.courseId === courseId && r.userId === userId)) return null
+    if (source === 'user' && all.some(r => r.courseId === courseId && r.userId === userId)) return null
 
     // Supabase에 저장
     const { data, error } = await supabase.from('reviews').insert({
       course_id: courseId, user_id: userId, user_name: userName,
-      user_avatar: userAvatar, rating, text,
+      user_avatar: userAvatar, rating, text, source,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }).select().single() as any
 
@@ -134,6 +136,7 @@ export function useCourses() {
       id: data.id, courseId: data.course_id, userId: data.user_id,
       userName: data.user_name, userAvatar: data.user_avatar ?? '',
       rating: data.rating, text: data.text, date: data.created_at,
+      source: data.source ?? 'user',
     }
 
     // 로컬 캐시 업데이트

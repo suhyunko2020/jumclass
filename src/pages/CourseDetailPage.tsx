@@ -116,17 +116,18 @@ export default function CourseDetailPage() {
                         {sec.items.map(item => {
                           const isFree = item.status === 'free'
                           const isLocked = !enrolled && !isFree
+                          const canPlay = enrolled || isFree
                           return (
                             <div key={item.id}
                               className={`curr-item ${isLocked ? 'locked' : ''}`}
                               style={{ cursor: isLocked ? 'default' : 'pointer' }}
                               onClick={() => {
-                                if (isFree || enrolled) navigate(`/lesson?course=${course.id}&lesson=${item.id}`)
+                                if (canPlay) navigate(`/lesson?course=${course.id}&lesson=${item.id}`)
                               }}
                             >
-                              <div className={`curr-item-icon ${isFree ? 'ic-free' : 'ic-lock'}`}>{isFree ? '▶' : '🔒'}</div>
+                              <div className={`curr-item-icon ${canPlay ? 'ic-free' : 'ic-lock'}`}>{canPlay ? '▶' : '🔒'}</div>
                               <span className="curr-item-title">{item.title}</span>
-                              {isFree && <span className="free-tag">미리보기</span>}
+                              {!enrolled && isFree && <span className="free-tag">미리보기</span>}
                               <span className="curr-item-dur">{item.duration}</span>
                             </div>
                           )

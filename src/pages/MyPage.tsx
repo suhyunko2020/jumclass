@@ -161,7 +161,7 @@ export default function MyPage() {
           </aside>
 
           {/* ── 메인 콘텐츠 ── */}
-          <main className="mypage-content">
+          <main className="mypage-content" key={tab}>
 
             {/* ════ 결제 내역 ════ */}
             {tab === 'payments' && (
