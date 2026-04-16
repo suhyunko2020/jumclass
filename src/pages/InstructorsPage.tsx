@@ -26,13 +26,15 @@ export default function InstructorsPage() {
               <Link to={`/instructor/${inst.id}`} key={inst.id} className="inst-card">
                 <div className="inst-card-photo">
                   {inst.photo
-                    ? <img src={inst.photo} alt={inst.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={inst.photo} alt={inst.name} />
                     : <div className="inst-card-placeholder">{inst.name.charAt(0)}</div>
                   }
+                  <div className="inst-card-overlay">
+                    <div className="inst-card-overlay-name">{inst.name}</div>
+                    <div className="inst-card-overlay-title">{inst.title}</div>
+                  </div>
                 </div>
                 <div className="inst-card-body">
-                  <div className="inst-card-name">{inst.name}</div>
-                  <div className="inst-card-title">{inst.title}</div>
                   <div className="inst-card-specialties">
                     {inst.specialties.slice(0, 3).map(s => (
                       <span key={s} className="inst-tag">{s}</span>
@@ -42,6 +44,7 @@ export default function InstructorsPage() {
                   <div className="inst-card-links">
                     {inst.instagram && <span className="inst-social" style={{ background: 'rgba(225,48,108,.08)', color: '#E1306C', borderColor: 'rgba(225,48,108,.2)' }}>Instagram</span>}
                     {inst.kakao && <span className="inst-social" style={{ background: 'rgba(254,229,0,.06)', color: '#FEE500', borderColor: 'rgba(254,229,0,.15)' }}>KakaoTalk</span>}
+                    {inst.email && <span className="inst-social" style={{ background: 'rgba(124,111,205,.06)', color: 'var(--purple-2)', borderColor: 'rgba(124,111,205,.15)' }}>Email</span>}
                   </div>
                   <div className="inst-card-footer">
                     <span className="inst-card-exp">{inst.experience}</span>

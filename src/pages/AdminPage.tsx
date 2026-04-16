@@ -1325,15 +1325,13 @@ export default function AdminPage() {
                       const canvas = document.createElement('canvas')
                       const img = new Image()
                       img.onload = () => {
-                        const max = 400
-                        let w = img.width, h = img.height
-                        if (w > max || h > max) {
-                          if (w > h) { h = Math.round(h * max / w); w = max }
-                          else { w = Math.round(w * max / h); h = max }
-                        }
-                        canvas.width = w; canvas.height = h
-                        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+                        const size = 400
+                        const min = Math.min(img.width, img.height)
+                        const sx = (img.width - min) / 2
+                        const sy = (img.height - min) / 2
+                        canvas.width = size; canvas.height = size
+                        canvas.getContext('2d')!.drawImage(img, sx, sy, min, min, 0, 0, size, size)
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
                         setInstModal(p => p ? { ...p, photo: dataUrl } : null)
                       }
                       img.src = URL.createObjectURL(file)
