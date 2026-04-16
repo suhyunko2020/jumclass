@@ -39,7 +39,7 @@ export default function PaymentSuccessPage() {
         } catch {}
       }
       // 수강 등록
-      enroll(courseId, days)
+      await enroll(courseId, days)
       setDone(true)
     }
     processPayment()

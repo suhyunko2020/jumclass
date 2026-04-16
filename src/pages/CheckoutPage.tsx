@@ -58,7 +58,7 @@ export default function CheckoutPage() {
     if (!user) { openAuth('login'); return }
     setPaying(true)
     await new Promise(r => setTimeout(r, 1500))
-    enroll(courseId, days)
+    await enroll(courseId, days)
     toast('수강신청이 완료됐습니다! ✦', 'ok')
     navigate(`/payment-success?course=${courseId}&demo=1`)
   }
