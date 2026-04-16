@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import type { Course } from '../../data/types'
-import { formatPrice, discountRate } from '../../utils/format'
+import { formatPrice, discountRate, calcTotalDuration } from '../../utils/format'
 
 interface Props {
   course: Course
@@ -25,7 +25,7 @@ export default function CourseCard({ course, enrolledCount }: Props) {
         <div className="card-sub">{course.subtitle}</div>
         <div className="card-meta">
           <span>🎬 {course.lessons}강</span>
-          <span>⏱ {course.duration}</span>
+          <span>⏱ {calcTotalDuration(course.curriculum)}</span>
           {enrolledCount && <span>👥 {enrolledCount}명</span>}
         </div>
         <div className="card-footer">
