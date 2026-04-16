@@ -66,7 +66,8 @@ const DEFAULT_TIERS = [
 
 export default function AdminPage() {
   const { isAdminLoggedIn, adminLogin, adminLogout, enrollManual } = useAuth()
-  const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview } = useCourses()
+  const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview, saveCourseOrder } = useCourses()
+  const [dragCourseId, setDragCourseId] = useState<string | null>(null)
   const { getAll: getAllInstructors, saveInstructor, deleteInstructor } = useInstructors()
   const { get: getSettings, save: saveSettings } = useSiteSettings()
   const [siteSettingsForm, setSiteSettingsForm] = useState<SiteSettings | null>(null)
@@ -711,7 +712,23 @@ export default function AdminPage() {
                       {courses.map(c => {
                         const isCustom = customIds.has(c.id)
                         return (
-                          <tr key={c.id}>
+                          <tr key={c.id} draggable
+                            onDragStart={() => setDragCourseId(c.id)}
+                            onDragOver={e => e.preventDefault()}
+                            onDrop={() => {
+                              if (!dragCourseId || dragCourseId === c.id) return
+                              const ids = courses.map(x => x.id)
+                              const fromIdx = ids.indexOf(dragCourseId)
+                              const toIdx = ids.indexOf(c.id)
+                              ids.splice(fromIdx, 1)
+                              ids.splice(toIdx, 0, dragCourseId)
+                              saveCourseOrder(ids)
+                              setDragCourseId(null)
+                              refresh()
+                            }}
+                            onDragEnd={() => setDragCourseId(null)}
+                            style={{ cursor: 'grab', opacity: dragCourseId === c.id ? 0.4 : 1 }}
+                          >
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '1.2rem' }}>{c.emoji}</span>
@@ -1244,7 +1261,7 @@ export default function AdminPage() {
                     <select className="form-input"
                       value={courseEditModal.level}
                       onChange={e => setCourseEditModal(p => p ? { ...p, level: e.target.value } : null)}>
-                      {['입문', '중급', '고급'].map(l => <option key={l}>{l}</option>)}
+                      {['입문', '중급', '고급', '자격증'].map(l => <option key={l}>{l}</option>)}
                     </select>
                   </div>
                   <div className="form-group">

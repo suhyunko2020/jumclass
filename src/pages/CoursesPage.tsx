@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import CourseCard from '../components/course/CourseCard'
 
-const FILTERS = ['전체', '입문', '중급', '고급']
+const FILTERS = ['전체', '입문', '중급', '고급', '자격증']
 
 export default function CoursesPage() {
   const { getPublicCourses, getEnrolledCount } = useCourses()
@@ -25,7 +25,6 @@ export default function CoursesPage() {
       {/* 필터 */}
       <div className="container" style={{ marginBottom: '32px', marginTop: '28px' }}>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: '.8rem', color: 'var(--t3)', marginRight: '4px' }}>필터</span>
           {FILTERS.map(f => (
             <button key={f} className={`tab ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
               {f}

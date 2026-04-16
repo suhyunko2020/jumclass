@@ -8,6 +8,7 @@ const OVERRIDE_KEY = 'arcana_course_overrides'
 const CUSTOM_KEY   = 'arcana_custom_courses'
 const REVIEWS_KEY  = 'arcana_reviews'
 const ATTACH_KEY   = 'arcana_lesson_attachments'
+const ORDER_KEY    = 'arcana_course_order'
 
 function getJSON<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback }
@@ -87,12 +88,24 @@ export function useCourses() {
 
   const getAllCourses = useCallback((): Course[] => {
     const base = COURSES.map(c => getCourse(c.id)!)
-    return [...base, ...getCachedCustomCourses()]
+    const all = [...base, ...getCachedCustomCourses()]
+    const order: string[] = getJSON(ORDER_KEY, [])
+    if (order.length > 0) {
+      all.sort((a, b) => {
+        const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      })
+    }
+    return all
   }, [getCourse])
 
   const getPublicCourses = useCallback((): Course[] => {
     return getAllCourses().filter(c => c.status !== 'private')
   }, [getAllCourses])
+
+  const saveCourseOrder = useCallback((ids: string[]) => {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(ids))
+  }, [])
 
   // ── override 저장 (로컬 즉시 + Supabase 백그라운드) ────────
   const saveCourseOverride = useCallback((id: string, data: Partial<Course>) => {
@@ -218,7 +231,7 @@ export function useCourses() {
   }, [])
 
   return {
-    getCourse, getAllCourses, getPublicCourses,
+    getCourse, getAllCourses, getPublicCourses, saveCourseOrder,
     saveCourseOverride, saveCustomCourse, deleteCustomCourse,
     syncFromSupabase,
     getEnrolledCount,

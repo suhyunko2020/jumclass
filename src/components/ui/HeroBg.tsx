@@ -1,13 +1,16 @@
 import { useEffect, useRef } from 'react'
 
-interface Star {
-  x: number; y: number; r: number
-  phase: number; speed: number
-  ox: number; oy: number  // 원래 위치 (마우스 패럴랙스용)
+interface Ring {
+  cx: number; cy: number; rx: number; ry: number
+  rotX: number; rotY: number; rotZ: number
+  speedX: number; speedY: number; speedZ: number
+  color: string; alpha: number; lineW: number
 }
-interface Orb {
-  x: number; y: number; r: number
-  color: string; speed: number; phase: number
+
+interface Particle {
+  x: number; y: number; z: number
+  ox: number; oy: number; oz: number
+  r: number; phase: number; speed: number; color: string
 }
 
 export default function HeroBg() {
@@ -20,37 +23,44 @@ export default function HeroBg() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const resize = () => {
-      canvas.width  = canvas.offsetWidth
-      canvas.height = canvas.offsetHeight
-    }
+    const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight }
     resize()
     window.addEventListener('resize', resize)
 
     const onMouse = (e: MouseEvent) => {
-      mouseRef.current = {
-        x: e.clientX / window.innerWidth,
-        y: e.clientY / window.innerHeight,
-      }
+      mouseRef.current = { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight }
     }
     window.addEventListener('mousemove', onMouse)
 
-    // ── 별 생성 ──────────────────────────────────────────────
-    const stars: Star[] = Array.from({ length: 90 }, () => {
+    const rings: Ring[] = [
+      { cx: 0.35, cy: 0.5, rx: 180, ry: 60, rotX: 0, rotY: 0, rotZ: 0, speedX: 0.003, speedY: 0.005, speedZ: 0.002, color: '124,111,205', alpha: 0.12, lineW: 1 },
+      { cx: 0.35, cy: 0.5, rx: 140, ry: 50, rotX: 1.2, rotY: 0.5, rotZ: 0, speedX: -0.004, speedY: 0.003, speedZ: 0.006, color: '170,90,230', alpha: 0.08, lineW: 0.8 },
+      { cx: 0.35, cy: 0.5, rx: 220, ry: 75, rotX: 0.5, rotY: 1.5, rotZ: 0, speedX: 0.002, speedY: -0.003, speedZ: 0.004, color: '201,168,76', alpha: 0.06, lineW: 0.7 },
+      { cx: 0.65, cy: 0.6, rx: 100, ry: 35, rotX: 0.8, rotY: 0, rotZ: 0, speedX: 0.005, speedY: 0.004, speedZ: -0.003, color: '124,111,205', alpha: 0.07, lineW: 0.6 },
+    ]
+
+    const particles: Particle[] = Array.from({ length: 60 }, () => {
       const ox = Math.random()
       const oy = Math.random()
-      return { x: ox, y: oy, ox, oy, r: Math.random() * 1.4 + 0.2, phase: Math.random() * Math.PI * 2, speed: Math.random() * 0.004 + 0.0015 }
+      const oz = Math.random() * 0.8 + 0.2
+      const colors = ['200,190,255', '170,140,255', '220,200,120', '180,160,240']
+      return {
+        x: ox, y: oy, z: oz, ox, oy, oz,
+        r: Math.random() * 1.5 + 0.3,
+        phase: Math.random() * Math.PI * 2,
+        speed: Math.random() * 0.003 + 0.001,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      }
     })
-
-    // ── 오브 생성 ────────────────────────────────────────────
-    const orbs: Orb[] = [
-      { x: 0.18, y: 0.35, r: 220, color: 'rgba(124,111,205,', speed: 0.00025, phase: 0 },
-      { x: 0.82, y: 0.55, r: 160, color: 'rgba(170,90,230,',  speed: 0.00040, phase: Math.PI },
-      { x: 0.50, y: 0.85, r: 180, color: 'rgba(70,90,220,',   speed: 0.00030, phase: Math.PI * 0.6 },
-    ]
 
     let frame = 0
     let raf: number
+
+    function project(x: number, y: number, z: number): [number, number, number] {
+      const perspective = 600
+      const scale = perspective / (perspective + z * 200)
+      return [x * scale, y * scale, scale]
+    }
 
     function draw() {
       if (!ctx || !canvas) return
@@ -58,62 +68,99 @@ export default function HeroBg() {
       const W = canvas.width, H = canvas.height
       frame++
 
-      // ── 오브 렌더 ──────────────────────────────────────────
-      orbs.forEach(orb => {
-        const dx = Math.sin(frame * orb.speed + orb.phase) * 40
-        const dy = Math.cos(frame * orb.speed * 0.7 + orb.phase) * 28
-        const x = orb.x * W + dx
-        const y = orb.y * H + dy
-        const g = ctx.createRadialGradient(x, y, 0, x, y, orb.r)
-        g.addColorStop(0, orb.color + '0.13)')
-        g.addColorStop(0.5, orb.color + '0.06)')
-        g.addColorStop(1, orb.color + '0)')
-        ctx.fillStyle = g
-        ctx.beginPath(); ctx.arc(x, y, orb.r, 0, Math.PI * 2); ctx.fill()
+      const mx = (mouseRef.current.x - 0.5) * 0.3
+      const my = (mouseRef.current.y - 0.5) * 0.2
+
+      // rings
+      rings.forEach(ring => {
+        ring.rotX += ring.speedX
+        ring.rotY += ring.speedY
+        ring.rotZ += ring.speedZ
+
+        const cx = ring.cx * W + mx * 40
+        const cy = ring.cy * H + my * 25
+        const cosX = Math.cos(ring.rotX + my), sinX = Math.sin(ring.rotX + my)
+        const cosY = Math.cos(ring.rotY + mx), sinY = Math.sin(ring.rotY + mx)
+        const cosZ = Math.cos(ring.rotZ), sinZ = Math.sin(ring.rotZ)
+
+        ctx.strokeStyle = `rgba(${ring.color},${ring.alpha})`
+        ctx.lineWidth = ring.lineW
+        ctx.beginPath()
+
+        const segments = 80
+        for (let i = 0; i <= segments; i++) {
+          const angle = (i / segments) * Math.PI * 2
+          let px = Math.cos(angle) * ring.rx
+          let py = Math.sin(angle) * ring.ry
+          let pz = 0
+
+          // rotate X
+          const y1 = py * cosX - pz * sinX
+          const z1 = py * sinX + pz * cosX
+          py = y1; pz = z1
+          // rotate Y
+          const x2 = px * cosY + pz * sinY
+          const z2 = -px * sinY + pz * cosY
+          px = x2; pz = z2
+          // rotate Z
+          const x3 = px * cosZ - py * sinZ
+          const y3 = px * sinZ + py * cosZ
+          px = x3; py = y3
+
+          const [sx, sy] = project(px, py, pz)
+
+          if (i === 0) ctx.moveTo(cx + sx, cy + sy)
+          else ctx.lineTo(cx + sx, cy + sy)
+        }
+        ctx.stroke()
       })
 
-      // ── 별 패럴랙스 위치 갱신 ─────────────────────────────
-      const mx = (mouseRef.current.x - 0.5) * 18
-      const my = (mouseRef.current.y - 0.5) * 10
-      stars.forEach(s => {
-        s.x = s.ox + (mx / W) * (s.r * 1.2)
-        s.y = s.oy + (my / H) * (s.r * 1.2)
+      // particles with depth
+      particles.forEach(p => {
+        const parallaxX = mx * p.z * 30
+        const parallaxY = my * p.z * 20
+        p.x = p.ox + parallaxX / W
+        p.y = p.oy + parallaxY / H
+
+        const breathe = Math.sin(frame * p.speed + p.phase)
+        const alpha = (breathe + 1) / 2 * 0.6 + 0.15
+        const depthScale = 0.5 + p.z * 0.5
+        const r = p.r * depthScale
+        const px = p.x * W
+        const py = p.y * H
+
+        ctx.globalAlpha = alpha * depthScale
+
+        if (r > 1.2) {
+          const g = ctx.createRadialGradient(px, py, 0, px, py, r * 5)
+          g.addColorStop(0, `rgba(${p.color},0.4)`)
+          g.addColorStop(1, `rgba(${p.color},0)`)
+          ctx.fillStyle = g
+          ctx.beginPath(); ctx.arc(px, py, r * 5, 0, Math.PI * 2); ctx.fill()
+        }
+
+        ctx.fillStyle = `rgba(${p.color},0.9)`
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill()
       })
 
-      // ── 별자리 선 ─────────────────────────────────────────
-      ctx.strokeStyle = 'rgba(180,160,255,0.08)'
-      ctx.lineWidth = 0.6
-      for (let i = 0; i < stars.length; i++) {
-        for (let j = i + 1; j < stars.length; j++) {
-          const dx = (stars[i].x - stars[j].x) * W
-          const dy = (stars[i].y - stars[j].y) * H
+      // subtle connecting lines between nearby particles
+      ctx.lineWidth = 0.4
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = (particles[i].x - particles[j].x) * W
+          const dy = (particles[i].y - particles[j].y) * H
           const dist = Math.sqrt(dx * dx + dy * dy)
-          if (dist < W * 0.10) {
-            const alpha = (1 - dist / (W * 0.10)) * 0.12
-            ctx.globalAlpha = alpha
+          if (dist < W * 0.08) {
+            const a = (1 - dist / (W * 0.08)) * 0.06
+            ctx.globalAlpha = a
+            ctx.strokeStyle = `rgba(180,160,255,1)`
             ctx.beginPath()
-            ctx.moveTo(stars[i].x * W, stars[i].y * H)
-            ctx.lineTo(stars[j].x * W, stars[j].y * H)
+            ctx.moveTo(particles[i].x * W, particles[i].y * H)
+            ctx.lineTo(particles[j].x * W, particles[j].y * H)
             ctx.stroke()
           }
         }
       }
-
-      // ── 별 렌더 ───────────────────────────────────────────
-      stars.forEach(s => {
-        const alpha = ((Math.sin(frame * s.speed + s.phase) + 1) / 2) * 0.75 + 0.2
-        ctx.globalAlpha = alpha
-        // 큰 별은 십자 글로우
-        if (s.r > 1.1) {
-          const glow = ctx.createRadialGradient(s.x * W, s.y * H, 0, s.x * W, s.y * H, s.r * 4)
-          glow.addColorStop(0, 'rgba(220,210,255,0.6)')
-          glow.addColorStop(1, 'rgba(220,210,255,0)')
-          ctx.fillStyle = glow
-          ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r * 4, 0, Math.PI * 2); ctx.fill()
-        }
-        ctx.fillStyle = '#e8e0ff'
-        ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2); ctx.fill()
-      })
 
       ctx.globalAlpha = 1
       raf = requestAnimationFrame(draw)
@@ -131,7 +178,7 @@ export default function HeroBg() {
     <canvas ref={canvasRef} style={{
       position: 'absolute', inset: 0,
       width: '100%', height: '100%',
-      pointerEvents: 'none', opacity: 0.9,
+      pointerEvents: 'none', opacity: 0.85,
     }} />
   )
 }
