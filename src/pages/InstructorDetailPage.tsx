@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useInstructors } from '../hooks/useInstructors'
 import { useCourses } from '../hooks/useCourses'
-import { formatPrice, discountRate } from '../utils/format'
+import { formatPrice, discountRate, calcTotalDuration } from '../utils/format'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useAuth } from '../hooks/useAuth'
 
@@ -186,7 +186,7 @@ export default function InstructorDetailPage() {
                         <span style={{ fontSize: '1.6rem' }}>{c.emoji}</span>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 700, fontSize: '.9rem' }}>{c.title}</div>
-                          <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>{c.level} · {c.lessons}강 · {c.duration}</div>
+                          <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>{c.level} · {c.lessons}강 · {calcTotalDuration(c.curriculum)}</div>
                         </div>
                         <span style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--gold)' }}>{formatPrice(c.price)}</span>
                       </Link>

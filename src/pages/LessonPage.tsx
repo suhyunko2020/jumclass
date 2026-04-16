@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/ui/Toast'
+import { calcTotalDuration } from '../utils/format'
 
 export default function LessonPage() {
   const [params] = useSearchParams()
@@ -176,7 +177,7 @@ export default function LessonPage() {
           <div style={{ marginTop: '24px', padding: '20px 24px', background: 'var(--bg-3)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: '.9rem', fontWeight: 700, marginBottom: '3px' }}>전체 강의 수강하기</div>
-              <div style={{ fontSize: '.82rem', color: 'var(--t2)' }}>총 {course.lessons}강 · {course.duration} · 학습 자료 포함</div>
+              <div style={{ fontSize: '.82rem', color: 'var(--t2)' }}>총 {course.lessons}강 · {calcTotalDuration(course.curriculum)} · 학습 자료 포함</div>
             </div>
             <button className="btn btn-gold btn-lg" onClick={() => navigate(`/checkout?course=${courseId}`)}>
               수강신청

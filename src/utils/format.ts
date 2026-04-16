@@ -13,6 +13,22 @@ export const formatDays = (days: number) =>
 export const formatDaysShort = (days: number) =>
   days >= 9999 ? '무제한' : `${days}일 수강`;
 
+export function calcTotalDuration(curriculum: { items: { duration: string }[] }[]): string {
+  let totalSec = 0
+  for (const sec of curriculum) {
+    for (const item of sec.items) {
+      const parts = item.duration.split(':').map(Number)
+      if (parts.length === 2) totalSec += (parts[0] || 0) * 60 + (parts[1] || 0)
+      else if (parts.length === 3) totalSec += (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0)
+    }
+  }
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  if (h > 0 && m > 0) return `${h}시간 ${m}분`
+  if (h > 0) return `${h}시간`
+  return `${m}분`
+}
+
 export function maskName(name: string): string {
   if (!name) return ''
   const isKorean = /[가-힣]/.test(name.charAt(0))

@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
-import { formatPrice, discountRate, formatDays, formatDaysShort, maskName } from '../utils/format'
+import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcTotalDuration } from '../utils/format'
 
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>()
@@ -32,6 +32,7 @@ export default function CourseDetailPage() {
 
   const enrolled = isEnrolled(course.id)
   const totalLessons = course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
+  const totalDuration = calcTotalDuration(course.curriculum)
   const freeLessons = course.curriculum.reduce((s, sec) => s + sec.items.filter(i => i.status === 'free').length, 0)
   const reviews = getReviewsByCourse(course.id)
   const reviewStats = getReviewStats(course.id)
@@ -71,7 +72,7 @@ export default function CourseDetailPage() {
                 </div>
                 <div className="detail-stat-item">👥 수강생 {getEnrolledCount(course.id)}명</div>
                 <div className="detail-stat-item">🎬 총 {totalLessons}강</div>
-                <div className="detail-stat-item">⏱ {course.duration}</div>
+                <div className="detail-stat-item">⏱ {totalDuration}</div>
               </div>
               <div className="detail-instructor-row" style={{ marginBottom: 0 }}>
                 <div className="instructor-avatar">{course.instructorAvatar}</div>
@@ -99,7 +100,7 @@ export default function CourseDetailPage() {
                 <div className="detail-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>강의 목차</span>
                   <span style={{ fontSize: '.8rem', fontWeight: 400, color: 'var(--t3)' }}>
-                    {course.curriculum.length}섹션 · {totalLessons}강 · {course.duration}
+                    {course.curriculum.length}섹션 · {totalLessons}강 · {totalDuration}
                   </span>
                 </div>
                 {course.curriculum.map((sec, si) => (
@@ -216,7 +217,7 @@ export default function CourseDetailPage() {
 
                   <div className="purchase-includes mt-16">
                     <div style={{ fontSize: '.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--t3)', marginBottom: '8px' }}>포함 내용</div>
-                    <div className="include-item"><span className="ic">🎬</span>{totalLessons}개 영상 강의 ({course.duration})</div>
+                    <div className="include-item"><span className="ic">🎬</span>{totalLessons}개 영상 강의 ({totalDuration})</div>
                     <div className="include-item"><span className="ic">📱</span>모바일·PC 무제한 수강</div>
                     <div className="include-item"><span className="ic">⏳</span>{formatDays(displayDays)}</div>
                     {course.attachments?.map((a, i) => (

@@ -5,6 +5,7 @@ import { useAuthModal } from '../components/auth/AuthModal'
 import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import CourseCard from '../components/course/CourseCard'
+import { calcTotalDuration } from '../utils/format'
 
 export default function ClassroomPage() {
   const { user, getEnrollment, pauseCourse, resumeCourse } = useAuth()
@@ -123,7 +124,7 @@ export default function ClassroomPage() {
                     </div>
                     {/* 메타 */}
                     <div className="my-card-meta">
-                      {c.instructor} · {c.lessons}강 · {c.duration}
+                      {c.instructor} · {c.lessons}강 · {calcTotalDuration(c.curriculum)}
                     </div>
                     {/* 진도 */}
                     <div className="prog-wrap">
@@ -202,7 +203,7 @@ export default function ClassroomPage() {
                       <div className="my-card-title">{c.title}</div>
                       <span style={{ flexShrink: 0, fontSize: '.68rem', fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', border: '1px solid rgba(224,82,82,.2)', whiteSpace: 'nowrap' }}>수강 종료</span>
                     </div>
-                    <div className="my-card-meta">{c.instructor} · {c.lessons}강 · {c.duration}</div>
+                    <div className="my-card-meta">{c.instructor} · {c.lessons}강 · {calcTotalDuration(c.curriculum)}</div>
                     <div className="my-card-actions">
                       <Link to={`/checkout?course=${c.id}`} className="btn btn-primary btn-sm"
                         onClick={e2 => e2.stopPropagation()}>

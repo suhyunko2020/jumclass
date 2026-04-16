@@ -1222,7 +1222,7 @@ export default function AdminPage() {
                     value={courseEditModal.description}
                     onChange={e => setCourseEditModal(p => p ? { ...p, description: e.target.value } : null)} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 1fr', gap: '0 12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: '0 12px' }}>
                   <div className="form-group">
                     <label className="form-label">레벨</label>
                     <select className="form-input"
@@ -1230,12 +1230,6 @@ export default function AdminPage() {
                       onChange={e => setCourseEditModal(p => p ? { ...p, level: e.target.value } : null)}>
                       {['입문', '중급', '고급'].map(l => <option key={l}>{l}</option>)}
                     </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">총 시간</label>
-                    <input className="form-input" type="text" placeholder="예: 12시간"
-                      value={courseEditModal.duration}
-                      onChange={e => setCourseEditModal(p => p ? { ...p, duration: e.target.value } : null)} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">강수</label>
