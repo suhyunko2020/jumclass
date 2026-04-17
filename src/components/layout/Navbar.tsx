@@ -6,7 +6,7 @@ import { useAuthModal } from '../auth/AuthModal'
 export default function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, logout, loading: authLoading } = useAuth()
   const { openAuth } = useAuthModal()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -70,7 +70,9 @@ export default function Navbar() {
 
         {/* 데스크톱 우측 */}
         <div className="nav-right nav-desktop">
-          {user ? (
+          {authLoading ? (
+            <div style={{ width: '160px', height: '36px' }} aria-hidden />
+          ) : user ? (
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => setDropdownOpen(p => !p)}
@@ -162,7 +164,7 @@ export default function Navbar() {
           <a href="#contact" className="mobile-nav-item" onClick={handleContact}>Contact</a>
         </div>
 
-        {user ? (
+        {authLoading ? null : user ? (
           <>
             <div className="mobile-menu-divider" />
             <div className="mobile-nav-section">

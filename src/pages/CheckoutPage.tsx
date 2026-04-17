@@ -6,6 +6,11 @@ import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useToast } from '../components/ui/Toast'
 import { formatPrice, discountRate } from '../utils/format'
+import { createProgressPage, uploadSignatureImage, saveCertificateAgreement } from '../utils/storage'
+import { sendInstructorAlimtalk } from '../utils/alimtalk'
+import type { ProgressChecklistItem } from '../data/types'
+import CertificateAgreementForm, { type AgreementFormValue } from '../components/course/CertificateAgreementForm'
+import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
 
 export default function CheckoutPage() {
   const [params] = useSearchParams()
@@ -20,6 +25,7 @@ export default function CheckoutPage() {
   const tierParam = params.get('tier')
   const instructorId = params.get('instructor') || ''
   const serviceId = params.get('service') || ''
+  const assignedInstructorId = params.get('assignedInstructor') || ''
 
   const course = courseId ? getCourse(courseId) : null
   const instructor = instructorId ? getInstructor(instructorId) : null
@@ -28,8 +34,19 @@ export default function CheckoutPage() {
   const isServiceCheckout = !!instructor && !!service
 
   const [paying, setPaying] = useState(false)
+  const [certAgreement, setCertAgreement] = useState<AgreementFormValue>({
+    name: '', birthdate: '', phone: '', signatureDataUrl: null,
+  })
   const [agreements, setAgreements] = useState({ privacy: false, terms: false, refund: false, copyright: false })
   const allAgreed = agreements.privacy && agreements.terms && agreements.refund && agreements.copyright
+  const isCertCheckout = !!course && course.level === '자격증'
+  const certAgreementReady = !isCertCheckout || (
+    certAgreement.name.trim().length > 0 &&
+    certAgreement.birthdate.length > 0 &&
+    certAgreement.phone.trim().length > 0 &&
+    !!certAgreement.signatureDataUrl
+  )
+  const canProceed = allAgreed && certAgreementReady
   const policies: { key: keyof typeof agreements; label: string }[] = [
     { key: 'privacy', label: '개인정보처리방침' },
     { key: 'terms', label: '이용약관' },
@@ -58,7 +75,9 @@ export default function CheckoutPage() {
     )
   }
 
-  if (course && user && isEnrolled(courseId)) {
+  // paying 중엔 enroll로 인해 isEnrolled가 true가 되어도 이 가드를 건너뛴다
+  // (결제 완료 후 navigate 되기 전 잠깐 깜빡이는 현상 방지)
+  if (course && user && isEnrolled(courseId) && !paying) {
     return (
       <div className="checkout-wrap">
         <div className="container">
@@ -75,6 +94,10 @@ export default function CheckoutPage() {
   async function doPay() {
     if (!user) { openAuth('login'); return }
     if (!allAgreed) { toast('약관에 모두 동의해주세요.', 'err'); return }
+    if (isCertCheckout && !certAgreementReady) {
+      toast('자격증 수강 동의서의 모든 항목을 입력하고 서명해주세요.', 'err')
+      return
+    }
     setPaying(true)
     await new Promise(r => setTimeout(r, 1500))
 
@@ -83,9 +106,66 @@ export default function CheckoutPage() {
       navigate(`/instructor/${instructorId}`)
     } else {
       const agreedKeys = policies.filter(p => agreements[p.key]).map(p => p.key)
-      await enroll(courseId, days, agreedKeys)
+      await enroll(courseId, days, agreedKeys, assignedInstructorId || undefined)
+
+      // 자격증 과정 — 서명·동의서 저장
+      if (isCertCheckout && user && certAgreement.signatureDataUrl) {
+        const signatureUrl = await uploadSignatureImage(user.uid, courseId, certAgreement.signatureDataUrl)
+        if (signatureUrl) {
+          await saveCertificateAgreement({
+            userId: user.uid,
+            courseId,
+            signerName: certAgreement.name.trim(),
+            signerBirthdate: certAgreement.birthdate,
+            signerPhone: certAgreement.phone.trim(),
+            signatureUrl,
+            agreementVersion: CERTIFICATE_AGREEMENT.version,
+            agreementSnapshot: CERTIFICATE_AGREEMENT,
+          })
+        } else {
+          console.warn('서명 이미지 업로드 실패 — 동의서 기록 없이 결제 진행')
+        }
+      }
+
+      // 자격증 과정 + 강사 선택 시: 강사용 진도 관리 페이지 자동 생성 + 알림톡 발송
+      if (course && course.level === '자격증' && assignedInstructorId && user) {
+        const checklist: ProgressChecklistItem[] = course.curriculum.flatMap(sec =>
+          sec.items.map(item => ({
+            id: item.id,
+            title: item.title,
+            description: sec.section,
+            checked: false,
+          }))
+        )
+        const progressPage = await createProgressPage({
+          userId: user.uid,
+          courseId: course.id,
+          instructorId: assignedInstructorId,
+          checklist,
+        })
+
+        // 알림톡 발송 (비즈엠 심사/환경변수 미완료 시 조용히 실패, 결제는 정상 진행)
+        if (progressPage) {
+          const inst = getInstructor(assignedInstructorId)
+          if (inst?.phone) {
+            const periodLabel = days === 90 ? '3개월' : days === 120 ? '4개월' : `${days}일`
+            sendInstructorAlimtalk({
+              phone: inst.phone,
+              instructorName: inst.name,
+              studentName: user.name,
+              courseName: course.title,
+              coursePeriod: periodLabel,
+              token: progressPage.id,
+            }).then(r => {
+              if (!r.ok) console.warn('알림톡 발송 실패 (정상 플로우 계속):', r.reason, r.message)
+            })
+          }
+        }
+      }
+
       toast('수강신청이 완료됐습니다!', 'ok')
-      navigate(`/payment-success?course=${courseId}&demo=1`)
+      const successQuery = `course=${courseId}&demo=1${assignedInstructorId ? `&assignedInstructor=${assignedInstructorId}` : ''}`
+      navigate(`/payment-success?${successQuery}`)
     }
   }
 
@@ -157,7 +237,7 @@ export default function CheckoutPage() {
                   결제 버튼을 누르면 <strong>테스트 {isServiceCheckout ? '신청' : '수강등록'}</strong>이 진행됩니다.
                 </div>
               </div>
-              <button className="btn btn-gold w-full btn-xl" onClick={doPay} disabled={paying || !allAgreed}>
+              <button className="btn btn-gold w-full btn-xl" onClick={doPay} disabled={paying || !canProceed}>
                 {paying ? '처리 중…' : `${formatPrice(price)} 결제하기 →`}
               </button>
               <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '.76rem', color: 'var(--t3)' }}>
@@ -218,6 +298,21 @@ export default function CheckoutPage() {
                   </div>
                 )}
               </div>
+
+              {/* 자격증 과정 — 수강 동의서 서명 */}
+              {isCertCheckout && (
+                <div style={{ marginTop: '16px' }}>
+                  <CertificateAgreementForm
+                    value={certAgreement}
+                    onChange={setCertAgreement}
+                  />
+                  {!certAgreementReady && (
+                    <div style={{ marginTop: '8px', fontSize: '.72rem', color: 'var(--warn)', textAlign: 'center' }}>
+                      동의서의 모든 항목 입력과 서명이 완료되어야 결제할 수 있습니다.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

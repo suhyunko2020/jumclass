@@ -7,7 +7,11 @@ import {
   getCustomCourses,
   getInquiries, answerInquiry,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
+  getProgressPageByEnrollment,
+  getCertificateAgreementByEnrollment,
+  type CertificateAgreementRecord,
 } from '../utils/storage'
+import { sendInstructorAlimtalk } from '../utils/alimtalk'
 import { formatPrice, getLevelColor } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
@@ -115,8 +119,18 @@ export default function AdminPage() {
   const [ceDays, setCeDays] = useState(365)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [enrollEditModal, setEnrollEditModal] = useState<{ user: any; enrollment: any; course: any } | null>(null)
+  const [progressPageInfo, setProgressPageInfo] = useState<import('../data/types').InstructorProgressPage | null>(null)
+  const [certAgreementInfo, setCertAgreementInfo] = useState<CertificateAgreementRecord | null>(null)
 
   useEffect(() => { document.title = '관리자 대시보드 — JUMCLASS' }, [])
+
+  useEffect(() => {
+    if (!enrollEditModal) { setProgressPageInfo(null); setCertAgreementInfo(null); return }
+    const em = enrollEditModal
+    if (em.course?.level !== '자격증') { setProgressPageInfo(null); setCertAgreementInfo(null); return }
+    getProgressPageByEnrollment(em.user.uid, em.course.id).then(setProgressPageInfo)
+    getCertificateAgreementByEnrollment(em.user.uid, em.course.id).then(setCertAgreementInfo)
+  }, [enrollEditModal])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [courses, setCourses] = useState<Course[]>([])
@@ -961,7 +975,7 @@ export default function AdminPage() {
                 ) : (
                   <table className="admin-table">
                     <thead>
-                      <tr><th>수강생</th><th>강의</th><th>등록일</th><th>수강 기간</th><th>타입</th><th>약관 동의</th><th>상태</th></tr>
+                      <tr><th>수강생</th><th>강의</th><th>담당 강사</th><th>등록일</th><th>수강 기간</th><th>타입</th><th>약관 동의</th><th>상태</th></tr>
                     </thead>
                     <tbody>
                       {allEnrollments.map((e, i) => {
@@ -983,6 +997,14 @@ export default function AdminPage() {
                               </div>
                             </td>
                             <td style={{ fontSize: '.855rem' }}>{c ? `${c.emoji} ${c.title}` : e.courseId}</td>
+                            <td style={{ fontSize: '.8rem' }}>
+                              {(() => {
+                                const inst = e.assignedInstructorId ? allInstructors.find(i => i.id === e.assignedInstructorId) : null
+                                if (inst) return <span style={{ color: 'var(--purple-2)', fontWeight: 600 }}>{inst.name}</span>
+                                if (e.assignedInstructorId) return <span style={{ color: 'var(--t3)' }}>(미등록 강사)</span>
+                                return <span style={{ color: 'var(--t3)' }}>-</span>
+                              })()}
+                            </td>
                             <td style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{new Date(e.enrolledAt).toLocaleDateString()}</td>
                             <td style={{ fontSize: '.8rem', color: expired ? 'var(--fail)' : e.paused ? 'var(--warn)' : 'var(--t2)' }}>{daysLeft}</td>
                             <td>
@@ -2131,6 +2153,151 @@ export default function AdminPage() {
                     잔여 {daysLeft}일 · 등록일 {new Date(enrollment.enrolledAt).toLocaleDateString()}
                   </div>
                 </div>
+
+                {/* 자격증 수강 동의서 서명 (자격증 과정만) */}
+                {em.course?.level === '자격증' && (
+                  <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(61,189,132,.06)', border: '1px solid rgba(61,189,132,.2)', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '.78rem', fontWeight: 700, marginBottom: '8px', color: 'var(--ok)' }}>
+                      수강 동의서 서명
+                    </div>
+                    {!certAgreementInfo ? (
+                      <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>서명 기록이 없습니다.</div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '6px 10px', fontSize: '.78rem', marginBottom: '10px' }}>
+                          <div style={{ color: 'var(--t3)' }}>성명</div>
+                          <div style={{ color: 'var(--t1)', fontWeight: 600 }}>{certAgreementInfo.signerName}</div>
+                          <div style={{ color: 'var(--t3)' }}>생년월일</div>
+                          <div style={{ color: 'var(--t1)' }}>{certAgreementInfo.signerBirthdate}</div>
+                          <div style={{ color: 'var(--t3)' }}>연락처</div>
+                          <div style={{ color: 'var(--t1)' }}>{certAgreementInfo.signerPhone}</div>
+                          <div style={{ color: 'var(--t3)' }}>서명 시각</div>
+                          <div style={{ color: 'var(--t2)', fontSize: '.74rem' }}>
+                            {new Date(certAgreementInfo.signedAt).toLocaleString('ko-KR')}
+                          </div>
+                          <div style={{ color: 'var(--t3)' }}>약관 버전</div>
+                          <div style={{ color: 'var(--t2)', fontSize: '.74rem' }}>{certAgreementInfo.agreementVersion}</div>
+                        </div>
+                        <div style={{ padding: '6px', background: '#fff', borderRadius: 'var(--r1)', border: '1px solid var(--line)' }}>
+                          <img
+                            src={certAgreementInfo.signatureUrl}
+                            alt="서명"
+                            style={{ display: 'block', width: '100%', maxHeight: '160px', objectFit: 'contain' }}
+                          />
+                        </div>
+                        <a
+                          href={certAgreementInfo.signatureUrl}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ display: 'inline-block', marginTop: '8px', fontSize: '.72rem', color: 'var(--purple-2)' }}
+                        >
+                          서명 원본 이미지 열기 →
+                        </a>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* 강사 진도 관리 페이지 (자격증 과정만) */}
+                {em.course?.level === '자격증' && (
+                  <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(124,111,205,.06)', border: '1px solid rgba(124,111,205,.2)', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '.78rem', fontWeight: 700, marginBottom: '8px', color: 'var(--purple-2)' }}>
+                      강사 진도 관리 페이지
+                    </div>
+                    {!progressPageInfo ? (
+                      <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>
+                        생성된 진도 관리 페이지가 없습니다.
+                      </div>
+                    ) : (() => {
+                      const pp = progressPageInfo
+                      const pageUrl = `${window.location.origin}/i/${pp.id}`
+                      const expired = pp.expiresAt ? new Date(pp.expiresAt).getTime() < Date.now() : false
+                      const checkedCount = pp.checklist.filter(i => i.checked).length
+                      const totalCount = pp.checklist.length
+                      const pct = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.78rem', marginBottom: '6px' }}>
+                            <span style={{ color: 'var(--t2)' }}>강사 체크 진도</span>
+                            <span style={{ fontWeight: 600 }}>{checkedCount}/{totalCount}개 ({pct}%)</span>
+                          </div>
+                          <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,.06)', borderRadius: '99px', overflow: 'hidden', marginBottom: '10px' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: pct >= 100 ? 'var(--ok)' : 'var(--purple)', borderRadius: '99px' }} />
+                          </div>
+                          <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginBottom: '10px' }}>
+                            {expired
+                              ? <span style={{ color: 'var(--fail)' }}>만료됨 · {pp.expiresAt && new Date(pp.expiresAt).toLocaleDateString()}</span>
+                              : pp.completedAt
+                                ? <span style={{ color: 'var(--ok)' }}>완료 · {new Date(pp.completedAt).toLocaleDateString()} · 7일 후 만료 예정</span>
+                                : <span>생성 · {new Date(pp.createdAt).toLocaleDateString()} · 진행 중</span>}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                            <input
+                              type="text" readOnly value={pageUrl}
+                              onFocus={e => e.currentTarget.select()}
+                              style={{ flex: 1, fontSize: '.72rem', padding: '6px 8px', background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)', borderRadius: 'var(--r1)', color: 'var(--t2)', fontFamily: 'monospace' }}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ fontSize: '.72rem' }}
+                              onClick={() => {
+                                navigator.clipboard.writeText(pageUrl)
+                                toast('URL이 복사되었습니다.', 'ok')
+                              }}
+                            >복사</button>
+                            <a
+                              href={pageUrl} target="_blank" rel="noopener noreferrer"
+                              className="btn btn-ghost btn-sm"
+                              style={{ fontSize: '.72rem' }}
+                            >열기</a>
+                          </div>
+                          {(() => {
+                            const inst = allInstructors.find(i => i.id === pp.instructorId)
+                            const canSend = !!inst?.phone
+                            return (
+                              <div style={{ display: 'flex', gap: '6px', marginBottom: pp.notes ? '10px' : 0, alignItems: 'center' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ fontSize: '.72rem', flexShrink: 0 }}
+                                  disabled={!canSend}
+                                  onClick={async () => {
+                                    if (!inst?.phone) { toast('강사 전화번호가 없습니다.', 'err'); return }
+                                    const daysLeftMs = new Date(em.enrollment.expiryDate).getTime() - new Date(em.enrollment.enrolledAt).getTime()
+                                    const totalDays = Math.max(1, Math.round(daysLeftMs / 86400000))
+                                    const periodLabel = totalDays === 90 ? '3개월' : totalDays === 120 ? '4개월' : `${totalDays}일`
+                                    toast('알림톡 발송 요청 중…', 'info')
+                                    const r = await sendInstructorAlimtalk({
+                                      phone: inst.phone,
+                                      instructorName: inst.name,
+                                      studentName: em.user.name || '-',
+                                      courseName: em.course?.title || '-',
+                                      coursePeriod: periodLabel,
+                                      token: pp.id,
+                                    })
+                                    if (r.ok) toast('알림톡이 발송되었습니다.', 'ok')
+                                    else toast(`발송 실패: ${r.reason}${r.message ? ` — ${r.message}` : ''}`, 'err')
+                                  }}
+                                >
+                                  알림톡 재발송
+                                </button>
+                                <div style={{ fontSize: '.68rem', color: 'var(--t3)' }}>
+                                  {canSend ? `강사 연락처: ${inst!.phone}` : '강사 전화번호 미등록'}
+                                </div>
+                              </div>
+                            )
+                          })()}
+                          {pp.notes && (
+                            <div style={{ padding: '8px 10px', background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', borderRadius: 'var(--r1)', fontSize: '.76rem', color: 'var(--t2)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                              <div style={{ fontSize: '.68rem', color: 'var(--t3)', fontWeight: 700, marginBottom: '4px' }}>강사 메모</div>
+                              {pp.notes}
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
+                  </div>
+                )}
 
                 {/* 첨부파일(교재) 다운로드 이력 */}
                 {(() => {

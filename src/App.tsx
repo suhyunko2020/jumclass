@@ -15,20 +15,23 @@ import AdminPage from './pages/AdminPage'
 import MyPage from './pages/MyPage'
 import InstructorsPage from './pages/InstructorsPage'
 import InstructorDetailPage from './pages/InstructorDetailPage'
+import InstructorProgressPageView from './pages/InstructorProgressPage'
 import PolicyPage from './pages/PolicyPage'
 import SeoHead from './components/ui/SeoHead'
 
 export default function App() {
   const location = useLocation()
   const isAdmin = location.pathname === '/admin2026'
-  const hideFooter = isAdmin || location.pathname === '/lesson'
+  const isProgressPage = location.pathname.startsWith('/i/')
+  const hideNavbar = isAdmin || isProgressPage
+  const hideFooter = isAdmin || location.pathname === '/lesson' || isProgressPage
 
   return (
     <AuthModalProvider>
       <SeoHead />
       <ScrollToTop />
       <div className="page-bg" />
-      {!isAdmin && <Navbar />}
+      {!hideNavbar && <Navbar />}
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/courses" element={<CoursesPage />} />
@@ -42,6 +45,7 @@ export default function App() {
         <Route path="/instructors" element={<InstructorsPage />} />
         <Route path="/instructor/:instructorId" element={<InstructorDetailPage />} />
         <Route path="/policy/:type" element={<PolicyPage />} />
+        <Route path="/i/:token" element={<InstructorProgressPageView />} />
         <Route path="/admin2026" element={<AdminPage />} />
       </Routes>
       {!hideFooter && <Footer />}

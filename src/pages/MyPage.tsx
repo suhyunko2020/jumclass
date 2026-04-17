@@ -25,7 +25,7 @@ const emptyForm: InquiryForm = { id: '', type: 'general', subject: '', message: 
 export default function MyPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, logout, loading: authLoading } = useAuth()
   const { openAuth } = useAuthModal()
   const { getCourse } = useCourses()
   const toast = useToast()
@@ -54,6 +54,14 @@ export default function MyPage() {
     if (!user) return
     const data = await getMyInquiries(user.uid)
     setInquiries(data)
+  }
+
+  if (authLoading) {
+    return (
+      <div className="loading" style={{ paddingTop: '140px' }}>
+        <div className="spinner" />
+      </div>
+    )
   }
 
   if (!user) {

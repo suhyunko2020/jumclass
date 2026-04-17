@@ -95,6 +95,7 @@ export interface Enrollment {
   policyAgreedAt?: string;
   policyAgreedKeys?: string[];
   attachmentDownloads?: AttachmentDownloadLog[];
+  assignedInstructorId?: string;
 }
 
 export interface User {
@@ -135,6 +136,28 @@ export interface Instructor {
   services: InstructorService[];
   courseIds: string[];
   status?: 'public' | 'private';
+}
+
+// 강사용 진도 관리 페이지 (자격증 과정 전용, 토큰 기반 접근)
+export interface ProgressChecklistItem {
+  id: string;
+  title: string;
+  description?: string;
+  checked: boolean;
+  checkedAt?: string;
+}
+
+export interface InstructorProgressPage {
+  id: string;               // 토큰 (URL /i/:id)
+  userId: string;           // 수강생 id
+  courseId: string;         // 자격증 강의 id
+  instructorId: string;     // 담당 강사 id
+  checklist: ProgressChecklistItem[];
+  notes: string;            // 강사 메모
+  completedAt?: string;     // 전체 체크 완료 시각
+  expiresAt?: string;       // 만료 시각 (completedAt + 7일)
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Inquiry {

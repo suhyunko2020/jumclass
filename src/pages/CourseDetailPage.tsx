@@ -11,12 +11,13 @@ export default function CourseDetailPage() {
   const navigate = useNavigate()
   const { getCourse, getEnrolledCount, getReviewsByCourse, getReviewStats } = useCourses()
   const { getPublicInstructors } = useInstructors()
-  const { isEnrolled } = useAuth()
+  const { isEnrolled, getEnrollment } = useAuth()
   useAuthModal()
 
   const course = getCourse(courseId || '')
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({ 0: true })
   const [tierIdx, setTierIdx] = useState(0)
+  const [selectedInstructorId, setSelectedInstructorId] = useState<string>('')
 
   useEffect(() => {
     if (course) document.title = course.title + ' — JUMCLASS'
@@ -34,6 +35,8 @@ export default function CourseDetailPage() {
 
   const isCert = course.level === '자격증'
   const enrolled = isEnrolled(course.id)
+  const myEnrollment = enrolled ? getEnrollment(course.id) : null
+  const lockedInstructorId = myEnrollment?.assignedInstructorId
   const totalLessons = course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
   const totalDuration = calcTotalDuration(course.curriculum)
   const freeLessons = course.curriculum.reduce((s, sec) => s + sec.items.filter(i => i.status === 'free').length, 0)
@@ -51,7 +54,7 @@ export default function CourseDetailPage() {
     setOpenSections(p => ({ ...p, [idx]: !p[idx] }))
   }
 
-  const checkoutLink = `/checkout?course=${course.id}${tier ? `&tier=${tierIdx}` : ''}`
+  const checkoutLink = `/checkout?course=${course.id}${tier ? `&tier=${tierIdx}` : ''}${isCert && selectedInstructorId ? `&assignedInstructor=${selectedInstructorId}` : ''}`
 
   return (
     <>
@@ -177,7 +180,7 @@ export default function CourseDetailPage() {
                     </div>
                     {openSections[si] && (
                       <div className="curr-items open">
-                        {sec.items.map(item => {
+                        {sec.items.map((item, ii) => {
                           if (isCert) {
                             const hasVimeo = !!item.vimeo
                             return (
@@ -186,7 +189,15 @@ export default function CourseDetailPage() {
                                 style={{ cursor: hasVimeo ? 'pointer' : 'default' }}
                                 onClick={() => { if (hasVimeo) navigate(`/lesson?course=${course.id}&lesson=${item.id}`) }}
                               >
-                                <div className="curr-item-icon ic-free">▶</div>
+                                <div className="curr-item-icon" style={{
+                                  background: 'rgba(124,111,205,.12)',
+                                  color: 'var(--purple-2)',
+                                  fontSize: '.78rem',
+                                  fontWeight: 700,
+                                  border: '1px solid rgba(124,111,205,.25)',
+                                }}>
+                                  {ii + 1}
+                                </div>
                                 <span className="curr-item-title">{item.title}</span>
                               </div>
                             )
@@ -258,24 +269,37 @@ export default function CourseDetailPage() {
                 ) : (
                   <>
                     <div className="detail-section-title">강사 소개</div>
-                    <div className="instructor-card">
-                      <div className="instructor-big-avatar">{course.instructorAvatar}</div>
-                      <div style={{ flex: 1 }}>
-                        <div className="instructor-name">{course.instructor}</div>
-                        <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>전문 타로 강사</div>
-                        <p className="instructor-bio">{course.instructorBio}</p>
-                        {courseInstructors[0] && (
-                          <Link to={`/instructor/${courseInstructors[0].id}`}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '4px',
-                              marginTop: '10px', fontSize: '.82rem', fontWeight: 600,
-                              color: 'var(--purple-2)', textDecoration: 'none',
-                            }}>
-                            프로필 보러가기 →
-                          </Link>
-                        )}
-                      </div>
-                    </div>
+                    {(() => {
+                      // 등록된 강사 엔티티가 있으면 그 데이터를 우선 사용 (강사 관리에서 편집한 내용이 반영됨)
+                      const primary = courseInstructors[0]
+                      const name = primary?.name || course.instructor
+                      const subtitle = primary?.title || '전문 타로 강사'
+                      const bio = primary?.bio || course.instructorBio
+                      return (
+                        <div className="instructor-card">
+                          <div className="instructor-big-avatar" style={primary?.photo ? { overflow: 'hidden' } : undefined}>
+                            {primary?.photo
+                              ? <img src={primary.photo} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              : course.instructorAvatar}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div className="instructor-name">{name}</div>
+                            <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{subtitle}</div>
+                            <p className="instructor-bio">{bio}</p>
+                            {primary && (
+                              <Link to={`/instructor/${primary.id}`}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                  marginTop: '10px', fontSize: '.82rem', fontWeight: 600,
+                                  color: 'var(--purple-2)', textDecoration: 'none',
+                                }}>
+                                프로필 보러가기 →
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </>
                 )}
               </div>
@@ -337,6 +361,33 @@ export default function CourseDetailPage() {
                     </div>
                   )}
 
+                  {/* 자격증 과정 — 담당 강사 선택 (결제 후엔 잠김) */}
+                  {isCert && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <label className="form-label">담당 강사 {enrolled ? '(결제 완료)' : '선택'}</label>
+                      {courseInstructors.length === 0 ? (
+                        <div style={{ width: '100%', fontSize: '.82rem', padding: '10px 12px', background: 'rgba(232,156,56,.06)', border: '1px solid rgba(232,156,56,.2)', borderRadius: 'var(--r2)', color: 'var(--warn)' }}>
+                          등록된 담당 강사가 없습니다. 운영자에게 문의해주세요.
+                        </div>
+                      ) : (
+                        <select
+                          className="form-input"
+                          style={{ width: '100%', fontSize: '.9rem', padding: '8px', cursor: enrolled ? 'not-allowed' : 'pointer', opacity: enrolled ? 0.65 : 1 }}
+                          value={enrolled ? (lockedInstructorId || '') : selectedInstructorId}
+                          onChange={e => { if (!enrolled) setSelectedInstructorId(e.target.value) }}
+                          disabled={enrolled}
+                        >
+                          <option value="">강사를 선택해주세요</option>
+                          {courseInstructors.map(inst => (
+                            <option key={inst.id} value={inst.id}>
+                              {inst.name}{inst.title ? ` · ${inst.title}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+
                   <div className="purchase-price">
                     <div style={{ marginBottom: '4px' }}>
                       <span className="orig">{formatPrice(displayOriginal)}</span>
@@ -348,7 +399,17 @@ export default function CourseDetailPage() {
                   </div>
 
                   {enrolled ? (
-                    <Link to={`/lesson?course=${course.id}`} className="btn btn-primary w-full btn-xl">수강 계속하기 →</Link>
+                    isCert ? (
+                      <button type="button" className="btn btn-primary w-full btn-xl" disabled style={{ opacity: 0.65, cursor: 'default' }}>
+                        진행 중
+                      </button>
+                    ) : (
+                      <Link to={`/lesson?course=${course.id}`} className="btn btn-primary w-full btn-xl">수강 계속하기 →</Link>
+                    )
+                  ) : isCert && !selectedInstructorId ? (
+                    <button type="button" className="btn btn-gold w-full btn-xl" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                      담당 강사를 선택해주세요
+                    </button>
                   ) : (
                     <Link to={checkoutLink} className="btn btn-gold w-full btn-xl">수강신청하기</Link>
                   )}

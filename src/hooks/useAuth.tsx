@@ -21,7 +21,7 @@ interface AuthContextType {
   signup: (name: string, email: string, password: string) => Promise<string | null>
   loginWithGoogle: () => Promise<void>
   logout: () => Promise<void>
-  enroll: (courseId: string, days?: number, policyAgreedKeys?: string[]) => Promise<boolean>
+  enroll: (courseId: string, days?: number, policyAgreedKeys?: string[], assignedInstructorId?: string) => Promise<boolean>
   isEnrolled: (courseId: string) => boolean
   isPaused: (courseId: string) => boolean
   getEnrollment: (courseId: string) => Enrollment | null
@@ -54,6 +54,7 @@ function rowToEnrollment(row: Record<string, unknown>): Enrollment {
     policyAgreedAt: (row.policy_agreed_at as string | undefined) ?? undefined,
     policyAgreedKeys: (row.policy_agreed_keys as string[] | undefined) ?? undefined,
     attachmentDownloads: (row.attachment_downloads as Enrollment['attachmentDownloads']) ?? [],
+    assignedInstructorId: (row.assigned_instructor_id as string | undefined) ?? undefined,
   }
 }
 
@@ -174,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── 수강 등록 ─────────────────────────────────────────────
-  const enroll = useCallback(async (courseId: string, days = 365, policyAgreedKeys?: string[]) => {
+  const enroll = useCallback(async (courseId: string, days = 365, policyAgreedKeys?: string[], assignedInstructorId?: string) => {
     if (!user) return false
     const expiry = new Date()
     expiry.setDate(expiry.getDate() + days)
@@ -190,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pause_count: 0,
       policy_agreed_at: policyAgreedKeys && policyAgreedKeys.length > 0 ? new Date().toISOString() : null,
       policy_agreed_keys: policyAgreedKeys && policyAgreedKeys.length > 0 ? policyAgreedKeys : null,
+      assigned_instructor_id: assignedInstructorId || null,
     }, { onConflict: 'user_id,course_id' })
 
     if (error) return false
