@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type { Instructor } from '../data/types'
+import { saveInstructorRemote, deleteInstructorRemote } from '../utils/storage'
 
 const STORAGE_KEY = 'arcana_instructors'
 
@@ -25,11 +26,13 @@ export function useInstructors() {
     if (idx >= 0) all[idx] = inst
     else all.push(inst)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+    saveInstructorRemote(inst)
   }, [])
 
   const deleteInstructor = useCallback((id: string) => {
     const all = getCached().filter(i => i.id !== id)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+    deleteInstructorRemote(id)
   }, [])
 
   return { getAll, getPublicInstructors, getInstructor, saveInstructor, deleteInstructor }

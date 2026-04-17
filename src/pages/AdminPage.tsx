@@ -7,6 +7,7 @@ import {
   getCustomCourses,
   getInquiries, answerInquiry,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
+  bulkUploadInstructors,
 } from '../utils/storage'
 import { formatPrice } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
@@ -96,6 +97,8 @@ export default function AdminPage() {
   const [adminReviewModal, setAdminReviewModal] = useState(false)
   const [arForm, setArForm] = useState({ courseId: '', userName: '', rating: 5, text: '' })
   const [studentSearch, setStudentSearch] = useState('')
+  const [inquirySearch, setInquirySearch] = useState('')
+  const [expandedInquiries, setExpandedInquiries] = useState<Set<string>>(new Set())
   const [instModal, setInstModal] = useState<Instructor | null>(null)
   const [instSvcModal, setInstSvcModal] = useState<{ instId: string; service: InstructorService | null } | null>(null)
   const [courseEnrollModal, setCourseEnrollModal] = useState<string | null>(null)
@@ -184,15 +187,15 @@ export default function AdminPage() {
 
   const allInstructors = getAllInstructors()
 
-  const navItems: { sec: Section; icon: string; label: string; badge?: number }[] = [
-    { sec: 'overview',    icon: '📊', label: '대시보드' },
-    { sec: 'courses',     icon: '📚', label: '강의 관리' },
-    { sec: 'instructors', icon: '👤', label: '강사 관리' },
-    { sec: 'students',    icon: '👥', label: '수강생' },
-    { sec: 'payments',    icon: '💳', label: '결제 내역' },
-    { sec: 'inquiries',   icon: '💬', label: '문의 관리', badge: pendingCount },
-    { sec: 'reviews',     icon: '⭐', label: '리뷰 관리' },
-    { sec: 'settings',    icon: '⚙', label: '설정' },
+  const navItems: { sec: Section; label: string; badge?: number }[] = [
+    { sec: 'overview',    label: '대시보드' },
+    { sec: 'courses',     label: '강의 관리' },
+    { sec: 'instructors', label: '강사 관리' },
+    { sec: 'students',    label: '수강생' },
+    { sec: 'payments',    label: '결제 내역' },
+    { sec: 'inquiries',   label: '문의 관리', badge: pendingCount },
+    { sec: 'reviews',     label: '리뷰 관리' },
+    { sec: 'settings',    label: '설정' },
   ]
 
   function openNewInstructor() {
@@ -577,7 +580,6 @@ export default function AdminPage() {
                   transition: 'var(--t)', width: '100%', textAlign: 'left',
                 }}
               >
-                <span>{n.icon}</span>
                 <span style={{ flex: 1 }}>{n.label}</span>
                 {(n.badge ?? 0) > 0 && (
                   <span style={{ fontSize: '.68rem', fontWeight: 700, padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(232,156,56,.2)', color: 'var(--warn)' }}>
@@ -933,82 +935,202 @@ export default function AdminPage() {
           )}
 
           {/* ═══ 문의 관리 ═══ */}
-          {sec === 'inquiries' && (
+          {sec === 'inquiries' && (() => {
+            const q = inquirySearch.trim().toLowerCase()
+            const filtered = q
+              ? inquiries.filter(i =>
+                  i.subject.toLowerCase().includes(q) ||
+                  i.message.toLowerCase().includes(q) ||
+                  i.userName.toLowerCase().includes(q) ||
+                  i.userEmail.toLowerCase().includes(q) ||
+                  (i.answer || '').toLowerCase().includes(q)
+                )
+              : inquiries
+            const toggleExpand = (id: string) => {
+              setExpandedInquiries(prev => {
+                const next = new Set(prev)
+                if (next.has(id)) next.delete(id); else next.add(id)
+                return next
+              })
+            }
+            return (
             <div>
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '28px' }}>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '20px' }}>
                 문의 관리
                 {pendingCount > 0 && <span style={{ fontSize: '.85rem', color: 'var(--warn)', fontWeight: 400, marginLeft: '8px' }}>({pendingCount}건 대기)</span>}
               </h1>
-              {inquiries.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>접수된 문의가 없습니다.</div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="제목, 내용, 이름, 이메일로 검색"
+                  value={inquirySearch}
+                  onChange={e => setInquirySearch(e.target.value)}
+                  className="form-input"
+                  style={{ flex: 1, minWidth: '240px', maxWidth: '420px' }}
+                />
+                {inquirySearch && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setInquirySearch('')}>초기화</button>
+                )}
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => setExpandedInquiries(new Set(filtered.map(i => i.id)))}>
+                    모두 펼치기
+                  </button>
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => setExpandedInquiries(new Set())}>
+                    모두 접기
+                  </button>
+                </div>
+              </div>
+              {filtered.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>
+                  {inquiries.length === 0 ? '접수된 문의가 없습니다.' : '검색 결과가 없습니다.'}
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {inquiries.map(inq => (
-                    <div key={inq.id} style={{ background: 'var(--glass-1)', border: `1px solid ${inq.status === 'pending' ? 'rgba(232,156,56,.25)' : 'var(--line)'}`, borderRadius: 'var(--r3)', padding: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                        <div>
-                          <div style={{ fontWeight: 700, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {filtered.map(inq => {
+                    const expanded = expandedInquiries.has(inq.id)
+                    const courseInfo = inq.metadata?.courseId ? courses.find(x => x.id === inq.metadata?.courseId) : null
+                    const refundEnrollment = (inq.type === 'refund' && inq.metadata?.courseId)
+                      ? allEnrollments.find(e => e.userId === inq.userId && e.courseId === inq.metadata?.courseId)
+                      : null
+                    const totalLessons = courseInfo?.curriculum?.reduce((s, sec) => s + sec.items.length, 0) ?? 0
+                    const completedCount = refundEnrollment?.completedLessons?.length ?? 0
+                    const progressPct = refundEnrollment?.progress ?? 0
+                    return (
+                    <div key={inq.id} style={{ background: 'var(--glass-1)', border: `1px solid ${inq.status === 'pending' ? 'rgba(232,156,56,.25)' : 'var(--line)'}`, borderRadius: 'var(--r3)', overflow: 'hidden' }}>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(inq.id)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '12px',
+                          width: '100%', padding: '14px 18px', background: 'transparent',
+                          border: 'none', textAlign: 'left', cursor: 'pointer', color: 'var(--t1)',
+                        }}
+                      >
+                        <span style={{
+                          display: 'inline-block', width: '14px', flexShrink: 0,
+                          transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                          transition: 'transform .15s', color: 'var(--t3)', fontSize: '.85rem',
+                        }}>▶</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             {inq.type === 'refund' && (
-                              <span style={{ fontSize: '.7rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.12)', color: 'var(--fail)' }}>환불 요청</span>
+                              <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.12)', color: 'var(--fail)', flexShrink: 0 }}>환불 요청</span>
                             )}
-                            {inq.subject}
+                            <span style={{ fontWeight: 700, fontSize: '.92rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inq.subject}</span>
                           </div>
-                          <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>
+                          <div style={{ fontSize: '.74rem', color: 'var(--t3)', marginTop: '3px' }}>
                             {inq.userName} ({inq.userEmail}) · {new Date(inq.date).toLocaleDateString()}
-                            {inq.metadata?.courseId && (() => {
-                              const c = courses.find(x => x.id === inq.metadata?.courseId)
-                              return c ? <span style={{ marginLeft: '8px', color: 'var(--purple-2)' }}>· {c.emoji} {c.title}</span> : null
-                            })()}
+                            {courseInfo && <span style={{ marginLeft: '8px', color: 'var(--purple-2)' }}>· {courseInfo.title}</span>}
                           </div>
                         </div>
                         <span style={{
-                          fontSize: '.72rem', padding: '3px 10px', borderRadius: 'var(--pill)', flexShrink: 0,
+                          fontSize: '.7rem', padding: '3px 10px', borderRadius: 'var(--pill)', flexShrink: 0,
                           background: inq.status === 'answered' ? 'rgba(52,196,124,.1)' : 'rgba(232,156,56,.1)',
                           color: inq.status === 'answered' ? 'var(--ok)' : 'var(--warn)',
                           border: `1px solid ${inq.status === 'answered' ? 'rgba(52,196,124,.2)' : 'rgba(232,156,56,.2)'}`,
                         }}>
                           {inq.status === 'answered' ? '답변 완료' : '답변 대기'}
                         </span>
-                      </div>
-                      <p style={{ fontSize: '.875rem', color: 'var(--t2)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: '12px' }}>{inq.message}</p>
-                      {inq.status === 'answered' && (
-                        <div style={{ padding: '12px 16px', background: 'rgba(52,196,124,.05)', border: '1px solid rgba(52,196,124,.15)', borderRadius: 'var(--r2)', marginBottom: '12px' }}>
-                          <div style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--ok)', marginBottom: '6px' }}>
-                            ✓ 관리자 답변 ({inq.answeredAt ? new Date(inq.answeredAt).toLocaleDateString() : ''})
+                      </button>
+                      {expanded && (
+                        <div style={{ padding: '0 18px 18px', borderTop: '1px solid var(--line)' }}>
+                          {inq.type === 'refund' && inq.metadata?.courseId && (
+                            <div style={{ marginTop: '14px', padding: '12px 14px', background: 'rgba(124,111,205,.06)', border: '1px solid rgba(124,111,205,.18)', borderRadius: 'var(--r2)' }}>
+                              <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--purple-2)', marginBottom: '8px' }}>
+                                환불 요청 강의 진도 현황
+                              </div>
+                              {refundEnrollment ? (
+                                <>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.78rem', marginBottom: '6px' }}>
+                                    <span style={{ color: 'var(--t2)' }}>
+                                      {courseInfo?.title ?? inq.metadata.courseId}
+                                    </span>
+                                    <span style={{ fontWeight: 600 }}>
+                                      {completedCount}/{totalLessons}강 ({progressPct}%)
+                                    </span>
+                                  </div>
+                                  <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,.06)', borderRadius: '99px', overflow: 'hidden' }}>
+                                    <div style={{
+                                      width: `${Math.min(progressPct, 100)}%`,
+                                      height: '100%',
+                                      background: progressPct >= 100 ? 'var(--fail)' : 'var(--purple)',
+                                      borderRadius: '99px',
+                                    }} />
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '14px', fontSize: '.72rem', color: 'var(--t3)', marginTop: '8px', flexWrap: 'wrap' }}>
+                                    <span>수강 시작: {new Date(refundEnrollment.enrolledAt).toLocaleDateString()}</span>
+                                    <span>만료: {new Date(refundEnrollment.expiryDate).toLocaleDateString()}</span>
+                                    <span>상태: {refundEnrollment.paused ? '휴강' : (new Date(refundEnrollment.expiryDate).getTime() < Date.now() ? '만료' : '수강중')}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>
+                                  수강 등록 정보를 찾을 수 없습니다.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <p style={{ fontSize: '.875rem', color: 'var(--t2)', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: '14px 0 12px' }}>{inq.message}</p>
+                          {inq.status === 'answered' && (
+                            <div style={{ padding: '12px 16px', background: 'rgba(52,196,124,.05)', border: '1px solid rgba(52,196,124,.15)', borderRadius: 'var(--r2)', marginBottom: '12px' }}>
+                              <div style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--ok)', marginBottom: '6px' }}>
+                                관리자 답변 ({inq.answeredAt ? new Date(inq.answeredAt).toLocaleDateString() : ''})
+                              </div>
+                              <div style={{ fontSize: '.855rem', color: 'var(--t1)', whiteSpace: 'pre-wrap' }}>{inq.answer}</div>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className={`btn btn-sm ${inq.status !== 'answered' ? 'btn-primary' : 'btn-ghost'}`}
+                              onClick={() => setAnswerModal({ inq, text: inq.answer || '' })}>
+                              {inq.status !== 'answered' ? '답변 작성' : '답변 수정'}
+                            </button>
+                            {inq.type === 'refund' && inq.status !== 'answered' && (
+                              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
+                                onClick={async () => {
+                                  if (!confirm('환불 처리 하시겠습니까? (수강 내역은 유지됩니다)')) return
+                                  await answerInquiry(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
+                                  toast('환불 처리 완료', 'ok')
+                                  refresh()
+                                }}>
+                                환불 처리
+                              </button>
+                            )}
                           </div>
-                          <div style={{ fontSize: '.855rem', color: 'var(--t1)', whiteSpace: 'pre-wrap' }}>{inq.answer}</div>
                         </div>
                       )}
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className={`btn btn-sm ${inq.status !== 'answered' ? 'btn-primary' : 'btn-ghost'}`}
-                          onClick={() => setAnswerModal({ inq, text: inq.answer || '' })}>
-                          {inq.status !== 'answered' ? '답변 작성' : '답변 수정'}
-                        </button>
-                        {inq.type === 'refund' && inq.status !== 'answered' && (
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
-                            onClick={async () => {
-                              if (!confirm('환불 처리 하시겠습니까? (수강 내역은 유지됩니다)')) return
-                              await answerInquiry(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
-                              toast('환불 처리 완료', 'ok')
-                              refresh()
-                            }}>
-                            환불 처리
-                          </button>
-                        )}
-                      </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
-          )}
+            )
+          })()}
 
           {/* ═══ 강사 관리 ═══ */}
           {sec === 'instructors' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>강사 관리 ({allInstructors.length}명)</h1>
-                <button className="btn btn-primary btn-sm" onClick={openNewInstructor}>+ 강사 등록</button>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    title="이 브라우저 localStorage의 강사 데이터를 Supabase로 일괄 업로드 (1회용 이관 도구)"
+                    onClick={async () => {
+                      const local = allInstructors
+                      if (local.length === 0) { toast('업로드할 강사가 없습니다.', 'err'); return }
+                      if (!confirm(`localStorage에 있는 강사 ${local.length}명을 Supabase로 업로드합니다.\n(기존에 같은 id의 데이터가 있으면 덮어씁니다.)\n\n진행할까요?`)) return
+                      const r = await bulkUploadInstructors(local)
+                      if (r.failed > 0) toast(`업로드 실패: ${r.error ?? '알 수 없는 오류'}`, 'err')
+                      else toast(`강사 ${r.success}명을 Supabase로 업로드했습니다.`, 'ok')
+                    }}
+                  >
+                    Supabase 일괄 업로드
+                  </button>
+                  <button className="btn btn-primary btn-sm" onClick={openNewInstructor}>+ 강사 등록</button>
+                </div>
               </div>
               {allInstructors.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>등록된 강사가 없습니다.</div>

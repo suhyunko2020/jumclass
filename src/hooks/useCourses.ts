@@ -143,10 +143,11 @@ export function useCourses() {
 
   // ── Supabase → 로컬 캐시 동기화 (앱 시작 시 1회 호출) ─────
   const syncFromSupabase = useCallback(async () => {
-    const [overridesRes, customRes, reviewsRes] = await Promise.all([
+    const [overridesRes, customRes, reviewsRes, instructorsRes] = await Promise.all([
       supabase.from('course_overrides').select('course_id, data'),
       supabase.from('custom_courses').select('id, data'),
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
+      supabase.from('instructors').select('id, data'),
     ])
 
     if (overridesRes.data) {
@@ -169,6 +170,11 @@ export function useCourses() {
         source: r.source ?? 'user',
       }))
       localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews))
+    }
+    if (instructorsRes.data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const instructors = instructorsRes.data.map((r: any) => r.data)
+      localStorage.setItem('arcana_instructors', JSON.stringify(instructors))
     }
   }, [])
 

@@ -2,7 +2,7 @@
 // - 강의 override/custom: localStorage 캐시 (동기) + Supabase 백그라운드
 // - 문의/리뷰/유저: Supabase (비동기)
 
-import type { Inquiry, Course } from '../data/types'
+import type { Inquiry, Course, Instructor } from '../data/types'
 import { supabase } from '../lib/supabase'
 
 // ── localStorage 캐시 (강의 데이터용) ─────────────────────
@@ -129,6 +129,7 @@ export async function getAllEnrollmentsAdmin() {
     enrolledAt: e.enrolled_at as string,
     expiryDate: e.expiry_date as string,
     progress: (e.progress ?? 0) as number,
+    completedLessons: (e.completed_lessons ?? []) as string[],
     type: (e.type ?? 'payment') as string,
     paused: (e.paused ?? false) as boolean,
     pauseCount: (e.pause_count ?? 0) as number,
@@ -163,4 +164,42 @@ export async function updateEnrollmentAdmin(
     .update(data)
     .eq('user_id', userId).eq('course_id', courseId)
   return !error
+}
+
+// ════════════════════════════════════════════════════════════
+// 강사 — Supabase 비동기 (custom_courses와 동일 패턴)
+// ════════════════════════════════════════════════════════════
+
+export async function getInstructorsRemote(): Promise<Instructor[]> {
+  const { data, error } = await supabase.from('instructors').select('id, data')
+  if (error) { console.warn('fetch instructors failed:', error.message); return [] }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => r.data as Instructor)
+}
+
+export function saveInstructorRemote(inst: Instructor) {
+  supabase.from('instructors').upsert(
+    { id: inst.id, data: inst as unknown as Record<string, unknown>, updated_at: new Date().toISOString() },
+    { onConflict: 'id' }
+  ).then(({ error }) => { if (error) console.warn('instructor sync failed:', error.message) })
+}
+
+export function deleteInstructorRemote(id: string) {
+  supabase.from('instructors').delete().eq('id', id)
+    .then(({ error }) => { if (error) console.warn('delete instructor failed:', error.message) })
+}
+
+// localStorage → Supabase 일괄 업로드 (1회용 이관)
+export async function bulkUploadInstructors(instructors: Instructor[]): Promise<{ success: number; failed: number; error?: string }> {
+  if (instructors.length === 0) return { success: 0, failed: 0 }
+  const rows = instructors.map(inst => ({
+    id: inst.id,
+    data: inst as unknown as Record<string, unknown>,
+    updated_at: new Date().toISOString(),
+  }))
+  const { error } = await supabase.from('instructors').upsert(rows, { onConflict: 'id' })
+  if (error) {
+    return { success: 0, failed: instructors.length, error: error.message }
+  }
+  return { success: instructors.length, failed: 0 }
 }
