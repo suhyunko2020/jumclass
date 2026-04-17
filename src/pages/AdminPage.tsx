@@ -2362,7 +2362,15 @@ export default function AdminPage() {
                                       token: pp.id,
                                     })
                                     if (r.ok) toast('알림톡이 발송되었습니다.', 'ok')
-                                    else toast(`발송 실패: ${r.reason}${r.message ? ` — ${r.message}` : ''}`, 'err')
+                                    else {
+                                      // 비즈엠 응답 상세(bizmCode + bizmMessage)를 토스트에 노출 — 디버그 용이
+                                      const parts = [r.reason]
+                                      if (r.bizmCode) parts.push(`code=${r.bizmCode}`)
+                                      if (r.bizmMessage) parts.push(String(r.bizmMessage))
+                                      if (r.message) parts.push(r.message)
+                                      toast(`발송 실패: ${parts.join(' | ')}`, 'err')
+                                      console.error('[alimtalk-fail]', r)
+                                    }
                                   }}
                                 >
                                   알림톡 재발송

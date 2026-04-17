@@ -161,7 +161,12 @@ export default function CheckoutPage() {
               coursePeriod: periodLabel,
               token: progressPage.id,
             }).then(r => {
-              if (!r.ok) console.warn('알림톡 발송 실패 (정상 플로우 계속):', r.reason, r.message)
+              if (!r.ok) console.warn('[alimtalk-fail]', {
+                reason: r.reason,
+                message: r.message,
+                bizmCode: r.bizmCode,
+                bizmMessage: r.bizmMessage,
+              })
             })
           }
         }

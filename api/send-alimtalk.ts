@@ -87,7 +87,8 @@ export default async function handler(request: Request): Promise<Response> {
   // 승인된 템플릿(jum_checklist)의 버튼 설정과 100% 일치해야 발송 성공.
   // - 이름: '페이지 바로가기'
   // - 타입: WL (웹링크)
-  // - Mobile URL만 사용 (PC URL은 승인본에서 미설정)
+  // - Mobile URL: 승인본의 변수 자리를 포함한 URL 패턴과 일치시키기 위해 실제 토큰으로 치환해서 전달
+  // - PC URL: 승인본에서 "PC(선택)"로 비어있음 → 빈 문자열로 필드 자체는 포함 (필드 누락 시 구조 불일치 가능)
   const body = [{
     message_type: 'AT',
     phn: normalizePhone(phone),
@@ -98,6 +99,7 @@ export default async function handler(request: Request): Promise<Response> {
       name: '페이지 바로가기',
       type: 'WL',
       url_mobile: url,
+      url_pc: '',
     },
     reserveDt: '00000000000000',
   }]
@@ -112,9 +114,25 @@ export default async function handler(request: Request): Promise<Response> {
       body: JSON.stringify(body),
     })
     const data = await res.json().catch(() => null)
-    if (!res.ok) {
+    // 비즈엠은 HTTP 200이어도 응답 body 내부에 실패 코드가 있을 수 있으므로
+    // 첫 항목의 code 값까지 확인해 실제 성공 여부를 판별.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const first = Array.isArray(data) ? (data[0] as any) : (data as any)
+    const bizmCode = first?.code
+    const bizmData = first?.data ?? first?.message ?? null
+    const isBizmSuccess = bizmCode === 'success'
+      || bizmCode === 'SUCCESS'
+      || bizmCode === '7000'
+      || bizmCode === 0
+    if (!res.ok || !isBizmSuccess) {
       return new Response(JSON.stringify({
-        ok: false, reason: 'bizm-error', status: res.status, data,
+        ok: false,
+        reason: !res.ok ? 'bizm-error' : 'bizm-failed',
+        status: res.status,
+        bizmCode,
+        bizmMessage: bizmData,
+        data,
+        sentPayload: body,
       }), { status: 502, headers: { 'Content-Type': 'application/json' } })
     }
     return new Response(JSON.stringify({ ok: true, data }), {

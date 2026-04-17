@@ -12,8 +12,10 @@ export interface AlimtalkPayload {
 
 export interface AlimtalkResult {
   ok: boolean
-  reason?: string         // not-configured / bizm-error / fetch-failed / missing-fields ...
+  reason?: string         // not-configured / bizm-error / bizm-failed / fetch-failed / missing-fields ...
   message?: string
+  bizmCode?: string | number
+  bizmMessage?: string | null
 }
 
 export async function sendInstructorAlimtalk(p: AlimtalkPayload): Promise<AlimtalkResult> {
@@ -24,12 +26,15 @@ export async function sendInstructorAlimtalk(p: AlimtalkPayload): Promise<Alimta
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(p),
     })
-    const data = await res.json().catch(() => null) as AlimtalkResult | null
-    if (!res.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await res.json().catch(() => null) as any
+    if (!res.ok || data?.ok === false) {
       return {
         ok: false,
         reason: data?.reason || `http-${res.status}`,
         message: data?.message,
+        bizmCode: data?.bizmCode,
+        bizmMessage: data?.bizmMessage,
       }
     }
     return data ?? { ok: true }
