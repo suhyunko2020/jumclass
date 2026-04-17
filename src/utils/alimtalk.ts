@@ -15,7 +15,11 @@ export interface AlimtalkResult {
   reason?: string         // not-configured / bizm-error / bizm-failed / fetch-failed / missing-fields ...
   message?: string
   bizmCode?: string | number
-  bizmMessage?: string | null
+  // 비즈엠 응답의 data 필드는 문자열일 수도, 객체일 수도 있음 — 원본 그대로 보관
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bizmMessage?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rawData?: any
 }
 
 export async function sendInstructorAlimtalk(p: AlimtalkPayload): Promise<AlimtalkResult> {
@@ -35,6 +39,7 @@ export async function sendInstructorAlimtalk(p: AlimtalkPayload): Promise<Alimta
         message: data?.message,
         bizmCode: data?.bizmCode,
         bizmMessage: data?.bizmMessage,
+        rawData: data?.data,
       }
     }
     return data ?? { ok: true }

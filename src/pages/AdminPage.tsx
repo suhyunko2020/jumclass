@@ -2363,10 +2363,18 @@ export default function AdminPage() {
                                     })
                                     if (r.ok) toast('알림톡이 발송되었습니다.', 'ok')
                                     else {
-                                      // 비즈엠 응답 상세(bizmCode + bizmMessage)를 토스트에 노출 — 디버그 용이
+                                      // 비즈엠 응답 상세를 JSON으로 변환해서 토스트에 노출
+                                      const stringify = (v: unknown): string => {
+                                        if (v == null) return ''
+                                        if (typeof v === 'string') return v
+                                        try { return JSON.stringify(v) } catch { return String(v) }
+                                      }
                                       const parts = [r.reason]
                                       if (r.bizmCode) parts.push(`code=${r.bizmCode}`)
-                                      if (r.bizmMessage) parts.push(String(r.bizmMessage))
+                                      const msg = stringify(r.bizmMessage)
+                                      if (msg) parts.push(msg)
+                                      const raw = stringify(r.rawData)
+                                      if (raw && raw !== msg) parts.push(`raw=${raw}`)
                                       if (r.message) parts.push(r.message)
                                       toast(`발송 실패: ${parts.join(' | ')}`, 'err')
                                       console.error('[alimtalk-fail]', r)
