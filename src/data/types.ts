@@ -72,6 +72,7 @@ export interface Course {
   reviews?: Review[];
   pauseConfig?: PauseConfig;
   status?: 'public' | 'private';
+  includedCourseIds?: string[];
 }
 
 export interface Enrollment {

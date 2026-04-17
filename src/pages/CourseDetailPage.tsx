@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
+import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcTotalDuration } from '../utils/format'
@@ -9,6 +10,7 @@ export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>()
   const navigate = useNavigate()
   const { getCourse, getEnrolledCount, getReviewsByCourse, getReviewStats } = useCourses()
+  const { getPublicInstructors } = useInstructors()
   const { isEnrolled } = useAuth()
   useAuthModal()
 
@@ -36,6 +38,7 @@ export default function CourseDetailPage() {
   const freeLessons = course.curriculum.reduce((s, sec) => s + sec.items.filter(i => i.status === 'free').length, 0)
   const reviews = getReviewsByCourse(course.id)
   const reviewStats = getReviewStats(course.id)
+  const courseInstructors = getPublicInstructors().filter(i => i.courseIds.includes(course.id))
 
   const tier = course.pricingTiers?.[tierIdx]
   const displayPrice = tier?.price ?? course.price
@@ -95,10 +98,62 @@ export default function CourseDetailPage() {
                 </div>
               </div>
 
+              {/* 기본 제공 강의 (자격증 과정일 때만) */}
+              {course.level === '자격증' && course.includedCourseIds && course.includedCourseIds.length > 0 && (
+                <div className="detail-section">
+                  <div className="detail-section-title">
+                    이 자격증 과정에 포함된 강의
+                    <span style={{ fontSize: '.8rem', fontWeight: 400, color: 'var(--t3)', marginLeft: '10px' }}>
+                      결제 시 함께 수강 가능
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {course.includedCourseIds.map(id => {
+                      const inc = getCourse(id)
+                      if (!inc) return null
+                      const incTotal = inc.curriculum.reduce((s, sec) => s + sec.items.length, 0)
+                      const incDur = calcTotalDuration(inc.curriculum)
+                      return (
+                        <Link
+                          key={id}
+                          to={`/course/${inc.id}`}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '14px',
+                            padding: '14px 16px', border: '1px solid var(--line)', borderRadius: 'var(--r3)',
+                            background: 'var(--glass-1)', textDecoration: 'none', color: 'inherit',
+                            transition: 'var(--t)',
+                          }}
+                        >
+                          <div style={{
+                            width: '48px', height: '48px', borderRadius: 'var(--r2)',
+                            background: 'rgba(124,111,205,.1)', display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0,
+                          }}>
+                            {inc.emoji}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.12)', color: 'var(--purple-2)' }}>
+                                {inc.level}
+                              </span>
+                              <span style={{ fontWeight: 700, fontSize: '.95rem' }}>{inc.title}</span>
+                            </div>
+                            <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>
+                              총 {incTotal}강 · {incDur}
+                            </div>
+                          </div>
+                          <span style={{ color: 'var(--t3)', fontSize: '1.1rem', flexShrink: 0 }}>›</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* 커리큘럼 */}
               <div className="detail-section">
                 <div className="detail-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>강의 목차</span>
+                  <span>{course.level === '자격증' ? '강의 진행 순서' : '강의 목차'}</span>
                   <span style={{ fontSize: '.8rem', fontWeight: 400, color: 'var(--t3)' }}>
                     {course.curriculum.length}섹션 · {totalLessons}강 · {totalDuration}
                   </span>
@@ -115,6 +170,19 @@ export default function CourseDetailPage() {
                     {openSections[si] && (
                       <div className="curr-items open">
                         {sec.items.map(item => {
+                          if (course.level === '자격증') {
+                            const hasVimeo = !!item.vimeo
+                            return (
+                              <div key={item.id}
+                                className="curr-item"
+                                style={{ cursor: hasVimeo ? 'pointer' : 'default' }}
+                                onClick={() => { if (hasVimeo) navigate(`/lesson?course=${course.id}&lesson=${item.id}`) }}
+                              >
+                                <div className="curr-item-icon ic-free">▶</div>
+                                <span className="curr-item-title">{item.title}</span>
+                              </div>
+                            )
+                          }
                           const isFree = item.status === 'free'
                           const isLocked = !enrolled && !isFree
                           const canPlay = enrolled || isFree
@@ -141,15 +209,67 @@ export default function CourseDetailPage() {
 
               {/* 강사 소개 */}
               <div className="detail-section">
-                <div className="detail-section-title">강사 소개</div>
-                <div className="instructor-card">
-                  <div className="instructor-big-avatar">{course.instructorAvatar}</div>
-                  <div>
-                    <div className="instructor-name">{course.instructor}</div>
-                    <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>전문 타로 강사</div>
-                    <p className="instructor-bio">{course.instructorBio}</p>
-                  </div>
-                </div>
+                {course.level === '자격증' ? (
+                  <>
+                    <div className="detail-section-title">이 자격증 과정을 진행하는 강사</div>
+                    {courseInstructors.length === 0 ? (
+                      <div style={{ color: 'var(--t3)', fontSize: '.875rem', padding: '12px 0' }}>
+                        등록된 강사가 아직 없습니다.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '14px' }}>
+                        {courseInstructors.map(inst => (
+                          <Link key={inst.id} to={`/instructor/${inst.id}`}
+                            style={{
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px',
+                              padding: '18px 14px', border: '1px solid var(--line)', borderRadius: 'var(--r3)',
+                              background: 'var(--glass-1)', textDecoration: 'none', color: 'inherit',
+                              transition: 'var(--t)',
+                            }}>
+                            <div style={{
+                              width: '88px', height: '88px', borderRadius: '50%',
+                              background: 'rgba(124,111,205,.1)', display: 'flex', alignItems: 'center',
+                              justifyContent: 'center', fontSize: '1.8rem', fontWeight: 800,
+                              color: 'var(--purple-2)', overflow: 'hidden', flexShrink: 0,
+                            }}>
+                              {inst.photo
+                                ? <img src={inst.photo} alt={inst.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                : inst.name.charAt(0)}
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontWeight: 700, fontSize: '.92rem' }}>{inst.name}</div>
+                              {inst.title && (
+                                <div style={{ fontSize: '.76rem', color: 'var(--t3)', marginTop: '3px' }}>{inst.title}</div>
+                              )}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="detail-section-title">강사 소개</div>
+                    <div className="instructor-card">
+                      <div className="instructor-big-avatar">{course.instructorAvatar}</div>
+                      <div style={{ flex: 1 }}>
+                        <div className="instructor-name">{course.instructor}</div>
+                        <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>전문 타로 강사</div>
+                        <p className="instructor-bio">{course.instructorBio}</p>
+                        {courseInstructors[0] && (
+                          <Link to={`/instructor/${courseInstructors[0].id}`}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              marginTop: '10px', fontSize: '.82rem', fontWeight: 600,
+                              color: 'var(--purple-2)', textDecoration: 'none',
+                            }}>
+                            프로필 보러가기 →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* 수강생 후기 */}
@@ -209,10 +329,7 @@ export default function CourseDetailPage() {
                   {enrolled ? (
                     <Link to={`/lesson?course=${course.id}`} className="btn btn-primary w-full btn-xl">수강 계속하기 →</Link>
                   ) : (
-                    <>
-                      <Link to={checkoutLink} className="btn btn-gold w-full btn-xl">수강신청하기</Link>
-                      <p style={{ fontSize: '.78rem', color: 'var(--t3)', textAlign: 'center', marginTop: '10px' }}>7일 환불 보장</p>
-                    </>
+                    <Link to={checkoutLink} className="btn btn-gold w-full btn-xl">수강신청하기</Link>
                   )}
 
                   <div className="purchase-includes mt-16">

@@ -33,6 +33,7 @@ interface CurrEditItem {
 interface CurriculumModalState {
   courseId: string
   courseTitle: string
+  courseLevel: string
   isCustom: boolean
   sections: CurrEditSection[]
 }
@@ -56,6 +57,8 @@ interface CourseEditForm {
   instructorBio: string
   tiers: { days: number; price: number; originalPrice: number }[]
   whatYouLearnText: string
+  includedCourseIds: string[]
+  instructorIds: string[]
 }
 
 const DEFAULT_TIERS = [
@@ -264,11 +267,24 @@ export default function AdminPage() {
   function handleCourseEdit(e: React.FormEvent) {
     e.preventDefault()
     if (!courseEditModal) return
-    const { _isNew, _isCustom, whatYouLearnText, tiers, id, ...rest } = courseEditModal
+    const { _isNew, _isCustom, whatYouLearnText, tiers, id, includedCourseIds, instructorIds, ...rest } = courseEditModal
     const whatYouLearn = whatYouLearnText.split('\n').map(s => s.trim()).filter(Boolean)
     const pricingTiers = tiers.filter(t => t.price > 0)
     const price = pricingTiers[0]?.price || 0
     const originalPrice = pricingTiers[0]?.originalPrice || 0
+    const finalIncluded = rest.level === '자격증' ? includedCourseIds : undefined
+
+    // 강사 담당 강의 양방향 동기화
+    const selectedInstSet = new Set(instructorIds)
+    getAllInstructors().forEach(inst => {
+      const currentlyHas = inst.courseIds.includes(id)
+      const shouldHave = selectedInstSet.has(inst.id)
+      if (currentlyHas === shouldHave) return
+      const nextCourseIds = shouldHave
+        ? [...inst.courseIds, id]
+        : inst.courseIds.filter(cid => cid !== id)
+      saveInstructor({ ...inst, courseIds: nextCourseIds })
+    })
 
     if (_isNew || _isCustom) {
       const existing = courses.find(c => c.id === id)
@@ -284,11 +300,12 @@ export default function AdminPage() {
         ratingCount: existing?.ratingCount ?? 0,
         students: existing?.students ?? 0,
         pauseConfig: existing?.pauseConfig || { maxPauses: 2, maxDays: 30 },
+        includedCourseIds: finalIncluded,
       }
       saveCustomCourse(course)
       toast(_isNew ? '강의가 등록되었습니다.' : '강의가 수정되었습니다.', 'ok')
     } else {
-      saveCourseOverride(id, { ...rest, price, originalPrice, pricingTiers, whatYouLearn })
+      saveCourseOverride(id, { ...rest, price, originalPrice, pricingTiers, whatYouLearn, includedCourseIds: finalIncluded })
       toast('강의 정보가 업데이트되었습니다.', 'ok')
     }
     setCourseEditModal(null)
@@ -315,6 +332,8 @@ export default function AdminPage() {
       instructorBio: c.instructorBio || '',
       tiers: c.pricingTiers?.length ? c.pricingTiers.map(t => ({ ...t })) : DEFAULT_TIERS.map(t => ({ ...t, price: c.price, originalPrice: c.originalPrice })),
       whatYouLearnText: (c.whatYouLearn || []).join('\n'),
+      includedCourseIds: c.includedCourseIds ?? [],
+      instructorIds: getAllInstructors().filter(i => i.courseIds.includes(c.id)).map(i => i.id),
     })
   }
 
@@ -337,6 +356,8 @@ export default function AdminPage() {
       instructorBio: '',
       tiers: DEFAULT_TIERS.map(t => ({ ...t })),
       whatYouLearnText: '',
+      includedCourseIds: [],
+      instructorIds: [],
     })
   }
 
@@ -354,6 +375,7 @@ export default function AdminPage() {
     setCurriculumModal({
       courseId: c.id,
       courseTitle: c.title,
+      courseLevel: c.level,
       isCustom,
       sections: (c.curriculum || []).map(s => ({
         _key: Math.random().toString(36).slice(2),
@@ -498,7 +520,7 @@ export default function AdminPage() {
     } else {
       saveCourseOverride(curriculumModal.courseId, { curriculum, lessons: totalLessons })
     }
-    toast('커리큘럼이 저장되었습니다.', 'ok')
+    toast(curriculumModal.courseLevel === '자격증' ? '강의 진행 순서가 저장되었습니다.' : '커리큘럼이 저장되었습니다.', 'ok')
     setCurriculumModal(null)
     refresh()
   }
@@ -768,7 +790,7 @@ export default function AdminPage() {
                             <td style={{ whiteSpace: 'nowrap' }}>
                               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                 <button className="btn btn-primary btn-sm" onClick={() => openCourseEdit(c)}>편집</button>
-                                <button className="btn btn-ghost btn-sm" onClick={() => openCurriculumEdit(c)}>커리큘럼</button>
+                                <button className="btn btn-ghost btn-sm" onClick={() => openCurriculumEdit(c)}>{c.level === '자격증' ? '진행 순서' : '커리큘럼'}</button>
                                 <button className="btn btn-ghost btn-sm" onClick={() => setCourseEnrollModal(c.id)}>+ 수강생</button>
                                 <button className="btn btn-ghost btn-sm" onClick={() => {
                                   const newId = 'course-' + Date.now()
@@ -1469,6 +1491,108 @@ export default function AdminPage() {
                   <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '4px' }}>강의 상세 페이지 "이런 것을 배워요" 섹션에 표시됩니다.</div>
                 </div>
 
+                {/* ⑤ 담당 강사 (복수 선택) */}
+                {(() => {
+                  const candidates = allInstructors.filter(i => i.status !== 'private')
+                  const selected = new Set(courseEditModal.instructorIds)
+                  const toggleInst = (id: string) => {
+                    setCourseEditModal(p => {
+                      if (!p) return p
+                      const next = new Set(p.instructorIds)
+                      if (next.has(id)) next.delete(id); else next.add(id)
+                      return { ...p, instructorIds: Array.from(next) }
+                    })
+                  }
+                  return (
+                    <>
+                      <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', margin: '20px 0 12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)' }}>
+                        담당 강사 {courseEditModal.level === '자격증' && '(자격증 과정 진행 강사)'}
+                      </div>
+                      {candidates.length === 0 ? (
+                        <div style={{ fontSize: '.82rem', color: 'var(--t3)', padding: '12px 0' }}>
+                          등록된 강사가 없습니다. 먼저 강사를 등록해주세요.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {candidates.map(inst => {
+                            const checked = selected.has(inst.id)
+                            return (
+                              <button key={inst.id} type="button"
+                                onClick={() => toggleInst(inst.id)}
+                                style={{
+                                  fontSize: '.78rem', padding: '6px 12px', borderRadius: 'var(--pill)',
+                                  cursor: 'pointer',
+                                  background: checked ? 'rgba(124,111,205,.2)' : 'rgba(255,255,255,.04)',
+                                  color: checked ? 'var(--purple-2)' : 'var(--t3)',
+                                  border: `1px solid ${checked ? 'rgba(124,111,205,.35)' : 'var(--line)'}`,
+                                  fontWeight: checked ? 700 : 500,
+                                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                }}>
+                                <span>{checked ? '✓' : '+'}</span>
+                                {inst.name}
+                                {inst.title && <span style={{ color: 'var(--t3)', fontWeight: 400 }}>· {inst.title}</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '6px' }}>
+                        선택한 강사들이 이 강의의 상세 페이지 "강사 소개"에 노출됩니다. (선택: {courseEditModal.instructorIds.length}명)
+                      </div>
+                    </>
+                  )
+                })()}
+
+                {/* ⑥ 기본 제공 강의 — 자격증 레벨일 때만 */}
+                {courseEditModal.level === '자격증' && (() => {
+                  const candidates = courses.filter(c => c.id !== courseEditModal.id && c.level !== '자격증')
+                  const selected = new Set(courseEditModal.includedCourseIds)
+                  const toggle = (id: string) => {
+                    setCourseEditModal(p => {
+                      if (!p) return p
+                      const next = new Set(p.includedCourseIds)
+                      if (next.has(id)) next.delete(id); else next.add(id)
+                      return { ...p, includedCourseIds: Array.from(next) }
+                    })
+                  }
+                  return (
+                    <>
+                      <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', margin: '20px 0 12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)' }}>
+                        기본 제공 강의 (자격증 과정 결제 시 함께 수강 가능한 강의)
+                      </div>
+                      {candidates.length === 0 ? (
+                        <div style={{ fontSize: '.82rem', color: 'var(--t3)', padding: '12px 0' }}>
+                          선택 가능한 강의가 없습니다. 먼저 일반 강의를 등록해주세요.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: 'var(--r2)', padding: '8px' }}>
+                          {candidates.map(c => {
+                            const checked = selected.has(c.id)
+                            return (
+                              <label key={c.id} style={{
+                                display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px',
+                                borderRadius: 'var(--r1)', cursor: 'pointer',
+                                background: checked ? 'rgba(124,111,205,.12)' : 'transparent',
+                                border: `1px solid ${checked ? 'rgba(124,111,205,.35)' : 'transparent'}`,
+                              }}>
+                                <input type="checkbox" checked={checked} onChange={() => toggle(c.id)} />
+                                <span style={{ fontSize: '1rem' }}>{c.emoji}</span>
+                                <span style={{ flex: 1, fontSize: '.85rem', fontWeight: 600 }}>{c.title}</span>
+                                <span style={{ fontSize: '.7rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(255,255,255,.04)', color: 'var(--t3)' }}>
+                                  {c.level}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '6px' }}>
+                        선택한 강의들이 이 자격증 과정 상세 페이지에 "기본 제공 강의"로 표시됩니다. (선택: {courseEditModal.includedCourseIds.length}개)
+                      </div>
+                    </>
+                  )
+                })()}
+
                 <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                   <button type="button" className="btn btn-ghost w-full" onClick={() => setCourseEditModal(null)}>취소</button>
                   <button type="submit" className="btn btn-primary w-full">
@@ -1674,23 +1798,8 @@ export default function AdminPage() {
                       onChange={e => setInstModal(p => p ? { ...p, phone: e.target.value } : null)} />
                   </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">연결 강의 (복수 선택)</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {courses.map(c => {
-                      const sel = instModal.courseIds.includes(c.id)
-                      return (
-                        <button key={c.id} type="button"
-                          style={{ fontSize: '.75rem', padding: '4px 10px', borderRadius: 'var(--pill)', cursor: 'pointer', background: sel ? 'rgba(124,111,205,.2)' : 'rgba(255,255,255,.04)', color: sel ? 'var(--purple-2)' : 'var(--t3)', border: `1px solid ${sel ? 'rgba(124,111,205,.3)' : 'var(--line)'}` }}
-                          onClick={() => setInstModal(p => {
-                            if (!p) return null
-                            const ids = sel ? p.courseIds.filter(id => id !== c.id) : [...p.courseIds, c.id]
-                            return { ...p, courseIds: ids }
-                          })}
-                        >{c.emoji} {c.title}</button>
-                      )
-                    })}
-                  </div>
+                <div style={{ padding: '10px 12px', border: '1px dashed var(--line)', borderRadius: 'var(--r2)', background: 'rgba(255,255,255,.02)', marginBottom: '14px', fontSize: '.76rem', color: 'var(--t3)' }}>
+                  담당 강의는 각 <strong style={{ color: 'var(--t2)' }}>강의 관리 → 편집 → 담당 강사</strong> 항목에서 지정합니다.
                 </div>
                 <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: '12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)', marginTop: '8px' }}>상담 설정</div>
                 <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
@@ -1961,7 +2070,7 @@ export default function AdminPage() {
           <div className="modal-box" style={{ position: 'relative', maxWidth: '720px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <button className="modal-close" onClick={() => setCurriculumModal(null)}>✕</button>
             <div className="modal-head" style={{ flexShrink: 0, textAlign: 'left', padding: '20px 24px 16px' }}>
-              <h2 style={{ fontSize: '1.05rem' }}>커리큘럼 편집</h2>
+              <h2 style={{ fontSize: '1.05rem' }}>{curriculumModal.courseLevel === '자격증' ? '강의 진행 순서 편집' : '커리큘럼 편집'}</h2>
               <p style={{ fontSize: '.82rem', color: 'var(--t3)', margin: 0 }}>{curriculumModal.courseTitle}</p>
             </div>
 
