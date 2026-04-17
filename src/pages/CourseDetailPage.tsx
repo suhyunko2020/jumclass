@@ -4,7 +4,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
-import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcTotalDuration } from '../utils/format'
+import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcTotalDuration, getLevelColor } from '../utils/format'
 
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>()
@@ -65,7 +65,14 @@ export default function CourseDetailPage() {
                 <span>›</span>
                 <span>{course.level}</span>
               </div>
-              <div className="detail-level">{course.level}</div>
+              {(() => {
+                const lc = getLevelColor(course.level)
+                return (
+                  <div className="detail-level" style={{ background: lc.bg, color: lc.color, border: `1px solid ${lc.color}33` }}>
+                    {course.level}
+                  </div>
+                )
+              })()}
               <h1 className="detail-title">{course.title}</h1>
               <p className="detail-subtitle" style={{ marginBottom: '12px' }}>{course.description}</p>
               <div className="detail-stats">
@@ -382,14 +389,6 @@ export default function CourseDetailPage() {
         </div>
       </div>
 
-      <footer className="footer" style={{ marginTop: 0 }}>
-        <div className="container">
-          <div className="footer-bottom" style={{ borderTop: 'none', paddingTop: 0 }}>
-            <Link to="/" style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--t1)' }}>JUMCLASS</Link>
-            <span>© 2026 JUMCLASS. All rights reserved.</span>
-          </div>
-        </div>
-      </footer>
     </>
   )
 }

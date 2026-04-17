@@ -28,6 +28,16 @@ export default function CheckoutPage() {
   const isServiceCheckout = !!instructor && !!service
 
   const [paying, setPaying] = useState(false)
+  const [agreements, setAgreements] = useState({ privacy: false, terms: false, refund: false, copyright: false })
+  const allAgreed = agreements.privacy && agreements.terms && agreements.refund && agreements.copyright
+  const policies: { key: keyof typeof agreements; label: string }[] = [
+    { key: 'privacy', label: '개인정보처리방침' },
+    { key: 'terms', label: '이용약관' },
+    { key: 'refund', label: '환불 정책' },
+    { key: 'copyright', label: '저작권 안내' },
+  ]
+  const toggleAllAgreements = (checked: boolean) =>
+    setAgreements({ privacy: checked, terms: checked, refund: checked, copyright: checked })
 
   const tierIdx = tierParam !== null ? Number(tierParam) : 0
   const tier = course?.pricingTiers?.[tierIdx]
@@ -64,6 +74,7 @@ export default function CheckoutPage() {
 
   async function doPay() {
     if (!user) { openAuth('login'); return }
+    if (!allAgreed) { toast('약관에 모두 동의해주세요.', 'err'); return }
     setPaying(true)
     await new Promise(r => setTimeout(r, 1500))
 
@@ -71,7 +82,8 @@ export default function CheckoutPage() {
       toast('서비스 신청이 완료됐습니다!', 'ok')
       navigate(`/instructor/${instructorId}`)
     } else {
-      await enroll(courseId, days)
+      const agreedKeys = policies.filter(p => agreements[p.key]).map(p => p.key)
+      await enroll(courseId, days, agreedKeys)
       toast('수강신청이 완료됐습니다!', 'ok')
       navigate(`/payment-success?course=${courseId}&demo=1`)
     }
@@ -110,23 +122,19 @@ export default function CheckoutPage() {
               {dr > 0 && <div className="price-row" style={{ color: 'var(--ok)' }}><span>할인 ({dr}%)</span><span>- {formatPrice(originalPrice - price)}</span></div>}
               <div className="price-row total"><span>결제 금액</span><span>{formatPrice(price)}</span></div>
             </div>
-            <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-              {(isServiceCheckout
-                ? [
-                    '결제 후 강사가 직접 연락드립니다',
-                    '이후 일정과 스케줄은 모두 개인 맞춤으로 진행됩니다',
-                    ...(service!.mode === 'offline' ? ['대면 강의로 진행됩니다'] :
-                        service!.mode === 'online' ? ['비대면 강의 (Zoom)로 진행됩니다'] :
-                        service!.mode === 'both' ? ['대면 & 비대면(Zoom) 선택 가능'] :
-                        []),
-                  ]
-                : ['결제 즉시 수강 시작 가능', '365일 수강 기간', '학습 자료 다운로드 포함', '7일 환불 보장']
-              ).map(t => (
-                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '.84rem', color: 'var(--t2)' }}>
-                  <span style={{ color: 'var(--ok)' }}>✓</span> {t}
-                </div>
-              ))}
-            </div>
+            {isServiceCheckout && (
+              <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                {[
+                  service!.mode === 'offline' ? '대면 강의로 진행됩니다' :
+                    service!.mode === 'online' ? '비대면 강의 (Zoom)로 진행됩니다' :
+                    service!.mode === 'both' ? '대면 & 비대면(Zoom) 선택 가능' : null,
+                ].filter(Boolean).map(t => (
+                  <div key={t as string} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '.84rem', color: 'var(--t2)' }}>
+                    <span style={{ color: 'var(--ok)' }}>✓</span> {t}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 결제 */}
@@ -149,11 +157,66 @@ export default function CheckoutPage() {
                   결제 버튼을 누르면 <strong>테스트 {isServiceCheckout ? '신청' : '수강등록'}</strong>이 진행됩니다.
                 </div>
               </div>
-              <button className="btn btn-gold w-full btn-xl" onClick={doPay} disabled={paying}>
+              <button className="btn btn-gold w-full btn-xl" onClick={doPay} disabled={paying || !allAgreed}>
                 {paying ? '처리 중…' : `${formatPrice(price)} 결제하기 →`}
               </button>
               <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '.76rem', color: 'var(--t3)' }}>
                 토스페이먼츠 보안 결제 · SSL 암호화
+              </div>
+
+              {/* 약관 동의 영역 */}
+              <div style={{
+                marginTop: '20px',
+                padding: '14px 16px',
+                borderRadius: 'var(--r2)',
+                background: 'rgba(6,7,15,.6)',
+                border: '1px solid rgba(255,255,255,.06)',
+              }}>
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  paddingBottom: '11px',
+                  borderBottom: '1px solid rgba(255,255,255,.06)',
+                  cursor: 'pointer',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={allAgreed}
+                    onChange={e => toggleAllAgreements(e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0, accentColor: 'var(--purple-2)' }}
+                  />
+                  <span style={{ fontWeight: 700, fontSize: '.88rem', color: 'var(--t1)' }}>전체 동의하기</span>
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '11px' }}>
+                  {policies.map(p => (
+                    <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, cursor: 'pointer', fontSize: '.82rem', color: 'var(--t2)' }}>
+                        <input
+                          type="checkbox"
+                          checked={agreements[p.key]}
+                          onChange={e => setAgreements(prev => ({ ...prev, [p.key]: e.target.checked }))}
+                          style={{ width: '14px', height: '14px', cursor: 'pointer', flexShrink: 0, accentColor: 'var(--purple-2)' }}
+                        />
+                        <span>
+                          <span style={{ color: 'var(--t3)', fontWeight: 500, marginRight: '4px' }}>(필수)</span>
+                          {p.label}
+                        </span>
+                      </label>
+                      <Link
+                        to={`/policy/${p.key}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: '.72rem', color: 'var(--t3)', textDecoration: 'none', flexShrink: 0, padding: '3px 8px', borderRadius: 'var(--r1)', border: '1px solid rgba(255,255,255,.06)' }}
+                      >
+                        보기
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+                {!allAgreed && (
+                  <div style={{ marginTop: '11px', paddingTop: '11px', borderTop: '1px solid rgba(255,255,255,.04)', fontSize: '.72rem', color: 'var(--t3)', textAlign: 'center' }}>
+                    모든 항목에 동의해야 결제할 수 있습니다.
+                  </div>
+                )}
               </div>
             </div>
           </div>

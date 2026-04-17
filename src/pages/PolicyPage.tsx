@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 
 const TITLES: Record<string, string> = {
@@ -83,38 +83,6 @@ export default function PolicyPage() {
         </div>
       </div>
 
-      <footer className="footer">
-        <div className="container">
-          <div className="footer-grid">
-            <div className="footer-brand">
-              <span className="logo">JUMCLASS</span>
-              <p>{settings.brandDescription}</p>
-            </div>
-            <div className="footer-col">
-              <h4>강의</h4>
-              <Link to="/courses">전체 강의</Link>
-              <Link to="/instructors">강사 소개</Link>
-            </div>
-            <div className="footer-col">
-              <h4>플랫폼</h4>
-              <Link to="/classroom">내 강의실</Link>
-              <Link to="/instructors">강사 소개</Link>
-              <a href="/#contact">문의</a>
-            </div>
-            <div className="footer-col">
-              <h4>정책</h4>
-              <Link to="/policy/privacy">개인정보처리방침</Link>
-              <Link to="/policy/terms">이용약관</Link>
-              <Link to="/policy/refund">환불 정책</Link>
-              <Link to="/policy/copyright">저작권 안내</Link>
-            </div>
-          </div>
-          <div className="footer-bottom">
-            <span>{settings.copyright}</span>
-            <span>{settings.businessInfo}</span>
-          </div>
-        </div>
-      </footer>
     </>
   )
 }

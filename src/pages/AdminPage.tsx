@@ -8,7 +8,7 @@ import {
   getInquiries, answerInquiry,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
 } from '../utils/storage'
-import { formatPrice } from '../utils/format'
+import { formatPrice, getLevelColor } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
@@ -814,7 +814,14 @@ export default function AdminPage() {
                               <div style={{ fontSize: '.72rem', color: 'var(--t3)', textDecoration: 'line-through' }}>{formatPrice(c.originalPrice)}</div>
                             </td>
                             <td>
-                              <span style={{ fontSize: '.72rem', padding: '2px 8px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)' }}>{c.level}</span>
+                              {(() => {
+                                const lc = getLevelColor(c.level)
+                                return (
+                                  <span style={{ fontSize: '.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--pill)', background: lc.bg, color: lc.color, border: `1px solid ${lc.color}33` }}>
+                                    {c.level}
+                                  </span>
+                                )
+                              })()}
                             </td>
                             <td>
                               <span style={{ fontSize: '.72rem', padding: '2px 8px', borderRadius: 'var(--pill)', background: c.status === 'private' ? 'rgba(224,82,82,.1)' : 'rgba(52,196,124,.1)', color: c.status === 'private' ? 'var(--fail)' : 'var(--ok)' }}>
@@ -936,7 +943,14 @@ export default function AdminPage() {
           })()}
 
           {/* ═══ 결제 내역 ═══ */}
-          {sec === 'payments' && (
+          {sec === 'payments' && (() => {
+            const POLICY_LABELS: Record<string, string> = {
+              privacy: '개인정보처리방침',
+              terms: '이용약관',
+              refund: '환불 정책',
+              copyright: '저작권 안내',
+            }
+            return (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>결제 내역 ({allEnrollments.length}건)</h1>
@@ -947,7 +961,7 @@ export default function AdminPage() {
                 ) : (
                   <table className="admin-table">
                     <thead>
-                      <tr><th>수강생</th><th>강의</th><th>등록일</th><th>수강 기간</th><th>타입</th><th>상태</th></tr>
+                      <tr><th>수강생</th><th>강의</th><th>등록일</th><th>수강 기간</th><th>타입</th><th>약관 동의</th><th>상태</th></tr>
                     </thead>
                     <tbody>
                       {allEnrollments.map((e, i) => {
@@ -958,6 +972,8 @@ export default function AdminPage() {
                           : expired
                           ? '만료됨'
                           : `${Math.ceil((new Date(e.expiryDate).getTime() - Date.now()) / 86400000)}일`
+                        const agreedKeys: string[] = e.policyAgreedKeys || []
+                        const agreedLabels = agreedKeys.map(k => POLICY_LABELS[k] || k).join(', ')
                         return (
                           <tr key={i}>
                             <td>
@@ -974,6 +990,18 @@ export default function AdminPage() {
                                 {e.type === 'manual' ? '수동' : '결제'}
                               </span>
                             </td>
+                            <td title={e.policyAgreedAt ? `동의 항목: ${agreedLabels}` : ''}>
+                              {e.policyAgreedAt ? (
+                                <div style={{ fontSize: '.72rem' }}>
+                                  <div style={{ color: 'var(--ok)', fontWeight: 600 }}>✓ 동의 ({agreedKeys.length}개)</div>
+                                  <div style={{ color: 'var(--t3)', fontSize: '.68rem', marginTop: '2px' }}>
+                                    {new Date(e.policyAgreedAt).toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: '.7rem', color: 'var(--t3)' }}>기록 없음</span>
+                              )}
+                            </td>
                             <td>
                               <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: expired ? 'rgba(224,82,82,.1)' : e.paused ? 'rgba(232,156,56,.1)' : 'rgba(52,196,124,.1)', color: expired ? 'var(--fail)' : e.paused ? 'var(--warn)' : 'var(--ok)' }}>
                                 {expired ? '만료' : e.paused ? '휴강' : '수강중'}
@@ -987,7 +1015,8 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
-          )}
+            )
+          })()}
 
           {/* ═══ 문의 관리 ═══ */}
           {sec === 'inquiries' && (() => {
@@ -2102,6 +2131,38 @@ export default function AdminPage() {
                     잔여 {daysLeft}일 · 등록일 {new Date(enrollment.enrolledAt).toLocaleDateString()}
                   </div>
                 </div>
+
+                {/* 첨부파일(교재) 다운로드 이력 */}
+                {(() => {
+                  const downloads: { lessonId: string; attachmentName: string; downloadedAt: string }[] =
+                    enrollment.attachmentDownloads || []
+                  const allLessons = (em.course?.curriculum || []).flatMap((s: { items: { id: string; title: string }[] }) => s.items)
+                  const lessonTitleById = (id: string) =>
+                    allLessons.find((l: { id: string; title: string }) => l.id === id)?.title || id
+                  return (
+                    <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '.78rem', fontWeight: 700, marginBottom: '8px' }}>
+                        교재 다운로드 이력 {downloads.length > 0 && <span style={{ color: 'var(--t3)', fontWeight: 400 }}>({downloads.length}건)</span>}
+                      </div>
+                      {downloads.length === 0 ? (
+                        <div style={{ fontSize: '.78rem', color: 'var(--t3)' }}>다운로드 이력이 없습니다.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                          {downloads.map((d, i) => (
+                            <div key={i} style={{ fontSize: '.76rem', padding: '7px 10px', background: 'rgba(124,111,205,.06)', border: '1px solid rgba(124,111,205,.15)', borderRadius: 'var(--r1)' }}>
+                              <div style={{ fontWeight: 600, color: 'var(--t1)', marginBottom: '2px' }}>
+                                {lessonTitleById(d.lessonId)}
+                              </div>
+                              <div style={{ color: 'var(--t3)', fontSize: '.7rem' }}>
+                                {d.attachmentName} · {new Date(d.downloadedAt).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 <form onSubmit={handleEnrollEdit}>
                   <div className="form-group">

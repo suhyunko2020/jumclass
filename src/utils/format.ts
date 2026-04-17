@@ -13,6 +13,18 @@ export const formatDays = (days: number) =>
 export const formatDaysShort = (days: number) =>
   days >= 9999 ? '무제한' : `${days}일 수강`;
 
+// 레벨별 컬러 매핑 (강의 카드/관리자 목록의 레벨 뱃지용)
+// 필터 버튼에는 적용하지 않음
+export function getLevelColor(level: string): { color: string; bg: string } {
+  switch (level) {
+    case '입문':   return { color: '#5EC3A1', bg: 'rgba(94,195,161,.12)' }   // 청록
+    case '중급':   return { color: '#5EAFFF', bg: 'rgba(94,175,255,.12)' }   // 하늘
+    case '고급':   return { color: '#E89C38', bg: 'rgba(232,156,56,.12)' }   // 오렌지
+    case '자격증': return { color: '#C77DFF', bg: 'rgba(199,125,255,.14)' }  // 자주
+    default:       return { color: '#9CA3AF', bg: 'rgba(156,163,175,.12)' }  // 회색
+  }
+}
+
 export function calcTotalDuration(curriculum: { items: { duration: string }[] }[]): string {
   let totalSec = 0
   for (const sec of curriculum) {

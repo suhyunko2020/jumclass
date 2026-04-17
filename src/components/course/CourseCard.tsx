@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import type { Course } from '../../data/types'
-import { formatPrice, discountRate, calcTotalDuration } from '../../utils/format'
+import { formatPrice, discountRate, calcTotalDuration, getLevelColor } from '../../utils/format'
 
 interface Props {
   course: Course
@@ -10,6 +10,7 @@ interface Props {
 export default function CourseCard({ course, enrolledCount }: Props) {
   const navigate = useNavigate()
   const dr = discountRate(course.originalPrice, course.price)
+  const lc = getLevelColor(course.level)
 
   return (
     <div className="course-card" onClick={() => navigate(`/course/${course.id}`)}>
@@ -18,7 +19,7 @@ export default function CourseCard({ course, enrolledCount }: Props) {
         {course.badge && <span className="card-badge">{course.badge}</span>}
       </div>
       <div className="card-body">
-        <div style={{ fontSize: '.73rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--purple-2)', marginBottom: '5px' }}>
+        <div style={{ fontSize: '.73rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: lc.color, marginBottom: '5px' }}>
           {course.level}
         </div>
         <div className="card-title">{course.title}</div>

@@ -3,7 +3,6 @@ import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useToast } from '../components/ui/Toast'
-import { useSiteSettings } from '../hooks/useSiteSettings'
 import CourseCard from '../components/course/CourseCard'
 import { TESTIMONIALS } from '../data/courses'
 import { useState } from 'react'
@@ -14,8 +13,6 @@ export default function HomePage() {
   const { openAuth } = useAuthModal()
   const { user } = useAuth()
   const toast = useToast()
-  const { get: getSettings } = useSiteSettings()
-  const siteSettings = getSettings()
   const courses = getPublicCourses().slice(0, 3)
 
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
@@ -189,41 +186,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="footer">
-        <div className="container">
-          <div className="footer-grid">
-            <div className="footer-brand">
-              <span className="logo">JUMCLASS</span>
-              <p>{siteSettings.brandDescription}</p>
-            </div>
-            <div className="footer-col">
-              <h4>강의</h4>
-              <Link to="/courses">전체 강의</Link>
-              <Link to="/courses" onClick={() => setTimeout(() => document.querySelector<HTMLButtonElement>('.tab:nth-child(5)')?.click(), 100)}>자격증 과정</Link>
-              <Link to="/instructors">강사 소개</Link>
-            </div>
-            <div className="footer-col">
-              <h4>플랫폼</h4>
-              <Link to="/classroom">내 강의실</Link>
-              <Link to="/instructors">강사 소개</Link>
-              {!user && <button style={{ textAlign: 'left', fontSize: '.83rem', color: 'var(--t2)', display: 'block', marginBottom: '9px' }} onClick={() => openAuth('signup')}>무료 시작</button>}
-              <a href="#contact">문의</a>
-            </div>
-            <div className="footer-col">
-              <h4>정책</h4>
-              <Link to="/policy/privacy">개인정보처리방침</Link>
-              <Link to="/policy/terms">이용약관</Link>
-              <Link to="/policy/refund">환불 정책</Link>
-              <Link to="/policy/copyright">저작권 안내</Link>
-            </div>
-          </div>
-          <div className="footer-bottom">
-            <span>{siteSettings.copyright}</span>
-            <span>{siteSettings.businessInfo}</span>
-          </div>
-        </div>
-      </footer>
     </>
   )
 }

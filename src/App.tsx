@@ -1,5 +1,7 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Navbar from './components/layout/Navbar'
+import Footer from './components/layout/Footer'
+import ScrollToTop from './components/layout/ScrollToTop'
 import { AuthModalProvider } from './components/auth/AuthModal'
 import HomePage from './pages/HomePage'
 import CoursesPage from './pages/CoursesPage'
@@ -19,10 +21,12 @@ import SeoHead from './components/ui/SeoHead'
 export default function App() {
   const location = useLocation()
   const isAdmin = location.pathname === '/admin2026'
+  const hideFooter = isAdmin || location.pathname === '/lesson'
 
   return (
     <AuthModalProvider>
       <SeoHead />
+      <ScrollToTop />
       <div className="page-bg" />
       {!isAdmin && <Navbar />}
       <Routes>
@@ -40,6 +44,7 @@ export default function App() {
         <Route path="/policy/:type" element={<PolicyPage />} />
         <Route path="/admin2026" element={<AdminPage />} />
       </Routes>
+      {!hideFooter && <Footer />}
     </AuthModalProvider>
   )
 }

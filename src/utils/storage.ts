@@ -96,7 +96,7 @@ export async function answerInquiry(id: string, answer: string): Promise<boolean
 export async function getAllUsers() {
   const { data } = await supabase
     .from('profiles')
-    .select('id, name, avatar, email, created_at, enrollments(course_id, enrolled_at, expiry_date, progress, type, paused, pause_count, remaining_days)')
+    .select('id, name, avatar, email, created_at, enrollments(course_id, enrolled_at, expiry_date, progress, type, paused, pause_count, remaining_days, attachment_downloads, completed_lessons)')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((u: any) => ({
     uid: u.id as string,
@@ -110,10 +110,12 @@ export async function getAllUsers() {
       enrolledAt: e.enrolled_at as string,
       expiryDate: e.expiry_date as string,
       progress: (e.progress ?? 0) as number,
+      completedLessons: (e.completed_lessons ?? []) as string[],
       type: (e.type ?? 'payment') as string,
       paused: (e.paused ?? false) as boolean,
       pauseCount: (e.pause_count ?? 0) as number,
       remainingDays: (e.remaining_days ?? 0) as number,
+      attachmentDownloads: (e.attachment_downloads ?? []) as { lessonId: string; attachmentName: string; downloadedAt: string }[],
     })),
   }))
 }
@@ -135,6 +137,9 @@ export async function getAllEnrollmentsAdmin() {
     pauseCount: (e.pause_count ?? 0) as number,
     remainingDays: (e.remaining_days ?? 0) as number,
     userId: (e.user_id ?? '') as string,
+    policyAgreedAt: (e.policy_agreed_at ?? null) as string | null,
+    policyAgreedKeys: (e.policy_agreed_keys ?? null) as string[] | null,
+    attachmentDownloads: (e.attachment_downloads ?? []) as { lessonId: string; attachmentName: string; downloadedAt: string }[],
     user: {
       name: (e.profiles?.name ?? '') as string,
       avatar: (e.profiles?.avatar ?? '') as string,

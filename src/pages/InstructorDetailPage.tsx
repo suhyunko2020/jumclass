@@ -24,7 +24,10 @@ export default function InstructorDetailPage() {
     )
   }
 
-  const linkedCourses = inst.courseIds.map(id => getCourse(id)).filter(Boolean)
+  // 자격증 강의는 강사 서비스/상품과 중복되므로 담당 강의 목록에서 제외
+  const linkedCourses = inst.courseIds
+    .map(id => getCourse(id))
+    .filter((c): c is NonNullable<typeof c> => !!c && c.level !== '자격증')
 
   function handleServiceClick(serviceId: string) {
     if (!user) { openAuth('login'); return }
@@ -199,14 +202,6 @@ export default function InstructorDetailPage() {
         </div>
       </div>
 
-      <footer className="footer" style={{ marginTop: 0 }}>
-        <div className="container">
-          <div className="footer-bottom" style={{ borderTop: 'none', paddingTop: 0 }}>
-            <Link to="/" style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--t1)' }}>JUMCLASS</Link>
-            <span>© 2026 JUMCLASS. All rights reserved.</span>
-          </div>
-        </div>
-      </footer>
     </>
   )
 }

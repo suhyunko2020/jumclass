@@ -10,13 +10,20 @@ export default function LessonPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { getCourse, addReview, hasReviewed } = useCourses()
-  const { user, isEnrolled, getEnrollment, completeLesson } = useAuth()
+  const { user, isEnrolled, getEnrollment, completeLesson, logAttachmentDownload } = useAuth()
   const toast = useToast()
 
   const [reviewModal, setReviewModal] = useState(false)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewText, setReviewText] = useState('')
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
+
+  // 첨부파일 다운로드 동의 모달
+  const [downloadModal, setDownloadModal] = useState<{
+    url: string; filename: string; name: string; lessonId: string;
+  } | null>(null)
+  const [downloadAgreed, setDownloadAgreed] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   const courseId = params.get('course') || ''
   const lessonId = params.get('lesson') || ''
@@ -136,16 +143,69 @@ export default function LessonPage() {
         {/* 강의별 첨부 파일 */}
         {(() => {
           const lessonAtts = getLessonAttachments(cur.id)
+          const downloadHistory = enrollment?.attachmentDownloads ?? []
+          const hasDownloaded = (filename: string) =>
+            downloadHistory.some(d => d.lessonId === cur!.id && d.attachmentName === filename)
+
+          // 이미 동의/다운로드한 항목은 모달 없이 즉시 다운로드 (수강 기간 내에서만)
+          async function directDownload(att: { url: string; name: string; ext: string }) {
+            if (!enrolled) { toast('수강 신청 후 자료를 다운로드할 수 있습니다.', 'err'); return }
+            const filename = `${att.name}.${att.ext}`
+            try {
+              await logAttachmentDownload(courseId, cur!.id, filename)
+              const link = document.createElement('a')
+              link.href = att.url
+              link.download = filename
+              link.target = '_blank'
+              link.rel = 'noopener noreferrer'
+              document.body.appendChild(link)
+              link.click()
+              document.body.removeChild(link)
+            } catch {
+              toast('다운로드 처리 중 오류가 발생했습니다.', 'err')
+            }
+          }
+
           return lessonAtts.length > 0 ? (
             <div className="attach-list">
               <div className="attach-head">학습 자료</div>
-              {lessonAtts.map((a, i) => (
-                <a key={i} href={a.url} download={`${a.name}.${a.ext}`} target="_blank" rel="noopener noreferrer" className="attach-item" style={{ cursor: 'pointer' }}>
-                  <span>{a.ext === 'pdf' ? '📄' : '📎'}</span>
-                  <span>{a.name}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: '.72rem', color: 'var(--purple-2)', fontWeight: 600 }}>다운로드</span>
-                </a>
-              ))}
+              {lessonAtts.map((a, i) => {
+                const filename = `${a.name}.${a.ext}`
+                const already = hasDownloaded(filename)
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className="attach-item"
+                    style={{ cursor: 'pointer', textAlign: 'left', width: '100%', background: 'transparent', border: 'none', font: 'inherit', color: 'inherit' }}
+                    onClick={() => {
+                      if (!enrolled) { toast('수강 신청 후 자료를 다운로드할 수 있습니다.', 'err'); return }
+                      if (already) {
+                        directDownload(a)
+                        return
+                      }
+                      setDownloadAgreed(false)
+                      setDownloadModal({
+                        url: a.url,
+                        filename,
+                        name: a.name,
+                        lessonId: cur!.id,
+                      })
+                    }}
+                  >
+                    <span>{a.ext === 'pdf' ? '📄' : '📎'}</span>
+                    <span>{a.name}</span>
+                    <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      {already && (
+                        <span style={{ fontSize: '.68rem', color: 'var(--ok)', background: 'rgba(52,196,124,.1)', padding: '2px 7px', borderRadius: 'var(--pill)', fontWeight: 600 }}>
+                          ✓ 동의함
+                        </span>
+                      )}
+                      <span style={{ fontSize: '.72rem', color: 'var(--purple-2)', fontWeight: 600 }}>다운로드</span>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           ) : null
         })()}
@@ -262,6 +322,92 @@ export default function LessonPage() {
                   나중에 작성하기
                 </button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 첨부파일 다운로드 동의 모달 */}
+      {downloadModal && (
+        <div className="modal-overlay" onClick={() => !downloading && setDownloadModal(null)}>
+          <div className="modal-box" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => !downloading && setDownloadModal(null)}>✕</button>
+            <div className="modal-head" style={{ paddingBottom: '14px' }}>
+              <h2 style={{ fontSize: '1.05rem' }}>학습 자료 다운로드 안내</h2>
+              <div style={{ marginTop: '10px', padding: '8px 12px', background: 'rgba(124,111,205,.06)', border: '1px solid rgba(124,111,205,.18)', borderRadius: 'var(--r2)', fontSize: '.84rem', color: 'var(--t1)' }}>
+                <span style={{ color: 'var(--t3)', marginRight: '6px' }}>교재명 :</span>
+                <strong>{downloadModal.name}</strong>
+              </div>
+            </div>
+            <div className="modal-body" style={{ paddingBottom: '24px' }}>
+              <div style={{ fontSize: '.86rem', color: 'var(--t1)', lineHeight: 1.7, padding: '16px 18px', background: 'rgba(232,156,56,.06)', border: '1px solid rgba(232,156,56,.2)', borderRadius: 'var(--r2)', marginBottom: '16px' }}>
+                <div style={{ fontWeight: 700, color: 'var(--warn)', marginBottom: '10px' }}>다운로드 시 유의사항</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: 'var(--t2)', fontSize: '.84rem', lineHeight: 1.65 }}>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <span style={{ color: 'var(--t3)', flexShrink: 0 }}>-</span>
+                    <span>이 학습 자료를 다운로드하면 <strong style={{ color: 'var(--t1)' }}>해당 강의가 자동으로 수강 완료 처리</strong>됩니다.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <span style={{ color: 'var(--t3)', flexShrink: 0 }}>-</span>
+                    <span>교재(첨부파일)는 강의 콘텐츠의 일부로, 한 번 다운로드된 강의는 환불 시 <strong style={{ color: 'var(--t1)' }}>수강 분으로 차감</strong>됩니다.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <span style={{ color: 'var(--t3)', flexShrink: 0 }}>-</span>
+                    <span>본 교재(첨부파일)의 저작권은 <strong style={{ color: 'var(--t1)' }}>(주)골든에이지</strong>에 있으며 수강생 본인에게만 제공하는 자료입니다. 타인에게 양도, 재판매 등은 저작권 위반으로 민형사상 처벌을 받을 수 있습니다.</span>
+                  </div>
+                </div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '12px 14px', background: 'rgba(6,7,15,.5)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 'var(--r2)' }}>
+                <input
+                  type="checkbox"
+                  checked={downloadAgreed}
+                  onChange={e => setDownloadAgreed(e.target.checked)}
+                  style={{ width: '16px', height: '16px', accentColor: 'var(--purple-2)', cursor: 'pointer', flexShrink: 0 }}
+                  disabled={downloading}
+                />
+                <span style={{ fontSize: '.86rem', color: 'var(--t1)' }}>
+                  <span style={{ color: 'var(--fail)', fontWeight: 700, marginRight: '4px' }}>(필수)</span>
+                  위 안내를 확인했으며 다운로드에 동의합니다.
+                </span>
+              </label>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost w-full"
+                  onClick={() => setDownloadModal(null)}
+                  disabled={downloading}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary w-full"
+                  disabled={!downloadAgreed || downloading}
+                  onClick={async () => {
+                    if (!downloadAgreed || !downloadModal) return
+                    setDownloading(true)
+                    try {
+                      await logAttachmentDownload(courseId, downloadModal.lessonId, downloadModal.filename)
+                      const a = document.createElement('a')
+                      a.href = downloadModal.url
+                      a.download = downloadModal.filename
+                      a.target = '_blank'
+                      a.rel = 'noopener noreferrer'
+                      document.body.appendChild(a)
+                      a.click()
+                      document.body.removeChild(a)
+                      toast('다운로드를 시작합니다. 해당 강의가 수강 완료로 처리되었습니다.', 'ok')
+                      setDownloadModal(null)
+                    } catch {
+                      toast('다운로드 처리 중 오류가 발생했습니다.', 'err')
+                    } finally {
+                      setDownloading(false)
+                    }
+                  }}
+                >
+                  {downloading ? '처리 중…' : '동의하고 다운로드'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

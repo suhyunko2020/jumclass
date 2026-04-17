@@ -75,6 +75,12 @@ export interface Course {
   includedCourseIds?: string[];
 }
 
+export interface AttachmentDownloadLog {
+  lessonId: string;
+  attachmentName: string;
+  downloadedAt: string;
+}
+
 export interface Enrollment {
   courseId: string;
   enrolledAt: string;
@@ -86,6 +92,9 @@ export interface Enrollment {
   pausedAt?: string;
   remainingDays?: number;
   pauseCount?: number;
+  policyAgreedAt?: string;
+  policyAgreedKeys?: string[];
+  attachmentDownloads?: AttachmentDownloadLog[];
 }
 
 export interface User {

@@ -21,11 +21,12 @@ interface AuthContextType {
   signup: (name: string, email: string, password: string) => Promise<string | null>
   loginWithGoogle: () => Promise<void>
   logout: () => Promise<void>
-  enroll: (courseId: string, days?: number) => Promise<boolean>
+  enroll: (courseId: string, days?: number, policyAgreedKeys?: string[]) => Promise<boolean>
   isEnrolled: (courseId: string) => boolean
   isPaused: (courseId: string) => boolean
   getEnrollment: (courseId: string) => Enrollment | null
   completeLesson: (courseId: string, lessonId: string) => Promise<void>
+  logAttachmentDownload: (courseId: string, lessonId: string, attachmentName: string) => Promise<void>
   pauseCourse: (courseId: string) => Promise<boolean>
   resumeCourse: (courseId: string) => Promise<boolean>
   enrollManual: (uid: string, courseId: string, days: number) => Promise<boolean>
@@ -50,6 +51,9 @@ function rowToEnrollment(row: Record<string, unknown>): Enrollment {
     pausedAt: row.paused_at as string | undefined,
     remainingDays: row.remaining_days as number | undefined,
     pauseCount: (row.pause_count as number) ?? 0,
+    policyAgreedAt: (row.policy_agreed_at as string | undefined) ?? undefined,
+    policyAgreedKeys: (row.policy_agreed_keys as string[] | undefined) ?? undefined,
+    attachmentDownloads: (row.attachment_downloads as Enrollment['attachmentDownloads']) ?? [],
   }
 }
 
@@ -170,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── 수강 등록 ─────────────────────────────────────────────
-  const enroll = useCallback(async (courseId: string, days = 365) => {
+  const enroll = useCallback(async (courseId: string, days = 365, policyAgreedKeys?: string[]) => {
     if (!user) return false
     const expiry = new Date()
     expiry.setDate(expiry.getDate() + days)
@@ -184,6 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       type: 'payment',
       paused: false,
       pause_count: 0,
+      policy_agreed_at: policyAgreedKeys && policyAgreedKeys.length > 0 ? new Date().toISOString() : null,
+      policy_agreed_keys: policyAgreedKeys && policyAgreedKeys.length > 0 ? policyAgreedKeys : null,
     }, { onConflict: 'user_id,course_id' })
 
     if (error) return false
@@ -222,6 +228,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     await supabase.from('enrollments')
       .update({ completed_lessons: completed, progress })
+      .eq('user_id', user.uid)
+      .eq('course_id', courseId)
+
+    await refreshUser()
+  }, [user, getCourse, refreshUser])
+
+  // ── 첨부파일(교재) 다운로드 로그 + 자동 강의 완료 처리 ──────
+  // 교재만 받고 환불받는 손실을 막기 위해 다운로드 즉시 해당 강의를 수강 완료로 간주
+  const logAttachmentDownload = useCallback(async (
+    courseId: string, lessonId: string, attachmentName: string
+  ) => {
+    if (!user) return
+    const enrollment = user.enrollments.find(e => e.courseId === courseId)
+    if (!enrollment) return
+
+    const downloads = [...(enrollment.attachmentDownloads ?? [])]
+    downloads.push({ lessonId, attachmentName, downloadedAt: new Date().toISOString() })
+
+    const completed = [...(enrollment.completedLessons ?? [])]
+    if (!completed.includes(lessonId)) completed.push(lessonId)
+
+    const course = getCourse(courseId)
+    const total = course?.curriculum.reduce((s, sec) => s + sec.items.length, 0) ?? 1
+    const progress = Math.round((completed.length / total) * 100)
+
+    await supabase.from('enrollments')
+      .update({
+        attachment_downloads: downloads,
+        completed_lessons: completed,
+        progress,
+      })
       .eq('user_id', user.uid)
       .eq('course_id', courseId)
 
@@ -316,7 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, loading,
       login, signup, loginWithGoogle, logout,
       enroll, isEnrolled, isPaused, getEnrollment,
-      completeLesson, pauseCourse, resumeCourse, enrollManual,
+      completeLesson, logAttachmentDownload, pauseCourse, resumeCourse, enrollManual,
       adminLogin, isAdminLoggedIn, adminLogout, refreshUser,
     }}>
       {children}
