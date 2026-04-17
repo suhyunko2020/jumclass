@@ -84,6 +84,10 @@ export default async function handler(request: Request): Promise<Response> {
   const url = `${SITE_ORIGIN}/i/${token}`
   const msg = buildMessage(payload)
 
+  // 승인된 템플릿(jum_checklist)의 버튼 설정과 100% 일치해야 발송 성공.
+  // - 이름: '페이지 바로가기'
+  // - 타입: WL (웹링크)
+  // - Mobile URL만 사용 (PC URL은 승인본에서 미설정)
   const body = [{
     message_type: 'AT',
     phn: normalizePhone(phone),
@@ -91,10 +95,9 @@ export default async function handler(request: Request): Promise<Response> {
     tmplId: BIZM_TEMPLATE_ID,
     msg,
     button1: {
-      name: '진도 관리 페이지 열기',
+      name: '페이지 바로가기',
       type: 'WL',
       url_mobile: url,
-      url_pc: url,
     },
     reserveDt: '00000000000000',
   }]
