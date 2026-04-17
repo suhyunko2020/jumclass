@@ -32,6 +32,7 @@ export default function CourseDetailPage() {
     )
   }
 
+  const isCert = course.level === '자격증'
   const enrolled = isEnrolled(course.id)
   const totalLessons = course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
   const totalDuration = calcTotalDuration(course.curriculum)
@@ -99,7 +100,7 @@ export default function CourseDetailPage() {
               </div>
 
               {/* 기본 제공 강의 (자격증 과정일 때만) */}
-              {course.level === '자격증' && course.includedCourseIds && course.includedCourseIds.length > 0 && (
+              {isCert && course.includedCourseIds && course.includedCourseIds.length > 0 && (
                 <div className="detail-section">
                   <div className="detail-section-title">
                     이 자격증 과정에 포함된 강의
@@ -153,7 +154,7 @@ export default function CourseDetailPage() {
               {/* 커리큘럼 */}
               <div className="detail-section">
                 <div className="detail-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>{course.level === '자격증' ? '강의 진행 순서' : '강의 목차'}</span>
+                  <span>{isCert ? '강의 진행 순서' : '강의 목차'}</span>
                   <span style={{ fontSize: '.8rem', fontWeight: 400, color: 'var(--t3)' }}>
                     {course.curriculum.length}섹션 · {totalLessons}강 · {totalDuration}
                   </span>
@@ -170,7 +171,7 @@ export default function CourseDetailPage() {
                     {openSections[si] && (
                       <div className="curr-items open">
                         {sec.items.map(item => {
-                          if (course.level === '자격증') {
+                          if (isCert) {
                             const hasVimeo = !!item.vimeo
                             return (
                               <div key={item.id}
@@ -209,7 +210,7 @@ export default function CourseDetailPage() {
 
               {/* 강사 소개 */}
               <div className="detail-section">
-                {course.level === '자격증' ? (
+                {isCert ? (
                   <>
                     <div className="detail-section-title">이 자격증 과정을 진행하는 강사</div>
                     {courseInstructors.length === 0 ? (
@@ -306,13 +307,26 @@ export default function CourseDetailPage() {
                 <div className="purchase-body">
                   {course.pricingTiers && course.pricingTiers.length > 0 && (
                     <div style={{ marginBottom: '12px' }}>
-                      <label className="form-label">수강 기간 선택</label>
-                      <select className="form-input" style={{ width: '100%', fontSize: '.9rem', padding: '8px' }}
-                        value={tierIdx} onChange={e => setTierIdx(Number(e.target.value))}>
-                        {course.pricingTiers.map((t, idx) => (
-                          <option key={idx} value={idx}>{formatDaysShort(t.days)}</option>
-                        ))}
-                      </select>
+                      <label className="form-label">{isCert ? '수강 기간' : '수강 기간 선택'}</label>
+                      {isCert ? (
+                        <div style={{
+                          width: '100%', fontSize: '.9rem', padding: '10px 12px',
+                          background: 'rgba(124,111,205,.06)', border: '1px solid var(--line)',
+                          borderRadius: 'var(--r2)', fontWeight: 600,
+                        }}>
+                          {(() => {
+                            const d = course.pricingTiers[0].days
+                            return d === 90 ? '3개월' : d === 120 ? '4개월' : `${d}일`
+                          })()}
+                        </div>
+                      ) : (
+                        <select className="form-input" style={{ width: '100%', fontSize: '.9rem', padding: '8px' }}
+                          value={tierIdx} onChange={e => setTierIdx(Number(e.target.value))}>
+                          {course.pricingTiers.map((t, idx) => (
+                            <option key={idx} value={idx}>{formatDaysShort(t.days)}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   )}
 
@@ -334,7 +348,7 @@ export default function CourseDetailPage() {
 
                   <div className="purchase-includes mt-16">
                     <div style={{ fontSize: '.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--t3)', marginBottom: '8px' }}>포함 내용</div>
-                    {course.level === '자격증' ? (
+                    {isCert ? (
                       <>
                         <div className="include-item"><span className="ic">👤</span>1:1 맞춤 수업</div>
                         <div className="include-item"><span className="ic">🏫</span>대면 &amp; 비대면 수업 가능</div>

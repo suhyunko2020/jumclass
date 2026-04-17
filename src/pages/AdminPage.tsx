@@ -67,11 +67,18 @@ const DEFAULT_TIERS = [
   { days: 9999, price: 0, originalPrice: 0 },
 ]
 
+// 자격증 전용 — 기간 선택지는 3개월(90일) / 4개월(120일), 티어 1개만 사용
+const CERT_TIER_DAYS_OPTIONS: { days: number; label: string }[] = [
+  { days: 90, label: '3개월' },
+  { days: 120, label: '4개월' },
+]
+
 export default function AdminPage() {
   const { isAdminLoggedIn, adminLogin, adminLogout, enrollManual } = useAuth()
   const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview, saveCourseOrder } = useCourses()
   const [dragCourseId, setDragCourseId] = useState<string | null>(null)
-  const { getAll: getAllInstructors, saveInstructor, deleteInstructor } = useInstructors()
+  const { getAll: getAllInstructors, saveInstructor, deleteInstructor, saveInstructorOrder } = useInstructors()
+  const [dragInstructorId, setDragInstructorId] = useState<string | null>(null)
   const { get: getSettings, save: saveSettings } = useSiteSettings()
   const [siteSettingsForm, setSiteSettingsForm] = useState<SiteSettings | null>(null)
   const toast = useToast()
@@ -261,6 +268,33 @@ export default function AdminPage() {
     if (ok) toast('수강이 취소되었습니다.', 'ok')
     else toast('취소 실패', 'err')
     refresh()
+  }
+
+  // ── 레벨 변경 시 관련 필드 일관성 보장 ──────────────────
+  function handleLevelChange(newLevel: string) {
+    setCourseEditModal(p => {
+      if (!p) return p
+      const wasCert = p.level === '자격증'
+      const isCert = newLevel === '자격증'
+      if (wasCert === isCert) return { ...p, level: newLevel }
+      if (isCert) {
+        // 일반 → 자격증: 티어 1개로 축소, 기존 첫 티어의 가격 보존
+        const first = p.tiers[0] ?? { days: 90, price: 0, originalPrice: 0 }
+        return {
+          ...p,
+          level: newLevel,
+          tiers: [{ days: 90, price: first.price, originalPrice: first.originalPrice }],
+        }
+      }
+      // 자격증 → 일반: 기본 3티어로 복원, 기존 가격을 첫 티어에만 반영, includedCourseIds 비움
+      const first = p.tiers[0] ?? { days: 30, price: 0, originalPrice: 0 }
+      return {
+        ...p,
+        level: newLevel,
+        tiers: DEFAULT_TIERS.map((t, i) => i === 0 ? { ...t, price: first.price, originalPrice: first.originalPrice } : { ...t }),
+        includedCourseIds: [],
+      }
+    })
   }
 
   // ── 강의 등록/편집 저장 ────────────────────────────────────
@@ -1140,9 +1174,50 @@ export default function AdminPage() {
               {allInstructors.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>등록된 강사가 없습니다.</div>
               ) : (
+                <>
+                <div style={{ fontSize: '.78rem', color: 'var(--t3)', marginBottom: '10px' }}>
+                  카드를 드래그해서 강사 노출 순서를 변경할 수 있습니다.
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {allInstructors.map(inst => (
-                    <div key={inst.id} style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '20px', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                    <div key={inst.id} draggable
+                      onDragStart={() => setDragInstructorId(inst.id)}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={() => {
+                        if (!dragInstructorId || dragInstructorId === inst.id) return
+                        const ids = allInstructors.map(x => x.id)
+                        const fromIdx = ids.indexOf(dragInstructorId)
+                        const toIdx = ids.indexOf(inst.id)
+                        ids.splice(fromIdx, 1)
+                        ids.splice(toIdx, 0, dragInstructorId)
+                        saveInstructorOrder(ids)
+                        setDragInstructorId(null)
+                        toast('강사 순서가 변경되었습니다.', 'ok')
+                        refresh()
+                      }}
+                      onDragEnd={() => setDragInstructorId(null)}
+                      style={{
+                        background: 'var(--glass-1)', border: '1px solid var(--line)',
+                        borderRadius: 'var(--r3)', padding: '20px',
+                        display: 'flex', gap: '14px', alignItems: 'flex-start',
+                        cursor: 'grab',
+                        opacity: dragInstructorId === inst.id ? 0.4 : 1,
+                        transition: 'opacity .15s',
+                      }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--t3)', flexShrink: 0,
+                        padding: '4px 2px', userSelect: 'none',
+                      }} title="드래그해서 순서 변경">
+                        <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor" aria-hidden="true">
+                          <circle cx="4" cy="4" r="1.4" />
+                          <circle cx="4" cy="10" r="1.4" />
+                          <circle cx="4" cy="16" r="1.4" />
+                          <circle cx="10" cy="4" r="1.4" />
+                          <circle cx="10" cy="10" r="1.4" />
+                          <circle cx="10" cy="16" r="1.4" />
+                        </svg>
+                      </div>
                       <div style={{ width: '56px', height: '56px', borderRadius: 'var(--r2)', background: 'rgba(124,111,205,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', fontWeight: 800, color: 'var(--purple-2)', flexShrink: 0, overflow: 'hidden' }}>
                         {inst.photo ? <img src={inst.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : inst.name.charAt(0)}
                       </div>
@@ -1205,6 +1280,7 @@ export default function AdminPage() {
                     </div>
                   ))}
                 </div>
+                </>
               )}
             </div>
           )}
@@ -1394,7 +1470,7 @@ export default function AdminPage() {
                     <label className="form-label">레벨</label>
                     <select className="form-input"
                       value={courseEditModal.level}
-                      onChange={e => setCourseEditModal(p => p ? { ...p, level: e.target.value } : null)}>
+                      onChange={e => handleLevelChange(e.target.value)}>
                       {['입문', '중급', '고급', '자격증'].map(l => <option key={l}>{l}</option>)}
                     </select>
                   </div>
@@ -1457,12 +1533,17 @@ export default function AdminPage() {
                           const tiers = courseEditModal.tiers.map((t, j) => j === i ? { ...t, days: Number(e.target.value) } : t)
                           setCourseEditModal(p => p ? { ...p, tiers } : null)
                         }}>
-                        <option value={30}>30일</option>
-                        <option value={60}>60일</option>
-                        <option value={90}>90일</option>
-                        <option value={180}>180일</option>
-                        <option value={365}>365일</option>
-                        <option value={9999}>무제한</option>
+                        {courseEditModal.level === '자격증'
+                          ? CERT_TIER_DAYS_OPTIONS.map(opt => <option key={opt.days} value={opt.days}>{opt.label}</option>)
+                          : (<>
+                              <option value={30}>30일</option>
+                              <option value={60}>60일</option>
+                              <option value={90}>90일</option>
+                              <option value={180}>180일</option>
+                              <option value={365}>365일</option>
+                              <option value={9999}>무제한</option>
+                            </>)
+                        }
                       </select>
                       <input className="form-input" type="number" min={0} placeholder="판매가"
                         value={tier.price || ''}
@@ -1479,7 +1560,11 @@ export default function AdminPage() {
                     </React.Fragment>
                   ))}
                 </div>
-                <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginBottom: '4px' }}>첫 번째 기간이 기본 가격(목록 표시가)으로 사용됩니다. 가격 0은 제외됩니다.</div>
+                <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginBottom: '4px' }}>
+                  {courseEditModal.level === '자격증'
+                    ? '자격증 과정은 3개월 또는 4개월 중 하나로 기간이 고정됩니다.'
+                    : '첫 번째 기간이 기본 가격(목록 표시가)으로 사용됩니다. 가격 0은 제외됩니다.'}
+                </div>
 
                 {/* ④ 학습 목표 */}
                 <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', margin: '20px 0 12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)' }}>학습 목표 (이수 후 얻는 것)</div>
