@@ -188,18 +188,3 @@ export function deleteInstructorRemote(id: string) {
   supabase.from('instructors').delete().eq('id', id)
     .then(({ error }) => { if (error) console.warn('delete instructor failed:', error.message) })
 }
-
-// localStorage → Supabase 일괄 업로드 (1회용 이관)
-export async function bulkUploadInstructors(instructors: Instructor[]): Promise<{ success: number; failed: number; error?: string }> {
-  if (instructors.length === 0) return { success: 0, failed: 0 }
-  const rows = instructors.map(inst => ({
-    id: inst.id,
-    data: inst as unknown as Record<string, unknown>,
-    updated_at: new Date().toISOString(),
-  }))
-  const { error } = await supabase.from('instructors').upsert(rows, { onConflict: 'id' })
-  if (error) {
-    return { success: 0, failed: instructors.length, error: error.message }
-  }
-  return { success: instructors.length, failed: 0 }
-}

@@ -7,7 +7,6 @@ import {
   getCustomCourses,
   getInquiries, answerInquiry,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
-  bulkUploadInstructors,
 } from '../utils/storage'
 import { formatPrice } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
@@ -1112,25 +1111,9 @@ export default function AdminPage() {
           {/* ═══ 강사 관리 ═══ */}
           {sec === 'instructors' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em' }}>강사 관리 ({allInstructors.length}명)</h1>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    title="이 브라우저 localStorage의 강사 데이터를 Supabase로 일괄 업로드 (1회용 이관 도구)"
-                    onClick={async () => {
-                      const local = allInstructors
-                      if (local.length === 0) { toast('업로드할 강사가 없습니다.', 'err'); return }
-                      if (!confirm(`localStorage에 있는 강사 ${local.length}명을 Supabase로 업로드합니다.\n(기존에 같은 id의 데이터가 있으면 덮어씁니다.)\n\n진행할까요?`)) return
-                      const r = await bulkUploadInstructors(local)
-                      if (r.failed > 0) toast(`업로드 실패: ${r.error ?? '알 수 없는 오류'}`, 'err')
-                      else toast(`강사 ${r.success}명을 Supabase로 업로드했습니다.`, 'ok')
-                    }}
-                  >
-                    Supabase 일괄 업로드
-                  </button>
-                  <button className="btn btn-primary btn-sm" onClick={openNewInstructor}>+ 강사 등록</button>
-                </div>
+                <button className="btn btn-primary btn-sm" onClick={openNewInstructor}>+ 강사 등록</button>
               </div>
               {allInstructors.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>등록된 강사가 없습니다.</div>
