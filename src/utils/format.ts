@@ -55,7 +55,9 @@ export function maskName(name: string): string {
 export function calcRefund(
   course: { badge: string; price: number },
   enrollment: { enrolledAt: string; expiryDate: string; completedLessons?: string[] },
-  totalLessons: number
+  totalLessons: number,
+  // 자격증 과정은 강사 진도 페이지 체크 수로 override
+  certCompletedCount?: number
 ): { refundable: boolean; refundAmount: number; penalty: number; reason: string } {
   const price = course.price
   const penalty10 = Math.round(price * 0.1)
@@ -64,8 +66,10 @@ export function calcRefund(
   const now = new Date()
   const daysSinceEnroll = Math.floor((now.getTime() - enrollDate.getTime()) / 86400000)
   const totalDays = Math.floor((expiryDate.getTime() - enrollDate.getTime()) / 86400000)
-  const completedCount = enrollment.completedLessons?.length ?? 0
   const isCert = course.badge === '자격증'
+  const completedCount = isCert && typeof certCompletedCount === 'number'
+    ? certCompletedCount
+    : (enrollment.completedLessons?.length ?? 0)
 
   if (isCert) {
     const oneThird = totalDays / 3

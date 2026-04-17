@@ -50,8 +50,8 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}
         >
-          <span>{a.title} (버전 {a.version})</span>
-          <span style={{ fontSize: '.72rem', color: 'var(--t3)' }}>
+          <span>민간자격 약관 (버전 {a.version})</span>
+          <span style={{ fontSize: '.72rem', color: 'var(--t3)', flexShrink: 0, marginLeft: '8px' }}>
             {agreementOpen ? '접기 ▲' : '본문 보기 ▼'}
           </span>
         </button>

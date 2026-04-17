@@ -15,11 +15,15 @@ export default function SignaturePad({ onChange, height = 180 }: Props) {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+    const parent = canvas.parentElement
+    if (!parent) return
+    let lastWidth = 0
     const resize = () => {
-      const parent = canvas.parentElement
-      if (!parent) return
       const ratio = window.devicePixelRatio || 1
       const width = parent.clientWidth
+      // 폭이 0이거나 이전과 동일하면 불필요한 재드로우 방지
+      if (width === 0 || width === lastWidth) return
+      lastWidth = width
       canvas.width = width * ratio
       canvas.height = height * ratio
       canvas.style.width = width + 'px'
@@ -36,8 +40,14 @@ export default function SignaturePad({ onChange, height = 180 }: Props) {
       }
     }
     resize()
+    // grid 레이아웃 변경처럼 window resize 없이 부모 폭만 바뀌는 경우도 감지
+    const ro = new ResizeObserver(resize)
+    ro.observe(parent)
     window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', resize)
+    }
   }, [height])
 
   function getPos(e: React.PointerEvent<HTMLCanvasElement>) {

@@ -121,6 +121,8 @@ export default function AdminPage() {
   const [enrollEditModal, setEnrollEditModal] = useState<{ user: any; enrollment: any; course: any } | null>(null)
   const [progressPageInfo, setProgressPageInfo] = useState<import('../data/types').InstructorProgressPage | null>(null)
   const [certAgreementInfo, setCertAgreementInfo] = useState<CertificateAgreementRecord | null>(null)
+  // 자격증 환불 문의의 강사 진도 맵 (key: `${userId}__${courseId}`)
+  const [certRefundProgress, setCertRefundProgress] = useState<Record<string, import('../data/types').InstructorProgressPage | null>>({})
 
   useEffect(() => { document.title = '관리자 대시보드 — JUMCLASS' }, [])
 
@@ -128,12 +130,33 @@ export default function AdminPage() {
     if (!enrollEditModal) { setProgressPageInfo(null); setCertAgreementInfo(null); return }
     const em = enrollEditModal
     if (em.course?.level !== '자격증') { setProgressPageInfo(null); setCertAgreementInfo(null); return }
-    getProgressPageByEnrollment(em.user.uid, em.course.id).then(setProgressPageInfo)
-    getCertificateAgreementByEnrollment(em.user.uid, em.course.id).then(setCertAgreementInfo)
+    // 자격증 중복 결제 지원 — 해당 강사의 진도 페이지와 서명만 로드
+    const instId = em.enrollment?.assignedInstructorId
+    getProgressPageByEnrollment(em.user.uid, em.course.id, instId).then(setProgressPageInfo)
+    getCertificateAgreementByEnrollment(em.user.uid, em.course.id, instId).then(setCertAgreementInfo)
   }, [enrollEditModal])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [courses, setCourses] = useState<Course[]>([])
+
+  // 자격증 환불 문의의 강사 진도 일괄 조회 (문의/강의 목록 갱신 시)
+  useEffect(() => {
+    if (inquiries.length === 0 || courses.length === 0) { setCertRefundProgress({}); return }
+    const targets = inquiries.filter(inq => {
+      if (inq.type !== 'refund' || !inq.metadata?.courseId) return false
+      const c = courses.find(x => x.id === inq.metadata!.courseId)
+      return c?.level === '자격증'
+    })
+    if (targets.length === 0) { setCertRefundProgress({}); return }
+    Promise.all(targets.map(async inq => {
+      const p = await getProgressPageByEnrollment(inq.userId, inq.metadata!.courseId!)
+      return [`${inq.userId}__${inq.metadata!.courseId}`, p] as const
+    })).then(results => {
+      const map: Record<string, import('../data/types').InstructorProgressPage | null> = {}
+      results.forEach(([k, p]) => { map[k] = p })
+      setCertRefundProgress(map)
+    })
+  }, [inquiries, courses])
 
   useEffect(() => {
     if (!isAdminLoggedIn) return
@@ -276,9 +299,9 @@ export default function AdminPage() {
   }
 
   // ── 수강 취소 ──────────────────────────────────────────────
-  async function handleCancelEnroll(uid: string, courseId: string) {
+  async function handleCancelEnroll(uid: string, courseId: string, assignedInstructorId?: string) {
     if (!confirm('수강을 취소하시겠습니까?')) return
-    const ok = await cancelEnrollment(uid, courseId)
+    const ok = await cancelEnrollment(uid, courseId, assignedInstructorId)
     if (ok) toast('수강이 취소되었습니다.', 'ok')
     else toast('취소 실패', 'err')
     refresh()
@@ -615,7 +638,7 @@ export default function AdminPage() {
       paused: em.enrollment.paused,
       pauseCount: em.enrollment.pauseCount,
       remainingDays: em.enrollment.remainingDays,
-    })
+    }, em.enrollment.assignedInstructorId)
     if (ok) toast('수강 정보가 수정되었습니다.', 'ok')
     else toast('수정 실패', 'err')
     setEnrollEditModal(null)
@@ -810,7 +833,7 @@ export default function AdminPage() {
                                       <span style={{ fontSize: '.62rem', padding: '1px 5px', borderRadius: 'var(--pill)', background: 'rgba(232,156,56,.15)', color: 'var(--warn)' }}>직접등록</span>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{c.curriculum.reduce((n, s) => n + s.items.length, 0)}강</div>
+                                  <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{c.curriculum.reduce((n, s) => n + s.items.length, 0)}{c.level === '자격증' ? '회차' : '강'}</div>
                                 </div>
                               </div>
                             </td>
@@ -920,18 +943,26 @@ export default function AdminPage() {
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 : (u.enrollments || []).map((e: any) => {
                                   const c = courses.find(x => x.id === e.courseId)
+                                  const isCert = c?.level === '자격증'
+                                  const inst = isCert && e.assignedInstructorId
+                                    ? allInstructors.find(i => i.id === e.assignedInstructorId)
+                                    : null
+                                  const label = c
+                                    ? `${c.emoji} ${c.title.slice(0, 8)}${inst ? ` (${inst.name})` : ''}`
+                                    : e.courseId
+                                  const key = `${e.courseId}:${e.assignedInstructorId || 'none'}`
                                   return (
-                                    <div key={e.courseId} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                       <button
                                         style={{ fontSize: '.72rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)', cursor: 'pointer' }}
                                         onClick={() => setEnrollEditModal({ user: u, enrollment: { ...e }, course: c })}
                                       >
-                                        {c ? `${c.emoji} ${c.title.slice(0, 8)}` : e.courseId}
+                                        {label}
                                       </button>
                                       <button
                                         title="수강 취소"
                                         style={{ fontSize: '.65rem', color: 'var(--fail)', cursor: 'pointer', padding: '1px 4px', borderRadius: '3px', background: 'rgba(224,82,82,.1)' }}
-                                        onClick={() => handleCancelEnroll(u.uid, e.courseId)}
+                                        onClick={() => handleCancelEnroll(u.uid, e.courseId, e.assignedInstructorId)}
                                       >✕</button>
                                     </div>
                                   )
@@ -1100,9 +1131,22 @@ export default function AdminPage() {
                     const refundEnrollment = (inq.type === 'refund' && inq.metadata?.courseId)
                       ? allEnrollments.find(e => e.userId === inq.userId && e.courseId === inq.metadata?.courseId)
                       : null
-                    const totalLessons = courseInfo?.curriculum?.reduce((s, sec) => s + sec.items.length, 0) ?? 0
-                    const completedCount = refundEnrollment?.completedLessons?.length ?? 0
-                    const progressPct = refundEnrollment?.progress ?? 0
+                    const isCertRefund = courseInfo?.level === '자격증'
+                    const certPP = isCertRefund && inq.metadata?.courseId
+                      ? certRefundProgress[`${inq.userId}__${inq.metadata.courseId}`] ?? null
+                      : null
+                    const certChecked = certPP?.checklist.filter(i => i.checked).length ?? 0
+                    const certTotal = certPP?.checklist.length ?? 0
+                    const totalLessons = isCertRefund
+                      ? certTotal
+                      : (courseInfo?.curriculum?.reduce((s, sec) => s + sec.items.length, 0) ?? 0)
+                    const completedCount = isCertRefund
+                      ? certChecked
+                      : (refundEnrollment?.completedLessons?.length ?? 0)
+                    const progressPct = isCertRefund
+                      ? (certTotal > 0 ? Math.round((certChecked / certTotal) * 100) : 0)
+                      : (refundEnrollment?.progress ?? 0)
+                    const unit = isCertRefund ? '회' : '강'
                     return (
                     <div key={inq.id} style={{ background: 'var(--glass-1)', border: `1px solid ${inq.status === 'pending' ? 'rgba(232,156,56,.25)' : 'var(--line)'}`, borderRadius: 'var(--r3)', overflow: 'hidden' }}>
                       <button
@@ -1154,7 +1198,9 @@ export default function AdminPage() {
                                       {courseInfo?.title ?? inq.metadata.courseId}
                                     </span>
                                     <span style={{ fontWeight: 600 }}>
-                                      {completedCount}/{totalLessons}강 ({progressPct}%)
+                                      {isCertRefund && !certPP
+                                        ? '강사 진도 페이지 없음'
+                                        : `${completedCount}/${totalLessons}${unit} (${progressPct}%)`}
                                     </span>
                                   </div>
                                   <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,.06)', borderRadius: '99px', overflow: 'hidden' }}>
@@ -1768,7 +1814,11 @@ export default function AdminPage() {
                             <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,var(--purple),var(--purple-sat))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 700 }}>{u.avatar}</div>
                             <div>
                               <div style={{ fontSize: '.875rem', fontWeight: 600 }}>{u.name}</div>
-                              <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>{e.progress || 0}% 진도</div>
+                              <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>
+                                {courseDetailModal.level === '자격증'
+                                  ? '진도는 강사 진도 페이지에서 확인'
+                                  : `${e.progress || 0}% 진도`}
+                              </div>
                             </div>
                           </div>
                           <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: expired ? 'rgba(224,82,82,.1)' : 'rgba(52,196,124,.1)', color: expired ? 'var(--fail)' : 'var(--ok)' }}>
@@ -2031,6 +2081,29 @@ export default function AdminPage() {
                     </select>
                   </div>
                 </div>
+
+                {/* 레슨 타입일 때만: 연결 자격증 강의 드롭다운 */}
+                {instSvcModal.service.type === 'lesson' && (() => {
+                  const certCourses = courses.filter(c => c.level === '자격증' && c.status !== 'private')
+                  return (
+                    <div className="form-group">
+                      <label className="form-label">연결 자격증 강의</label>
+                      <select className="form-input"
+                        value={instSvcModal.service.linkedCourseId || ''}
+                        onChange={e => setInstSvcModal(p => p && p.service ? { ...p, service: { ...p.service, linkedCourseId: e.target.value || undefined } } : null)}>
+                        <option value="">(연결 없음 — 기존 서비스 결제)</option>
+                        {certCourses.map(c => (
+                          <option key={c.id} value={c.id}>{c.emoji} {c.title}</option>
+                        ))}
+                      </select>
+                      <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '6px', lineHeight: 1.55 }}>
+                        연결 설정 시 강사 상세 페이지의 "신청하기" 버튼이 해당 자격증 과정 페이지로 이동하며,
+                        이 강사가 담당 강사로 자동 지정됩니다. 실제 결제 가격·기간은 연결된 자격증 강의 기준으로 적용됩니다.
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 <button type="submit" className="btn btn-primary w-full">저장하기</button>
               </form>
             </div>
@@ -2140,19 +2213,32 @@ export default function AdminPage() {
                 </p>
               </div>
               <div className="modal-body">
-                {/* 진도 현황 */}
-                <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '.78rem', fontWeight: 700, marginBottom: '8px' }}>수강 진도</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <div style={{ flex: 1, height: '6px', borderRadius: '99px', background: 'rgba(255,255,255,.1)', overflow: 'hidden' }}>
-                      <div style={{ width: `${enrollment.progress || 0}%`, height: '100%', background: 'var(--purple)', borderRadius: '99px' }} />
+                {/* 진도 현황 — 자격증이면 강사 체크리스트 기반, 일반은 enrollment.progress */}
+                {(() => {
+                  const isCert = em.course?.level === '자격증'
+                  const certChecked = isCert ? (progressPageInfo?.checklist.filter(i => i.checked).length ?? 0) : 0
+                  const certTotal = isCert ? (progressPageInfo?.checklist.length ?? 0) : 0
+                  const pct = isCert
+                    ? (certTotal > 0 ? Math.round((certChecked / certTotal) * 100) : 0)
+                    : (enrollment.progress || 0)
+                  return (
+                    <div style={{ padding: '14px 16px', borderRadius: 'var(--r2)', background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '.78rem', fontWeight: 700, marginBottom: '8px' }}>수강 진도</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <div style={{ flex: 1, height: '6px', borderRadius: '99px', background: 'rgba(255,255,255,.1)', overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: 'var(--purple)', borderRadius: '99px' }} />
+                        </div>
+                        <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--t1)' }}>
+                          {isCert ? `${certChecked}/${certTotal}회` : `${pct}%`}{isCert && ` (${pct}%)`}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>
+                        잔여 {daysLeft}일 · 등록일 {new Date(enrollment.enrolledAt).toLocaleDateString()}
+                        {isCert && !progressPageInfo && ' · 강사 진도 페이지 미생성'}
+                      </div>
                     </div>
-                    <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--t1)' }}>{enrollment.progress || 0}%</span>
-                  </div>
-                  <div style={{ fontSize: '.75rem', color: 'var(--t3)' }}>
-                    잔여 {daysLeft}일 · 등록일 {new Date(enrollment.enrolledAt).toLocaleDateString()}
-                  </div>
-                </div>
+                  )
+                })()}
 
                 {/* 자격증 수강 동의서 서명 (자격증 과정만) */}
                 {em.course?.level === '자격증' && (
@@ -2218,7 +2304,7 @@ export default function AdminPage() {
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.78rem', marginBottom: '6px' }}>
                             <span style={{ color: 'var(--t2)' }}>강사 체크 진도</span>
-                            <span style={{ fontWeight: 600 }}>{checkedCount}/{totalCount}개 ({pct}%)</span>
+                            <span style={{ fontWeight: 600 }}>{checkedCount}/{totalCount}회 ({pct}%)</span>
                           </div>
                           <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,.06)', borderRadius: '99px', overflow: 'hidden', marginBottom: '10px' }}>
                             <div style={{ width: `${pct}%`, height: '100%', background: pct >= 100 ? 'var(--ok)' : 'var(--purple)', borderRadius: '99px' }} />

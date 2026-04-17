@@ -76,8 +76,11 @@ export default function CheckoutPage() {
   }
 
   // paying 중엔 enroll로 인해 isEnrolled가 true가 되어도 이 가드를 건너뛴다
-  // (결제 완료 후 navigate 되기 전 잠깐 깜빡이는 현상 방지)
-  if (course && user && isEnrolled(courseId) && !paying) {
+  // 자격증 과정은 (강의, 강사) 조합으로 체크 — 다른 강사로 재결제 허용
+  const alreadyEnrolled = isCertCheckout
+    ? isEnrolled(courseId, assignedInstructorId || undefined)
+    : isEnrolled(courseId)
+  if (course && user && alreadyEnrolled && !paying) {
     return (
       <div className="checkout-wrap">
         <div className="container">
@@ -108,7 +111,7 @@ export default function CheckoutPage() {
       const agreedKeys = policies.filter(p => agreements[p.key]).map(p => p.key)
       await enroll(courseId, days, agreedKeys, assignedInstructorId || undefined)
 
-      // 자격증 과정 — 서명·동의서 저장
+      // 자격증 과정 — 서명·동의서 저장 (강사별로 독립 저장)
       if (isCertCheckout && user && certAgreement.signatureDataUrl) {
         const signatureUrl = await uploadSignatureImage(user.uid, courseId, certAgreement.signatureDataUrl)
         if (signatureUrl) {
@@ -121,6 +124,7 @@ export default function CheckoutPage() {
             signatureUrl,
             agreementVersion: CERTIFICATE_AGREEMENT.version,
             agreementSnapshot: CERTIFICATE_AGREEMENT,
+            assignedInstructorId: assignedInstructorId || null,
           })
         } else {
           console.warn('서명 이미지 업로드 실패 — 동의서 기록 없이 결제 진행')

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
@@ -9,6 +9,7 @@ import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcT
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { getCourse, getEnrolledCount, getReviewsByCourse, getReviewStats } = useCourses()
   const { getPublicInstructors } = useInstructors()
   const { isEnrolled, getEnrollment } = useAuth()
@@ -17,7 +18,9 @@ export default function CourseDetailPage() {
   const course = getCourse(courseId || '')
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({ 0: true })
   const [tierIdx, setTierIdx] = useState(0)
-  const [selectedInstructorId, setSelectedInstructorId] = useState<string>('')
+  // 강사 페이지에서 진입한 경우 쿼리로 강사가 강제 지정됨 (셀렉트 잠금, 변경 불가)
+  const forcedInstructorId = searchParams.get('assignedInstructor') || ''
+  const [selectedInstructorId, setSelectedInstructorId] = useState<string>(forcedInstructorId)
 
   useEffect(() => {
     if (course) document.title = course.title + ' — JUMCLASS'
@@ -34,8 +37,14 @@ export default function CourseDetailPage() {
   }
 
   const isCert = course.level === '자격증'
-  const enrolled = isEnrolled(course.id)
-  const myEnrollment = enrolled ? getEnrollment(course.id) : null
+  // 자격증은 (강의, 강사) 조합일 때만 "이미 수강 중"으로 판단 → 다른 강사로 재결제 가능
+  // 일반 강의는 기존처럼 강의 단위로 판단
+  const enrolled = isCert && selectedInstructorId
+    ? isEnrolled(course.id, selectedInstructorId)
+    : isEnrolled(course.id)
+  const myEnrollment = enrolled
+    ? (isCert && selectedInstructorId ? getEnrollment(course.id, selectedInstructorId) : getEnrollment(course.id))
+    : null
   const lockedInstructorId = myEnrollment?.assignedInstructorId
   const totalLessons = course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
   const totalDuration = calcTotalDuration(course.curriculum)
@@ -361,32 +370,40 @@ export default function CourseDetailPage() {
                     </div>
                   )}
 
-                  {/* 자격증 과정 — 담당 강사 선택 (결제 후엔 잠김) */}
-                  {isCert && (
-                    <div style={{ marginBottom: '12px' }}>
-                      <label className="form-label">담당 강사 {enrolled ? '(결제 완료)' : '선택'}</label>
-                      {courseInstructors.length === 0 ? (
-                        <div style={{ width: '100%', fontSize: '.82rem', padding: '10px 12px', background: 'rgba(232,156,56,.06)', border: '1px solid rgba(232,156,56,.2)', borderRadius: 'var(--r2)', color: 'var(--warn)' }}>
-                          등록된 담당 강사가 없습니다. 운영자에게 문의해주세요.
-                        </div>
-                      ) : (
-                        <select
-                          className="form-input"
-                          style={{ width: '100%', fontSize: '.9rem', padding: '8px', cursor: enrolled ? 'not-allowed' : 'pointer', opacity: enrolled ? 0.65 : 1 }}
-                          value={enrolled ? (lockedInstructorId || '') : selectedInstructorId}
-                          onChange={e => { if (!enrolled) setSelectedInstructorId(e.target.value) }}
-                          disabled={enrolled}
-                        >
-                          <option value="">강사를 선택해주세요</option>
-                          {courseInstructors.map(inst => (
-                            <option key={inst.id} value={inst.id}>
-                              {inst.name}{inst.title ? ` · ${inst.title}` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  )}
+                  {/* 자격증 과정 — 담당 강사 선택
+                     · 강사 페이지에서 진입한 경우(forcedInstructorId): 해당 강사로 강제 잠금
+                     · 일반 진입: 사용자가 선택. 이미 해당 강사 조합으로 수강 중이면 잠김 */}
+                  {isCert && (() => {
+                    const isForced = !!forcedInstructorId
+                    const locked = isForced || enrolled
+                    return (
+                      <div style={{ marginBottom: '12px' }}>
+                        <label className="form-label">
+                          담당 강사 {isForced ? '(강사 페이지에서 지정됨)' : enrolled ? '(결제 완료)' : '선택'}
+                        </label>
+                        {courseInstructors.length === 0 ? (
+                          <div style={{ width: '100%', fontSize: '.82rem', padding: '10px 12px', background: 'rgba(232,156,56,.06)', border: '1px solid rgba(232,156,56,.2)', borderRadius: 'var(--r2)', color: 'var(--warn)' }}>
+                            등록된 담당 강사가 없습니다. 운영자에게 문의해주세요.
+                          </div>
+                        ) : (
+                          <select
+                            className="form-input"
+                            style={{ width: '100%', fontSize: '.9rem', padding: '8px', cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.8 : 1 }}
+                            value={isForced ? forcedInstructorId : enrolled ? (lockedInstructorId || '') : selectedInstructorId}
+                            onChange={e => { if (!locked) setSelectedInstructorId(e.target.value) }}
+                            disabled={locked}
+                          >
+                            <option value="">강사를 선택해주세요</option>
+                            {courseInstructors.map(inst => (
+                              <option key={inst.id} value={inst.id}>
+                                {inst.name}{inst.title ? ` · ${inst.title}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   <div className="purchase-price">
                     <div style={{ marginBottom: '4px' }}>

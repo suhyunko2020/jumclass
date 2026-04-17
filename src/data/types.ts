@@ -117,6 +117,9 @@ export interface InstructorService {
   duration: string;
   type: 'consultation' | 'reading' | 'lesson' | 'other';
   mode?: 'online' | 'offline' | 'both';
+  // 레슨 타입 서비스를 실제 자격증 강의와 연결. 설정 시 신청 버튼은
+  // 해당 자격증 CourseDetailPage로 이동하며 이 강사가 강제 지정됨.
+  linkedCourseId?: string;
 }
 
 export interface Instructor {

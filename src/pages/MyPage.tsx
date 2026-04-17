@@ -3,12 +3,17 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useCourses } from '../hooks/useCourses'
+import { useInstructors } from '../hooks/useInstructors'
 import { useToast } from '../components/ui/Toast'
 import { formatPrice, calcRefund } from '../utils/format'
 import {
   getMyInquiries, addInquiry, editInquiry as editInquiryStorage,
+  getProgressPageByEnrollment,
 } from '../utils/storage'
-import type { Inquiry } from '../data/types'
+import type { Inquiry, InstructorProgressPage } from '../data/types'
+
+const certKey = (courseId: string, instructorId?: string | null) =>
+  `${courseId}:${instructorId || ''}`
 
 type MyTab = 'payments' | 'inquiries'
 
@@ -28,6 +33,7 @@ export default function MyPage() {
   const { user, logout, loading: authLoading } = useAuth()
   const { openAuth } = useAuthModal()
   const { getCourse } = useCourses()
+  const { getInstructor } = useInstructors()
   const toast = useToast()
 
   const [tab, setTab] = useState<MyTab>((searchParams.get('tab') as MyTab) || 'payments')
@@ -36,6 +42,8 @@ export default function MyPage() {
   const [modalTitle, setModalTitle] = useState('문의 작성')
   const [form, setForm] = useState<InquiryForm>(emptyForm)
   const [openBodies, setOpenBodies] = useState<Record<string, boolean>>({})
+  // 자격증 강의 강사 진도 맵 — 수강 완료 뱃지 판단용
+  const [certProgressMap, setCertProgressMap] = useState<Record<string, InstructorProgressPage | null>>({})
 
   useEffect(() => {
     document.title = '마이페이지 — JUMCLASS'
@@ -49,6 +57,23 @@ export default function MyPage() {
   useEffect(() => {
     if (user) loadInquiries()
   }, [user])
+
+  // 자격증 enrollment별(강사별) 진도 일괄 조회 — 수강 완료 판단용
+  useEffect(() => {
+    if (!user) { setCertProgressMap({}); return }
+    const certEnrollments = (user.enrollments || [])
+      .filter(e => getCourse(e.courseId)?.level === '자격증')
+    if (certEnrollments.length === 0) { setCertProgressMap({}); return }
+    Promise.all(certEnrollments.map(async e => {
+      const p = await getProgressPageByEnrollment(user.uid, e.courseId, e.assignedInstructorId)
+      return [certKey(e.courseId, e.assignedInstructorId), p] as const
+    })).then(results => {
+      const map: Record<string, InstructorProgressPage | null> = {}
+      results.forEach(([key, p]) => { map[key] = p })
+      setCertProgressMap(map)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, (user?.enrollments || []).length])
 
   async function loadInquiries() {
     if (!user) return
@@ -91,17 +116,42 @@ export default function MyPage() {
     price: number; badge: string;
     completedCount: number; totalLessons: number; progress: number;
     daysSinceEnroll: number; totalDays: number;
+    isCert: boolean;
   } | null>(null)
   const [refundReason, setRefundReason] = useState('')
+  const [refundConfirmed, setRefundConfirmed] = useState(false)
 
-  function openRefundRequest(courseId: string, orderDate: string) {
+  async function openRefundRequest(courseId: string, orderDate: string, assignedInstructorId?: string) {
     const course = getCourse(courseId)
     if (!course) return
-    const enrollment = user!.enrollments.find(e => e.courseId === courseId)
+    const enrollment = assignedInstructorId
+      ? user!.enrollments.find(e => e.courseId === courseId && e.assignedInstructorId === assignedInstructorId)
+      : user!.enrollments.find(e => e.courseId === courseId)
     if (!enrollment) return
-    const totalLessons = course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
-    const result = calcRefund(course, enrollment, totalLessons)
-    const completedCount = enrollment.completedLessons?.length ?? 0
+    const isCert = course.level === '자격증'
+    // 자격증: 해당 강사의 진도 페이지 체크리스트 기반
+    let certChecked = 0
+    let certTotal = 0
+    if (isCert) {
+      const pp = await getProgressPageByEnrollment(user!.uid, courseId, assignedInstructorId)
+      if (pp) {
+        certChecked = pp.checklist.filter(i => i.checked).length
+        certTotal = pp.checklist.length
+      }
+    }
+    const totalLessons = isCert
+      ? certTotal
+      : course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
+    const completedCount = isCert ? certChecked : (enrollment.completedLessons?.length ?? 0)
+    const progress = isCert
+      ? (certTotal > 0 ? Math.round((certChecked / certTotal) * 100) : 0)
+      : (enrollment.progress || 0)
+    const result = calcRefund(
+      course,
+      enrollment,
+      totalLessons,
+      isCert ? completedCount : undefined,
+    )
     // 자정 기준으로 일수 계산 — 어제 등록하면 시각과 무관하게 "1일 경과"
     const enrolledMidnight = new Date(enrollment.enrolledAt); enrolledMidnight.setHours(0, 0, 0, 0)
     const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0)
@@ -111,15 +161,17 @@ export default function MyPage() {
     setRefundModal({
       courseId, courseTitle: course.title, orderDate,
       ...result, price: course.price, badge: course.badge,
-      completedCount, totalLessons, progress: enrollment.progress || 0,
-      daysSinceEnroll, totalDays,
+      completedCount, totalLessons, progress,
+      daysSinceEnroll, totalDays, isCert,
     })
     setRefundReason('')
+    setRefundConfirmed(false)
   }
 
   async function submitRefund() {
-    if (!refundModal || !refundReason.trim()) return
-    const msg = `결제일: ${refundModal.orderDate}\n강의: ${refundModal.courseTitle}\n환불 예상 금액: ${formatPrice(refundModal.refundAmount)}\n\n환불 사유: ${refundReason}`
+    if (!refundModal || !refundReason.trim() || !refundConfirmed) return
+    const unit = refundModal.isCert ? '회' : '강'
+    const msg = `결제일: ${refundModal.orderDate}\n강의: ${refundModal.courseTitle}\n수강 진도: ${refundModal.completedCount}/${refundModal.totalLessons}${unit} (${refundModal.progress}%)\n환불 예상 금액: ${formatPrice(refundModal.refundAmount)}\n\n환불 사유: ${refundReason}`
     await addInquiry(user!.uid, user!.name, user!.email, '결제 환불 요청합니다.', msg, 'refund', { courseId: refundModal.courseId, orderDate: refundModal.orderDate })
     toast('환불 요청이 접수되었습니다.', 'ok')
     setRefundModal(null)
@@ -223,17 +275,39 @@ export default function MyPage() {
                       const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / 86400000)
                       const isExpired = !e.paused && expiry <= new Date()
                       const isUnlimited = daysLeft > 3000
+                      // 수강 완료 판단 — 자격증은 모든 회차 체크 (강사별 독립), 일반은 progress 100%
+                      const isCert = c.level === '자격증'
+                      const certPage = isCert ? certProgressMap[certKey(e.courseId, e.assignedInstructorId)] : null
+                      const certChecked = certPage?.checklist.filter(i => i.checked).length ?? 0
+                      const certTotal = certPage?.checklist.length ?? 0
+                      const isComplete = isCert
+                        ? (certTotal > 0 && certChecked === certTotal)
+                        : (e.progress || 0) >= 100
+                      // 자격증 담당 강사명 (중복 결제 구분용)
+                      const certInstructor = isCert && e.assignedInstructorId
+                        ? getInstructor(e.assignedInstructorId)
+                        : null
+                      const itemKey = `${e.courseId}:${e.assignedInstructorId || 'none'}:${e.enrolledAt}`
 
                       return (
-                        <div key={e.courseId} className="payment-item">
+                        <div key={itemKey} className="payment-item">
                           <div className="payment-item-thumb">{c.emoji}</div>
                           <div className="payment-item-body">
                             <div className="payment-item-top">
-                              <div className="payment-item-title">{c.title}</div>
+                              <div className="payment-item-title">
+                                {c.title}
+                                {certInstructor && (
+                                  <span style={{ marginLeft: '8px', fontSize: '.78rem', fontWeight: 500, color: 'var(--purple-2)' }}>
+                                    · {certInstructor.name} 강사
+                                  </span>
+                                )}
+                              </div>
                               {e.type === 'manual'
                                 ? <span className="badge-manual">수동 등록</span>
                                 : isExpired
                                 ? <span className="badge-expired">만료</span>
+                                : isComplete
+                                ? <span className="badge-complete">수강 완료</span>
                                 : <span className="badge-active">수강중</span>}
                             </div>
                             <div className="payment-item-meta">
@@ -244,7 +318,7 @@ export default function MyPage() {
                               <span className="payment-item-price">{formatPrice(c.price)}</span>
                               {e.type !== 'manual' && !isExpired && (
                                 <button className="btn btn-ghost btn-sm"
-                                  onClick={() => openRefundRequest(c.id, date)}>
+                                  onClick={() => openRefundRequest(c.id, date, e.assignedInstructorId)}>
                                   환불 요청
                                 </button>
                               )}
@@ -379,7 +453,7 @@ export default function MyPage() {
                 <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--t1)', marginBottom: '10px' }}>수강 현황</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>수강 진도</div>
-                  <div style={{ fontSize: '.8rem', fontWeight: 600, textAlign: 'right' }}>{refundModal.completedCount}/{refundModal.totalLessons}강 ({refundModal.progress}%)</div>
+                  <div style={{ fontSize: '.8rem', fontWeight: 600, textAlign: 'right' }}>{refundModal.completedCount}/{refundModal.totalLessons}{refundModal.isCert ? '회' : '강'} ({refundModal.progress}%)</div>
                   <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>수강 경과일</div>
                   <div style={{ fontSize: '.8rem', fontWeight: 600, textAlign: 'right' }}>{refundModal.daysSinceEnroll}일 / 총 {refundModal.totalDays}일</div>
                   <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>결제 금액</div>
@@ -434,7 +508,9 @@ export default function MyPage() {
                 {fullyWatched ? (
                   <div style={{ textAlign: 'center', padding: '8px 0' }}>
                     <div style={{ fontSize: '.9rem', fontWeight: 700, color: 'var(--fail)', marginBottom: '4px' }}>환불 불가</div>
-                    <div style={{ fontSize: '.8rem', color: 'var(--t2)' }}>이미 수강을 완료하여 환불이 불가능합니다.</div>
+                    <div style={{ fontSize: '.8rem', color: 'var(--t2)' }}>
+                      {refundModal.isCert ? '모든 회차 수강을 완료하여 환불이 불가능합니다.' : '이미 수강을 완료하여 환불이 불가능합니다.'}
+                    </div>
                   </div>
                 ) : refundModal.refundable ? (() => {
                   const baseRefund = refundModal.refundAmount + refundModal.penalty
@@ -477,7 +553,24 @@ export default function MyPage() {
                     <textarea className="form-input" rows={3} placeholder="환불 사유를 입력해주세요." required
                       value={refundReason} onChange={e => setRefundReason(e.target.value)} />
                   </div>
-                  <button className="btn btn-primary w-full" onClick={submitRefund} disabled={!refundReason.trim()}>
+                  <label style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '10px',
+                    padding: '12px 14px', borderRadius: 'var(--r2)',
+                    background: refundConfirmed ? 'rgba(124,111,205,.08)' : 'rgba(255,255,255,.03)',
+                    border: `1px solid ${refundConfirmed ? 'rgba(124,111,205,.3)' : 'var(--line)'}`,
+                    cursor: 'pointer', marginBottom: '14px', transition: 'all .15s',
+                  }}>
+                    <input
+                      type="checkbox" checked={refundConfirmed}
+                      onChange={e => setRefundConfirmed(e.target.checked)}
+                      style={{ marginTop: '2px', accentColor: 'var(--purple)', flexShrink: 0, cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '.82rem', color: 'var(--t1)', lineHeight: 1.55 }}>
+                      환불 예상 금액 <strong style={{ color: 'var(--ok)' }}>{formatPrice(refundModal.refundAmount)}</strong>을 확인하였으며, 해당 금액으로 환불을 요청합니다.
+                    </span>
+                  </label>
+                  <button className="btn btn-primary w-full" onClick={submitRefund}
+                    disabled={!refundReason.trim() || !refundConfirmed}>
                     환불 요청하기
                   </button>
                 </>

@@ -31,6 +31,13 @@ export default function InstructorDetailPage() {
 
   function handleServiceClick(serviceId: string) {
     if (!user) { openAuth('login'); return }
+    const svc = inst!.services.find(s => s.id === serviceId)
+    // 레슨 타입 + 연결 자격증 강의가 설정된 경우: CourseDetailPage로 이동하며 이 강사를 강제 지정
+    if (svc?.type === 'lesson' && svc.linkedCourseId) {
+      navigate(`/course/${svc.linkedCourseId}?assignedInstructor=${inst!.id}`)
+      return
+    }
+    // 그 외: 기존 서비스 결제 플로우
     navigate(`/checkout?instructor=${inst!.id}&service=${serviceId}`)
   }
 

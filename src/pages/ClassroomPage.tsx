@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useCourses } from '../hooks/useCourses'
+import { useInstructors } from '../hooks/useInstructors'
 import { useToast } from '../components/ui/Toast'
 import CourseCard from '../components/course/CourseCard'
 import { calcTotalDuration } from '../utils/format'
@@ -14,9 +15,14 @@ import {
 import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
 import type { InstructorProgressPage } from '../data/types'
 
+// 자격증 강사별 진도 맵 캐시 키 — courseId+instructorId 조합
+const certKey = (courseId: string, instructorId?: string | null) =>
+  `${courseId}:${instructorId || ''}`
+
 export default function ClassroomPage() {
   const { user, loading: authLoading, getEnrollment, pauseCourse, resumeCourse } = useAuth()
   const { getPublicCourses, getCourse, hasReviewed, addReview } = useCourses()
+  const { getInstructor } = useInstructors()
   const { openAuth } = useAuthModal()
   const navigate = useNavigate()
   const toast = useToast()
@@ -29,36 +35,35 @@ export default function ClassroomPage() {
 
   // 자격증 과정 — 강사 진도 페이지 캐시 (체크리스트 + 진행률)
   const [certProgressMap, setCertProgressMap] = useState<Record<string, InstructorProgressPage | null>>({})
-  // 진도 확인 모달
-  const [progressViewModal, setProgressViewModal] = useState<{ courseId: string; courseTitle: string } | null>(null)
+  // 진도 확인 모달 — 강사 id까지 함께 보관하여 강사별 진도 매핑
+  const [progressViewModal, setProgressViewModal] = useState<{ courseId: string; courseTitle: string; instructorId?: string } | null>(null)
   // 약관 보기 모달
-  const [agreementModal, setAgreementModal] = useState<{ courseId: string; courseTitle: string } | null>(null)
+  const [agreementModal, setAgreementModal] = useState<{ courseId: string; courseTitle: string; instructorId?: string } | null>(null)
   const [agreementRecord, setAgreementRecord] = useState<CertificateAgreementRecord | null>(null)
   const [agreementLoading, setAgreementLoading] = useState(false)
 
-  // 자격증 강의들의 진도 페이지를 일괄 조회 (enrollments 로드 후)
+  // 자격증 enrollment별(강사별) 진도 페이지를 일괄 조회
   useEffect(() => {
     if (!user) return
-    const certIds = (user.enrollments || [])
+    const certEnrollments = (user.enrollments || [])
       .filter(e => getCourse(e.courseId)?.level === '자격증')
-      .map(e => e.courseId)
-    if (certIds.length === 0) { setCertProgressMap({}); return }
-    Promise.all(certIds.map(async id => {
-      const page = await getProgressPageByEnrollment(user.uid, id)
-      return [id, page] as const
+    if (certEnrollments.length === 0) { setCertProgressMap({}); return }
+    Promise.all(certEnrollments.map(async e => {
+      const page = await getProgressPageByEnrollment(user.uid, e.courseId, e.assignedInstructorId)
+      return [certKey(e.courseId, e.assignedInstructorId), page] as const
     })).then(results => {
       const map: Record<string, InstructorProgressPage | null> = {}
-      results.forEach(([id, p]) => { map[id] = p })
+      results.forEach(([key, p]) => { map[key] = p })
       setCertProgressMap(map)
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, (user?.enrollments || []).length])
 
-  // 약관 모달 열릴 때 서명 정보 로드
+  // 약관 모달 열릴 때 서명 정보 로드 (강사별 독립)
   useEffect(() => {
     if (!agreementModal || !user) { setAgreementRecord(null); return }
     setAgreementLoading(true)
-    getCertificateAgreementByEnrollment(user.uid, agreementModal.courseId).then(rec => {
+    getCertificateAgreementByEnrollment(user.uid, agreementModal.courseId, agreementModal.instructorId).then(rec => {
       setAgreementRecord(rec)
       setAgreementLoading(false)
     })
@@ -162,16 +167,25 @@ export default function ClassroomPage() {
               const usedPauses = e.pauseCount || 0
               const canPause = !isCert && maxPauses > 0 && usedPauses < maxPauses && !isPaused
 
-              // 자격증: 강사 체크 진도 기반, 일반: enrollment.progress
-              const certPage = isCert ? certProgressMap[c.id] : null
+              // 자격증: 강사 체크 진도 기반 (강사별 독립), 일반: enrollment.progress
+              const certPage = isCert ? certProgressMap[certKey(c.id, e.assignedInstructorId)] : null
               const certChecked = certPage?.checklist.filter(i => i.checked).length ?? 0
               const certTotal = certPage?.checklist.length ?? 0
               const prog = isCert
                 ? (certTotal > 0 ? Math.round((certChecked / certTotal) * 100) : 0)
                 : (e.progress || 0)
+              // 수강 완료 여부: 자격증은 모든 회차 체크, 일반은 progress 100%
+              const isComplete = isCert
+                ? (certTotal > 0 && certChecked === certTotal)
+                : prog >= 100
+              // 자격증 강사 이름 — 메타에 표시 (시각적 구분)
+              const certInstructor = isCert && e.assignedInstructorId
+                ? getInstructor(e.assignedInstructorId)
+                : null
+              const cardKey = `${e.courseId}:${e.assignedInstructorId || 'none'}`
 
               return (
-                <div key={e.courseId} className={`my-card${isPaused ? ' paused' : ''}`}
+                <div key={cardKey} className={`my-card${isPaused ? ' paused' : ''}`}
                   style={{ cursor: isCert ? 'default' : undefined }}
                   onClick={() => !isPaused && !isCert && navigate(`/lesson?course=${c.id}`)}>
                   <div className="my-card-thumb">{c.emoji}</div>
@@ -181,11 +195,15 @@ export default function ClassroomPage() {
                       <div className="my-card-title">{c.title}</div>
                       {isPaused
                         ? <span className="my-card-status-warn">⏸ 휴강중</span>
+                        : isComplete
+                        ? <span className="my-card-status-done">✓ 수강 완료</span>
                         : <span className="my-card-status-ok">● 수강중</span>}
                     </div>
-                    {/* 메타 */}
+                    {/* 메타 — 자격증은 담당 강사명 + 회차 표시 (중복 결제 시각적 구분) */}
                     <div className="my-card-meta">
-                      {c.instructor} · {isCert ? `${certTotal}회차 과정` : `${c.lessons}강 · ${calcTotalDuration(c.curriculum)}`}
+                      {isCert
+                        ? `${certInstructor?.name ? `${certInstructor.name} · ` : ''}${certTotal || c.curriculum.reduce((s, sec) => s + sec.items.length, 0)}회차 과정`
+                        : `${c.instructor} · ${c.lessons}강 · ${calcTotalDuration(c.curriculum)}`}
                     </div>
                     {/* 진도 */}
                     <div className="prog-wrap">
@@ -203,12 +221,12 @@ export default function ClassroomPage() {
                       {isCert ? (
                         <>
                           <button className="btn btn-primary btn-sm"
-                            onClick={e2 => { e2.stopPropagation(); setProgressViewModal({ courseId: c.id, courseTitle: c.title }) }}>
+                            onClick={e2 => { e2.stopPropagation(); setProgressViewModal({ courseId: c.id, courseTitle: c.title, instructorId: e.assignedInstructorId }) }}>
                             진도 확인
                           </button>
                           <button className="btn btn-ghost btn-sm"
                             style={{ fontSize: '.75rem', color: 'var(--t2)' }}
-                            onClick={e2 => { e2.stopPropagation(); setAgreementModal({ courseId: c.id, courseTitle: c.title }) }}>
+                            onClick={e2 => { e2.stopPropagation(); setAgreementModal({ courseId: c.id, courseTitle: c.title, instructorId: e.assignedInstructorId }) }}>
                             📄 약관 보기
                           </button>
                         </>
@@ -361,7 +379,7 @@ export default function ClassroomPage() {
 
       {/* 진도 확인 모달 (자격증) — 읽기 전용 · 메모 숨김 */}
       {progressViewModal && (() => {
-        const cp = certProgressMap[progressViewModal.courseId]
+        const cp = certProgressMap[certKey(progressViewModal.courseId, progressViewModal.instructorId)]
         const checked = cp?.checklist.filter(i => i.checked).length ?? 0
         const total = cp?.checklist.length ?? 0
         const pct = total > 0 ? Math.round((checked / total) * 100) : 0

@@ -22,9 +22,10 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>
   logout: () => Promise<void>
   enroll: (courseId: string, days?: number, policyAgreedKeys?: string[], assignedInstructorId?: string) => Promise<boolean>
-  isEnrolled: (courseId: string) => boolean
+  // 자격증은 (courseId, instructorId) 조합으로 체크 가능 — instructorId 미지정 시 courseId만으로 1건이라도 있으면 true
+  isEnrolled: (courseId: string, assignedInstructorId?: string) => boolean
   isPaused: (courseId: string) => boolean
-  getEnrollment: (courseId: string) => Enrollment | null
+  getEnrollment: (courseId: string, assignedInstructorId?: string) => Enrollment | null
   completeLesson: (courseId: string, lessonId: string) => Promise<void>
   logAttachmentDownload: (courseId: string, lessonId: string, attachmentName: string) => Promise<void>
   pauseCourse: (courseId: string) => Promise<boolean>
@@ -175,12 +176,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── 수강 등록 ─────────────────────────────────────────────
+  // 자격증 (assignedInstructorId 있음): insert — DB의 부분 유니크 인덱스가
+  //   (user_id, course_id, assigned_instructor_id) 조합으로 중복 체크
+  // 일반 강의 (없음): upsert — 기존처럼 1인 1강의 유지
   const enroll = useCallback(async (courseId: string, days = 365, policyAgreedKeys?: string[], assignedInstructorId?: string) => {
     if (!user) return false
     const expiry = new Date()
     expiry.setDate(expiry.getDate() + days)
 
-    const { error } = await supabase.from('enrollments').upsert({
+    const row = {
       user_id: user.uid,
       course_id: courseId,
       expiry_date: expiry.toISOString(),
@@ -192,27 +196,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       policy_agreed_at: policyAgreedKeys && policyAgreedKeys.length > 0 ? new Date().toISOString() : null,
       policy_agreed_keys: policyAgreedKeys && policyAgreedKeys.length > 0 ? policyAgreedKeys : null,
       assigned_instructor_id: assignedInstructorId || null,
-    }, { onConflict: 'user_id,course_id' })
+    }
+
+    const { error } = assignedInstructorId
+      ? await supabase.from('enrollments').insert(row)
+      : await supabase.from('enrollments').upsert(row, { onConflict: 'user_id,course_id' })
 
     if (error) return false
     await refreshUser()
     return true
   }, [user, refreshUser])
 
-  const isEnrolled = useCallback((courseId: string) => {
+  const isEnrolled = useCallback((courseId: string, assignedInstructorId?: string) => {
     if (!user?.enrollments) return false
-    const e = user.enrollments.find(x => x.courseId === courseId)
-    if (!e) return false
-    if (e.paused) return true
-    return new Date(e.expiryDate) > new Date()
+    const candidates = assignedInstructorId
+      ? user.enrollments.filter(x => x.courseId === courseId && x.assignedInstructorId === assignedInstructorId)
+      : user.enrollments.filter(x => x.courseId === courseId)
+    if (candidates.length === 0) return false
+    // 활성(미만료) 또는 휴강 상태면 수강 중
+    return candidates.some(e => e.paused || new Date(e.expiryDate) > new Date())
   }, [user])
 
   const isPaused = useCallback((courseId: string) => {
     return !!user?.enrollments.find(e => e.courseId === courseId)?.paused
   }, [user])
 
-  const getEnrollment = useCallback((courseId: string) => {
-    return user?.enrollments.find(e => e.courseId === courseId) ?? null
+  const getEnrollment = useCallback((courseId: string, assignedInstructorId?: string) => {
+    if (!user?.enrollments) return null
+    if (assignedInstructorId) {
+      return user.enrollments.find(e => e.courseId === courseId && e.assignedInstructorId === assignedInstructorId) ?? null
+    }
+    return user.enrollments.find(e => e.courseId === courseId) ?? null
   }, [user])
 
   // ── 강의 완료 처리 ────────────────────────────────────────

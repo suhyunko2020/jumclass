@@ -150,16 +150,22 @@ export async function getAllEnrollmentsAdmin() {
   }))
 }
 
-export async function cancelEnrollment(userId: string, courseId: string): Promise<boolean> {
-  const { error } = await supabase.from('enrollments')
-    .delete()
+// 자격증 중복 결제 지원: assignedInstructorId가 제공되면 해당 강사 조합만 삭제/수정
+export async function cancelEnrollment(
+  userId: string, courseId: string, assignedInstructorId?: string | null,
+): Promise<boolean> {
+  let query = supabase.from('enrollments').delete()
     .eq('user_id', userId).eq('course_id', courseId)
+  if (assignedInstructorId) query = query.eq('assigned_instructor_id', assignedInstructorId)
+  else if (assignedInstructorId === null) query = query.is('assigned_instructor_id', null)
+  const { error } = await query
   return !error
 }
 
 export async function updateEnrollmentAdmin(
   userId: string, courseId: string,
-  updates: { expiryDate?: string; paused?: boolean; pauseCount?: number; remainingDays?: number }
+  updates: { expiryDate?: string; paused?: boolean; pauseCount?: number; remainingDays?: number },
+  assignedInstructorId?: string | null,
 ): Promise<boolean> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = {}
@@ -167,9 +173,11 @@ export async function updateEnrollmentAdmin(
   if (updates.paused !== undefined) data.paused = updates.paused
   if (updates.pauseCount !== undefined) data.pause_count = updates.pauseCount
   if (updates.remainingDays !== undefined) data.remaining_days = updates.remainingDays
-  const { error } = await supabase.from('enrollments')
-    .update(data)
+  let query = supabase.from('enrollments').update(data)
     .eq('user_id', userId).eq('course_id', courseId)
+  if (assignedInstructorId) query = query.eq('assigned_instructor_id', assignedInstructorId)
+  else if (assignedInstructorId === null) query = query.is('assigned_instructor_id', null)
+  const { error } = await query
   return !error
 }
 
@@ -249,10 +257,16 @@ export async function getProgressPage(id: string): Promise<InstructorProgressPag
   return rowToProgressPage(data)
 }
 
-export async function getProgressPageByEnrollment(userId: string, courseId: string): Promise<InstructorProgressPage | null> {
-  const { data, error } = await supabase.from('instructor_progress_pages')
+export async function getProgressPageByEnrollment(
+  userId: string,
+  courseId: string,
+  instructorId?: string,
+): Promise<InstructorProgressPage | null> {
+  let query = supabase.from('instructor_progress_pages')
     .select('*')
     .eq('user_id', userId).eq('course_id', courseId)
+  if (instructorId) query = query.eq('instructor_id', instructorId)
+  const { data, error } = await query
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -290,6 +304,7 @@ export interface CertificateAgreementRecord {
   signatureUrl: string
   agreementVersion: string
   signedAt: string
+  assignedInstructorId?: string | null
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
@@ -322,6 +337,7 @@ export async function saveCertificateAgreement(params: {
   signatureUrl: string
   agreementVersion: string
   agreementSnapshot: unknown
+  assignedInstructorId?: string | null
 }): Promise<boolean> {
   const { error } = await supabase.from('certificate_agreements').insert({
     user_id: params.userId,
@@ -333,15 +349,24 @@ export async function saveCertificateAgreement(params: {
     agreement_version: params.agreementVersion,
     agreement_snapshot: params.agreementSnapshot,
     user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    assigned_instructor_id: params.assignedInstructorId || null,
   })
   if (error) { console.warn('saveCertificateAgreement failed:', error.message); return false }
   return true
 }
 
-export async function getCertificateAgreementByEnrollment(userId: string, courseId: string): Promise<CertificateAgreementRecord | null> {
-  const { data, error } = await supabase.from('certificate_agreements')
-    .select('id, user_id, course_id, signer_name, signer_birthdate, signer_phone, signature_url, agreement_version, signed_at')
+// 자격증 중복 결제 지원: instructorId 전달 시 해당 강사의 서명만 조회
+// (미전달 시 기존 동작 — user_id+course_id 기준 최신 1건)
+export async function getCertificateAgreementByEnrollment(
+  userId: string,
+  courseId: string,
+  instructorId?: string,
+): Promise<CertificateAgreementRecord | null> {
+  let query = supabase.from('certificate_agreements')
+    .select('id, user_id, course_id, signer_name, signer_birthdate, signer_phone, signature_url, agreement_version, signed_at, assigned_instructor_id')
     .eq('user_id', userId).eq('course_id', courseId)
+  if (instructorId) query = query.eq('assigned_instructor_id', instructorId)
+  const { data, error } = await query
     .order('signed_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -356,5 +381,6 @@ export async function getCertificateAgreementByEnrollment(userId: string, course
     signatureUrl: data.signature_url,
     agreementVersion: data.agreement_version,
     signedAt: data.signed_at,
+    assignedInstructorId: data.assigned_instructor_id ?? null,
   }
 }
