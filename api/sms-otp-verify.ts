@@ -11,9 +11,10 @@
 export const config = { runtime: 'edge' }
 
 function normalizePhone(phone: string): string {
+  // send 엔드포인트와 동일하게 국내 0-prefix 형식(01012345678)으로 정규화
+  // DB의 phone 컬럼도 같은 포맷으로 저장되어 있어야 매칭됨
   const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('82')) return digits
-  if (digits.startsWith('0')) return '82' + digits.slice(1)
+  if (digits.startsWith('82')) return '0' + digits.slice(2)
   return digits
 }
 

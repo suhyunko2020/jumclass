@@ -1,6 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import SignaturePad from './SignaturePad'
 import { CERTIFICATE_AGREEMENT } from '../../data/certificateAgreement'
+
+const OTP_TTL_MS = 5 * 60 * 1000  // 5분
+
+function formatMmSs(totalSec: number): string {
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
 
 export interface AgreementFormValue {
   name: string
@@ -23,7 +31,20 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
   const [otpInput, setOtpInput] = useState('')
   const [otpMessage, setOtpMessage] = useState<string | null>(null)
   const [resendSec, setResendSec] = useState(0)
+  // 5분 카운트다운 — OTP 만료 시점(Unix ms)과 현재 시각 틱
+  const [expiresAtMs, setExpiresAtMs] = useState<number | null>(null)
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const a = CERTIFICATE_AGREEMENT
+
+  // 만료 시점이 잡힌 동안 1초마다 현재 시각 갱신 (리렌더로 카운트다운 표시)
+  useEffect(() => {
+    if (expiresAtMs === null) return
+    const t = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [expiresAtMs])
+
+  const secondsLeft = expiresAtMs === null ? 0 : Math.max(0, Math.ceil((expiresAtMs - nowMs) / 1000))
+  const hasExpired = expiresAtMs !== null && secondsLeft === 0 && otpPhase !== 'verified'
 
   // 전화번호 입력이 바뀌면 이전 인증 상태 리셋 (동일 번호 다시 입력해도 검증 필요)
   function handlePhoneChange(newPhone: string) {
@@ -31,6 +52,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       setOtpPhase('idle')
       setOtpInput('')
       setOtpMessage(null)
+      setExpiresAtMs(null)
       onChange({ ...value, phone: newPhone, phoneVerified: false })
     } else {
       onChange({ ...value, phone: newPhone })
@@ -43,6 +65,9 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       setOtpPhase('error')
       return
     }
+    // 재전송 시 이전 입력/상태 초기화
+    setOtpInput('')
+    setExpiresAtMs(null)
     setOtpPhase('sending')
     setOtpMessage(null)
     try {
@@ -58,8 +83,10 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
         return
       }
       setOtpPhase('sent')
+      setExpiresAtMs(Date.now() + OTP_TTL_MS)
+      setNowMs(Date.now())
       const devHint = data.devCode ? ` (테스트 모드: ${data.devCode})` : ''
-      setOtpMessage(`인증번호를 발송했습니다. 5분 안에 입력해주세요.${devHint}`)
+      setOtpMessage(`인증번호를 발송했습니다.${devHint}`)
       // 재전송 쿨다운 60초
       setResendSec(60)
       const timer = setInterval(() => {
@@ -91,10 +118,15 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       if (!res.ok || !data.ok) {
         setOtpPhase('sent')  // 다시 시도 가능하도록 sent 상태 유지
         setOtpMessage(data.message || '인증번호가 일치하지 않습니다.')
+        // 서버에서 EXPIRED 반환 시 클라이언트 타이머도 만료 상태로 맞춤
+        if (data.code === 'EXPIRED') {
+          setExpiresAtMs(Date.now() - 1)
+        }
         return
       }
       setOtpPhase('verified')
       setOtpMessage('✓ 본인 인증이 완료되었습니다.')
+      setExpiresAtMs(null)
       onChange({ ...value, phoneVerified: true })
     } catch (err) {
       setOtpPhase('sent')
@@ -268,25 +300,26 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
                 value={otpInput}
                 onChange={e => setOtpInput(e.target.value.replace(/\D/g, ''))}
                 placeholder="6자리 인증번호"
+                disabled={hasExpired}
                 style={{
                   flex: 1, padding: '10px 12px',
                   background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)',
-                  borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
-                  letterSpacing: '4px', fontFamily: 'monospace',
+                  borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.95rem',
                   outline: 'none',
+                  opacity: hasExpired ? 0.5 : 1,
                 }}
               />
               <button
                 type="button"
                 onClick={handleVerifyOtp}
-                disabled={otpPhase === 'verifying' || otpInput.length !== 6}
+                disabled={otpPhase === 'verifying' || otpInput.length !== 6 || hasExpired}
                 style={{
                   padding: '10px 18px', fontSize: '.82rem', fontWeight: 700,
                   background: 'var(--purple)',
                   border: '1px solid var(--purple-sat)',
                   color: 'white', borderRadius: 'var(--r2)',
-                  cursor: otpInput.length === 6 ? 'pointer' : 'not-allowed',
-                  flexShrink: 0, opacity: otpPhase === 'verifying' ? 0.6 : 1,
+                  cursor: (otpInput.length === 6 && !hasExpired) ? 'pointer' : 'not-allowed',
+                  flexShrink: 0, opacity: (otpPhase === 'verifying' || hasExpired) ? 0.6 : 1,
                 }}
               >
                 {otpPhase === 'verifying' ? '확인 중…' : '확인'}
@@ -294,11 +327,47 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
             </div>
           )}
 
-          {otpMessage && (
+          {/* 카운트다운 타이머 — 발송 직후 ~ 만료 전까지 */}
+          {expiresAtMs !== null && !hasExpired && otpPhase !== 'verified' && (
             <div style={{
-              marginTop: '6px', fontSize: '.74rem',
+              marginTop: '8px', fontSize: '.78rem',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
+            }}>
+              <span style={{ color: 'var(--t3)' }}>인증번호를 발송했습니다. 5분 안에 입력해주세요.</span>
+              <span style={{
+                fontFamily: 'monospace', fontWeight: 700, flexShrink: 0,
+                color: secondsLeft <= 30 ? 'var(--warn, #e89c38)' : 'var(--purple-2)',
+              }}>
+                ⏱ {formatMmSs(secondsLeft)}
+              </span>
+            </div>
+          )}
+
+          {/* 만료 경고 — 눈에 띄는 빨간 박스 */}
+          {hasExpired && (
+            <div style={{
+              marginTop: '10px',
+              padding: '12px 14px',
+              background: 'rgba(224,82,82,.08)',
+              border: '1px solid rgba(224,82,82,.4)',
+              borderRadius: 'var(--r2)',
+              fontSize: '.85rem',
+              color: 'var(--fail)',
+              fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: '10px',
+            }}>
+              <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+              <span>인증번호가 만료되었습니다. <strong>다시 전송</strong>을 눌러주세요.</span>
+            </div>
+          )}
+
+          {/* 메시지 — 전송 기본 안내문은 타이머에서 보여주므로 중복 제외하고, 에러/완료만 여기 표시 */}
+          {otpMessage && !hasExpired && !otpMessage.startsWith('인증번호를 발송했습니다') && (
+            <div style={{
+              marginTop: '6px', fontSize: '.78rem',
               color: otpPhase === 'verified' ? 'var(--ok)'
                 : otpPhase === 'error' ? 'var(--fail)'
+                : otpPhase === 'sent' ? 'var(--fail)'  // sent 상태에서 남은 메시지는 검증 에러
                 : 'var(--t3)',
             }}>
               {otpMessage}
