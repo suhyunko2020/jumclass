@@ -1,46 +1,48 @@
-// Vercel Edge Runtime
-// 휴대폰 인증번호 발송 — Bizm 알림톡(OTP 전용 템플릿)을 사용
+// Vercel Node.js Runtime (기본)
+// 휴대폰 인증번호 발송 — SOLAPI(coolsms) SDK 사용
 //
 // 요청 (POST /api/sms-otp-send):
 // { phone: string }  // 01012345678 또는 010-1234-5678
 //
 // 응답:
-// 성공: 200 { ok: true, sentAt: ISOString, devCode?: "123456" }  // devCode는 DEV_OTP_ECHO=true일 때만
-// 실패: 400/429/500 { ok: false, code, message }
+// 성공: 200 { ok: true, sentAt: ISOString, devCode?: "123456" }
+// 실패: 400/429/500 { ok: false, code, message, sentTo?, rawData? }
 //
-// 환경 변수:
+// 필수 환경 변수 (Vercel):
 // - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  → phone_verifications 테이블 접근
-// - BIZM_USERID, BIZM_PROFILE                → 기존 알림톡과 동일 자격증명
-// - BIZM_OTP_TEMPLATE_ID                     → OTP 전용 알림톡 템플릿 ID (Bizm 심사 필요, 변수 #{authCode})
-// - DEV_OTP_ECHO                             → "true"면 응답에 devCode 포함 (템플릿 승인 전 테스트용)
+// - SOLAPI_API_KEY                           → Solapi 콘솔 → 개발자 센터 → API Key
+// - SOLAPI_API_SECRET                        → Solapi 콘솔 → 개발자 센터 → API Secret
+// - SOLAPI_SENDER                            → 사전등록된 발신번호 (01012345678 형식, 하이픈 X)
+// - DEV_OTP_ECHO (선택)                      → "true"면 응답에 devCode 포함 (초기 테스트용)
 
-export const config = { runtime: 'edge' }
+import { SolapiMessageService } from 'solapi'
 
 const CODE_TTL_MS = 5 * 60 * 1000       // 5분
 const RESEND_COOLDOWN_MS = 60 * 1000    // 60초 재전송 방지
-const BIZM_API_ENDPOINT = 'https://alimtalk-api.bizmsg.kr/v2/sender/send'
+
+// Node.js Runtime — Web Crypto 대신 node:crypto 사용
+import { createHash, randomInt } from 'node:crypto'
 
 function normalizePhone(phone: string): string {
+  // Solapi는 하이픈 없는 국내 번호(01012345678) 형식을 요구
   const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('82')) return digits
-  if (digits.startsWith('0')) return '82' + digits.slice(1)
+  // 82로 시작하면 국내 형식으로 역변환
+  if (digits.startsWith('82')) return '0' + digits.slice(2)
   return digits
 }
 
 function isValidKrMobile(phone: string): boolean {
   const d = phone.replace(/\D/g, '')
-  // 01X-XXXX-XXXX (국내) 또는 82-10-XXXX-XXXX
-  return /^(010|011|016|017|018|019)\d{7,8}$/.test(d) || /^82(10|11|16|17|18|19)\d{7,8}$/.test(d)
+  return /^(010|011|016|017|018|019)\d{7,8}$/.test(d)
+    || /^82(10|11|16|17|18|19)\d{7,8}$/.test(d)
 }
 
 function gen6DigitCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000))
+  return String(randomInt(100000, 1000000))
 }
 
-async function sha256Hex(input: string): Promise<string> {
-  const enc = new TextEncoder().encode(input)
-  const buf = await crypto.subtle.digest('SHA-256', enc)
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+function sha256Hex(input: string): string {
+  return createHash('sha256').update(input).digest('hex')
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -81,7 +83,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   // 2) 코드 생성 및 해시 저장
   const code = gen6DigitCode()
-  const codeHash = await sha256Hex(code + ':' + phone)   // 단순 해시 + phone salt
+  const codeHash = sha256Hex(code + ':' + phone)
   const expiresAt = new Date(Date.now() + CODE_TTL_MS).toISOString()
 
   const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/phone_verifications`, {
@@ -99,94 +101,60 @@ export default async function handler(req: Request): Promise<Response> {
     return json(500, { ok: false, code: 'INSERT_FAILED', message: `DB 저장 실패: ${msg}` })
   }
 
-  // 3) Bizm 알림톡으로 코드 발송 (OTP 전용 템플릿 — 심사 완료 후 BIZM_OTP_TEMPLATE_ID 설정)
-  const BIZM_USERID = process.env.BIZM_USERID
-  const BIZM_PROFILE = process.env.BIZM_PROFILE
-  const BIZM_OTP_TEMPLATE_ID = process.env.BIZM_OTP_TEMPLATE_ID
+  // 3) SOLAPI SDK로 SMS 발송
+  const SOLAPI_API_KEY = process.env.SOLAPI_API_KEY
+  const SOLAPI_API_SECRET = process.env.SOLAPI_API_SECRET
+  const SOLAPI_SENDER = process.env.SOLAPI_SENDER
   const DEV_OTP_ECHO = process.env.DEV_OTP_ECHO === 'true'
 
-  if (!BIZM_USERID || !BIZM_PROFILE || !BIZM_OTP_TEMPLATE_ID) {
-    // 비즈엠 미설정 — 개발 모드면 echo, 아니면 사용자에게 안내
+  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
     if (DEV_OTP_ECHO) {
-      return json(200, { ok: true, sentAt: new Date().toISOString(), devCode: code, warning: 'BIZM_OTP_TEMPLATE_ID 미설정 — 개발 모드로 코드를 응답에 포함합니다.' })
+      return json(200, {
+        ok: true,
+        sentAt: new Date().toISOString(),
+        devCode: code,
+        warning: 'SOLAPI 환경변수 미설정 — 개발 모드로 코드를 응답에 포함합니다.',
+      })
     }
     return json(503, {
       ok: false,
-      code: 'BIZM_NOT_CONFIGURED',
-      message: 'OTP 알림톡 템플릿이 설정되지 않았습니다. (BIZM_OTP_TEMPLATE_ID 필요 또는 DEV_OTP_ECHO=true로 테스트)',
+      code: 'SOLAPI_NOT_CONFIGURED',
+      message: 'SOLAPI_API_KEY / SOLAPI_API_SECRET / SOLAPI_SENDER 환경변수가 필요합니다.',
     })
   }
 
-  // mobile_auth 템플릿 본문 (#{shop_name}, #{auth_number} 치환)
-  // Bizm은 msg 전체와 템플릿을 렌더한 결과를 바이트 비교함 — 공백/줄바꿈/구두점 하나도 달라지면 K105/M120
-  const shopName = '점클래스'
-  const msgBody = [
-    `[${shopName}]`,
-    '본인 확인을 위한 인증번호는 아래와 같습니다.',
-    '인증번호란에 입력 바랍니다.',
-    '',
-    `인증번호 : ${code}`,
-    '',
-    '감사합니다.',
-  ].join('\n')
-
-  const payload = {
-    message_type: 'AT',
-    phn: phone,
-    profile: BIZM_PROFILE,
-    tmplId: BIZM_OTP_TEMPLATE_ID,
-    msg: msgBody,
-    reserveDt: '00000000000000',
-    smsKind: 'L',
-    msgSms: `[${shopName}] 인증번호 ${code} (5분 유효)`,
-    smsLmsTit: `[${shopName}] 인증번호`,
-    smsSender: '',
-    // 일부 Bizm 계정은 치환 변수를 별도 필드로도 기대함 — 안전하게 같이 전달
-    var1: shopName,
-    var2: code,
-    shop_name: shopName,
-    auth_number: code,
-  }
+  const text = `[점클래스] 본인 확인 인증번호: ${code}\n5분 안에 입력해주세요.`
 
   try {
-    const res = await fetch(BIZM_API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'userid': BIZM_USERID },
-      body: JSON.stringify([payload]),
+    const service = new SolapiMessageService(SOLAPI_API_KEY, SOLAPI_API_SECRET)
+    const result = await service.send({
+      to: phone,
+      from: SOLAPI_SENDER,
+      text,
     })
-    const data = await res.json().catch(() => null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const first = Array.isArray(data) ? data[0] : (data as any)
-    const bizmCode = first?.code
-    const ok = bizmCode === 'success' || bizmCode === 'SUCCESS' || bizmCode === '7000' || bizmCode === 0
-    if (!res.ok || !ok) {
-      return json(502, {
-        ok: false,
-        code: 'BIZM_SEND_FAILED',
-        message: `알림톡 발송 실패${first?.message ? ': ' + first.message : ''}`,
-        bizmCode,
-        bizmMessage: first?.message ?? null,
-        rawData: first,
-        // 진단용 — 실제로 보낸 msg 본문 (템플릿과 차이 비교 위해 에코)
-        sentMsgPreview: msgBody,
-        sentMsgCharCount: msgBody.length,
-        ...(DEV_OTP_ECHO ? { devCode: code } : {}),
-      })
-    }
+
+    // Solapi SDK는 성공 시 groupInfo/messageList를 포함한 객체 반환
+    return json(200, {
+      ok: true,
+      sentAt: new Date().toISOString(),
+      sentTo: phone,
+      ...(DEV_OTP_ECHO ? { devCode: code } : {}),
+      // 실패 진단용 일부 정보 (민감한 값 제외)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      groupId: (result as any)?.groupInfo?.groupId ?? null,
+    })
   } catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const e = err as any
     return json(502, {
       ok: false,
-      code: 'BIZM_NETWORK',
-      message: err instanceof Error ? err.message : '알림톡 전송 네트워크 오류',
+      code: 'SOLAPI_SEND_FAILED',
+      message: e?.message || '문자 발송에 실패했습니다.',
+      solapiErrorCode: e?.errorCode ?? e?.failedMessageList?.[0]?.statusCode ?? null,
+      rawData: e?.response?.data ?? e?.failedMessageList ?? null,
       ...(DEV_OTP_ECHO ? { devCode: code } : {}),
     })
   }
-
-  return json(200, {
-    ok: true,
-    sentAt: new Date().toISOString(),
-    ...(DEV_OTP_ECHO ? { devCode: code } : {}),
-  })
 }
 
 function json(status: number, data: unknown): Response {
