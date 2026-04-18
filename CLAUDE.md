@@ -2,7 +2,7 @@
 
 React 19 + Vite 8 + TS + Tailwind v4 + Supabase + Vercel
 배포: `jumclass.vercel.app` / GitHub push 시 자동 재배포
-관리자: `/admin2026` (admin / admin123!)
+관리자: `/admin2026` — Supabase Auth 로그인 + `admin_users` 테이블에 본인 uid 등록된 계정만 접근 (하드코딩 비밀번호 없음)
 
 ## 핵심 규칙
 
