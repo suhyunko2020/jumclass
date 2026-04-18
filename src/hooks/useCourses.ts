@@ -179,13 +179,44 @@ export function useCourses() {
   }, [])
 
   // ── 수강생 수 ─────────────────────────────────────────────
-  const getEnrolledCount = useCallback((_courseId: string): string => '250+', [])
+  const getEnrolledCount = useCallback((_courseId: string): string => '0', [])
 
   // ── 리뷰 API (캐시 기반 동기 — syncFromSupabase 후 최신) ───
   const getReviewsByCourse = useCallback((courseId: string): Review[] => {
     return getCachedReviews()
       .filter(r => r.courseId === courseId)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [])
+
+  // 전체 리뷰 (메인 페이지 후기 노출용) — 최신순
+  const getAllReviews = useCallback((): Review[] => {
+    return [...getCachedReviews()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [])
+
+  // 리뷰 수정 (관리자)
+  const updateReview = useCallback(async (
+    id: string,
+    patch: { rating?: number; text?: string; userName?: string }
+  ): Promise<boolean> => {
+    const all = getCachedReviews()
+    const idx = all.findIndex(r => r.id === id)
+    if (idx < 0) return false
+
+    // Supabase 업데이트 — 변경된 필드만
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dbPatch: any = {}
+    if (typeof patch.rating === 'number') dbPatch.rating = patch.rating
+    if (typeof patch.text === 'string') dbPatch.text = patch.text
+    if (typeof patch.userName === 'string') dbPatch.user_name = patch.userName
+    const { error } = await supabase.from('reviews').update(dbPatch).eq('id', id)
+    if (error) return false
+
+    // 로컬 캐시 업데이트
+    if (typeof patch.rating === 'number') all[idx].rating = patch.rating
+    if (typeof patch.text === 'string') all[idx].text = patch.text
+    if (typeof patch.userName === 'string') all[idx].userName = patch.userName
+    localStorage.setItem(REVIEWS_KEY, JSON.stringify(all))
+    return true
   }, [])
 
   const addReview = useCallback(async (
@@ -241,6 +272,6 @@ export function useCourses() {
     saveCourseOverride, saveCustomCourse, deleteCustomCourse,
     syncFromSupabase,
     getEnrolledCount,
-    getReviewsByCourse, addReview, hasReviewed, getReviewStats, deleteReviewById,
+    getReviewsByCourse, getAllReviews, addReview, updateReview, hasReviewed, getReviewStats, deleteReviewById,
   }
 }

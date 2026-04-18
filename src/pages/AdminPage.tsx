@@ -79,12 +79,14 @@ const CERT_TIER_DAYS_OPTIONS: { days: number; label: string }[] = [
 
 export default function AdminPage() {
   const { isAdminLoggedIn, adminLogin, adminLogout, enrollManual } = useAuth()
-  const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview, saveCourseOrder } = useCourses()
+  const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview, updateReview, saveCourseOrder } = useCourses()
   const [dragCourseId, setDragCourseId] = useState<string | null>(null)
   const { getAll: getAllInstructors, saveInstructor, deleteInstructor, saveInstructorOrder } = useInstructors()
   const [dragInstructorId, setDragInstructorId] = useState<string | null>(null)
   const { get: getSettings, save: saveSettings } = useSiteSettings()
   const [siteSettingsForm, setSiteSettingsForm] = useState<SiteSettings | null>(null)
+  // 토스 Secret Key 편집 모드 토글 (기본: 마스킹 표시, 클릭 시 입력창 노출)
+  const [editingSecretKey, setEditingSecretKey] = useState(false)
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -109,6 +111,10 @@ export default function AdminPage() {
   const [reviews, setReviews] = useState<{ id: string; courseId: string; userId: string; userName: string; userAvatar: string; rating: number; text: string; date: string; source?: string }[]>([])
   const [adminReviewModal, setAdminReviewModal] = useState(false)
   const [arForm, setArForm] = useState({ courseId: '', userName: '', rating: 5, text: '' })
+  // 리뷰 편집 모달 — 기존 리뷰 수정용
+  const [editReviewModal, setEditReviewModal] = useState<{ id: string; courseId: string; userName: string; rating: number; text: string } | null>(null)
+  // 샘플 리뷰 시드 진행 상태
+  const [seedingReviews, setSeedingReviews] = useState(false)
   const [studentSearch, setStudentSearch] = useState('')
   const [inquirySearch, setInquirySearch] = useState('')
   const [expandedInquiries, setExpandedInquiries] = useState<Set<string>>(new Set())
@@ -164,6 +170,7 @@ export default function AdminPage() {
     loadAdminData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdminLoggedIn])
+
 
   // reload on tick (after mutations)
   const [, setTick] = useState(0)
@@ -612,6 +619,74 @@ export default function AdminPage() {
     toast('리뷰가 등록되었습니다.', 'ok')
     setAdminReviewModal(false)
     setArForm({ courseId: '', userName: '', rating: 5, text: '' })
+    refresh()
+  }
+
+  // ── 관리자 리뷰 수정 ──────────────────────────────────────
+  async function handleEditReview(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editReviewModal) return
+    const ok = await updateReview(editReviewModal.id, {
+      rating: editReviewModal.rating,
+      text: editReviewModal.text,
+      userName: editReviewModal.userName,
+    })
+    if (ok) {
+      toast('리뷰가 수정되었습니다.', 'ok')
+      setEditReviewModal(null)
+      refresh()
+    } else {
+      toast('리뷰 수정에 실패했습니다.', 'err')
+    }
+  }
+
+  // ── 샘플 리뷰 시드 — 현재 공개 강의별로 2건씩 임시 생성 ──────
+  async function handleSeedReviews() {
+    if (seedingReviews) return
+    if (!confirm('현재 공개 중인 강의에 샘플 리뷰를 생성합니다.\n이미 등록된 리뷰는 유지되며, 샘플만 추가로 등록됩니다. 진행할까요?')) return
+    setSeedingReviews(true)
+
+    // 레벨별 리뷰 문구 — 강의 컨텐츠와 어울리는 현실적인 톤
+    const textsByLevel: Record<string, string[]> = {
+      입문: [
+        '타로를 처음 접했는데 카드 한 장 한 장 의미를 차근차근 짚어줘서 이해가 정말 잘 됐어요. 혼자 책으로만 공부했을 때 답답했던 부분이 풀렸습니다.',
+        '기초를 탄탄하게 잡아주는 강의예요. 영상이 깔끔하고 설명이 친근해서 부담 없이 들을 수 있었습니다.',
+      ],
+      중급: [
+        '어느 정도 감은 있었는데 스프레드 해석이 넓어지는 느낌이에요. 실전 리딩에 바로 적용해볼 수 있는 팁이 많았습니다.',
+        '기본기를 넘어서 한 단계 올라가고 싶을 때 딱 좋은 강의입니다. 설명이 군더더기 없어서 집중이 잘 돼요.',
+      ],
+      고급: [
+        '심화 해석 기법을 체계적으로 배울 수 있어서 좋았어요. 중급에서 막혔던 부분이 명쾌하게 풀렸습니다.',
+        '고급 스프레드 풀이가 특히 도움이 많이 됐어요. 리더로 활동하면서 바로 적용해보고 있습니다.',
+      ],
+      자격증: [
+        '자격증 과정 자체도 탄탄하지만, 비즈니스와 윤리 파트까지 포함되어 있어 실제 리더로 활동할 준비가 됐어요.',
+        '강사님 진도 관리가 꼼꼼해서 완주할 수 있었습니다. 수료 후에도 궁금한 건 물어볼 수 있어 든든해요.',
+      ],
+    }
+    const defaultTexts = [
+      '영상 품질이 깨끗하고 강사님 설명도 정리되어 있어서 집중하기 좋았어요.',
+      '여러 번 반복해서 볼 수 있어 복습하기 편했습니다. 내용이 알차요.',
+    ]
+    const lastNames = ['김', '이', '박', '정', '최', '조', '강', '윤', '장', '서', '오', '한', '임', '유', '황']
+    const avatars = ['🌙', '✨', '🌟', '🔮', '☯️', '🌹', '🕊️', '🪄', '🦋', '🌻']
+
+    let added = 0
+    const allCourses = courses.filter(c => c.status !== 'private')
+    for (const c of allCourses) {
+      const pool = textsByLevel[c.level] ?? defaultTexts
+      for (let i = 0; i < Math.min(2, pool.length); i++) {
+        const name = `${lastNames[Math.floor(Math.random() * lastNames.length)]}**`
+        const avatar = avatars[Math.floor(Math.random() * avatars.length)]
+        const rating = Math.random() < 0.7 ? 5 : 4
+        const uniqueUserId = `seed-${c.id}-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+        const ok = await addReview(c.id, uniqueUserId, name, avatar, rating, pool[i], 'admin')
+        if (ok) added++
+      }
+    }
+    setSeedingReviews(false)
+    toast(`샘플 리뷰 ${added}건이 생성되었습니다.`, 'ok')
     refresh()
   }
 
@@ -1385,11 +1460,16 @@ export default function AdminPage() {
           {/* ═══ 리뷰 관리 ═══ */}
           {sec === 'reviews' && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px', gap: '8px', flexWrap: 'wrap' }}>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', margin: 0 }}>
                   리뷰 관리 ({reviews.length}개)
                 </h1>
-                <button className="btn btn-primary btn-sm" onClick={() => setAdminReviewModal(true)}>+ 리뷰 작성</button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={handleSeedReviews} disabled={seedingReviews}>
+                    {seedingReviews ? '생성 중…' : '🎲 샘플 생성'}
+                  </button>
+                  <button className="btn btn-primary btn-sm" onClick={() => setAdminReviewModal(true)}>+ 리뷰 작성</button>
+                </div>
               </div>
               {reviews.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>등록된 리뷰가 없습니다.</div>
@@ -1417,12 +1497,20 @@ export default function AdminPage() {
                           {c && <div style={{ fontSize: '.75rem', color: 'var(--purple-2)', marginBottom: '6px' }}>{c.emoji} {c.title}</div>}
                           <p style={{ fontSize: '.875rem', color: 'var(--t2)', lineHeight: 1.6 }}>{r.text}</p>
                         </div>
-                        <button
-                          style={{ fontSize: '.75rem', padding: '5px 10px', borderRadius: 'var(--r1)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', cursor: 'pointer', flexShrink: 0 }}
-                          onClick={() => handleDeleteReview(r.id)}
-                        >
-                          삭제
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
+                          <button
+                            style={{ fontSize: '.75rem', padding: '5px 10px', borderRadius: 'var(--r1)', background: 'rgba(124,111,205,.12)', color: 'var(--purple-2)', cursor: 'pointer', border: 'none' }}
+                            onClick={() => setEditReviewModal({ id: r.id, courseId: r.courseId, userName: r.userName, rating: r.rating, text: r.text })}
+                          >
+                            수정
+                          </button>
+                          <button
+                            style={{ fontSize: '.75rem', padding: '5px 10px', borderRadius: 'var(--r1)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', cursor: 'pointer', border: 'none' }}
+                            onClick={() => handleDeleteReview(r.id)}
+                          >
+                            삭제
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
@@ -1482,6 +1570,139 @@ export default function AdminPage() {
                     <input className="form-input" placeholder="https://..." value={form.ogImage}
                       onChange={e => setSiteSettingsForm(p => p ? { ...p, ogImage: e.target.value } : null)} />
                   </div>
+                </div>
+
+                {/* 결제 설정 (토스페이먼츠) */}
+                <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '.85rem', fontWeight: 700 }}>결제 설정 (토스페이먼츠)</div>
+                    <div style={{ fontSize: '.72rem', color: 'var(--t3)' }}>
+                      PG사: 토스페이먼츠 (고정)
+                    </div>
+                  </div>
+
+                  {/* 결제 기능 사용 ON/OFF */}
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(255,255,255,.02)', border: '1px solid var(--line)', borderRadius: 'var(--r2)' }}>
+                    <div>
+                      <div style={{ fontSize: '.85rem', fontWeight: 600 }}>결제 기능</div>
+                      <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '2px' }}>OFF로 두면 모든 결제 버튼이 비활성화됩니다.</div>
+                    </div>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={form.payment.enabled}
+                        onChange={e => setSiteSettingsForm(p => p ? { ...p, payment: { ...p.payment, enabled: e.target.checked } } : null)} />
+                      <span style={{ fontSize: '.8rem', fontWeight: 700, color: form.payment.enabled ? 'var(--ok)' : 'var(--t3)' }}>
+                        {form.payment.enabled ? 'ON' : 'OFF'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* 사용 모드 TEST / REAL */}
+                  <div className="form-group">
+                    <label className="form-label">사용 모드</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {(['test', 'real'] as const).map(m => (
+                        <button key={m} type="button"
+                          onClick={() => setSiteSettingsForm(p => p ? { ...p, payment: { ...p.payment, mode: m } } : null)}
+                          style={{
+                            flex: 1, padding: '10px 14px',
+                            background: form.payment.mode === m ? 'rgba(124,111,205,.18)' : 'rgba(255,255,255,.03)',
+                            border: `1px solid ${form.payment.mode === m ? 'rgba(124,111,205,.6)' : 'var(--line)'}`,
+                            borderRadius: 'var(--r2)',
+                            fontSize: '.82rem', fontWeight: form.payment.mode === m ? 700 : 500,
+                            color: form.payment.mode === m ? 'var(--purple-2)' : 'var(--t2)',
+                            cursor: 'pointer',
+                          }}>
+                          {m === 'test' ? 'TEST 모드' : 'REAL 모드'}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '6px' }}>
+                      {form.payment.mode === 'test'
+                        ? '테스트 키로 결제됩니다. 실제 결제 X — 개발/테스트 단계에서 사용.'
+                        : '실제 카드·계좌로 결제됩니다. 라이브 운영 시에만 선택하세요.'}
+                    </div>
+                  </div>
+
+                  {/* 결제 수단 체크박스 */}
+                  <div className="form-group">
+                    <label className="form-label">결제 수단</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                      {([
+                        ['card', '신용카드'],
+                        ['virtualAccount', '가상계좌'],
+                        ['transfer', '계좌이체'],
+                        ['phone', '휴대폰'],
+                        ['cashReceipt', '무통장'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', borderRadius: 'var(--r2)', cursor: 'pointer', fontSize: '.82rem' }}>
+                          <input type="checkbox" checked={form.payment.methods[key]}
+                            onChange={e => setSiteSettingsForm(p => p ? { ...p, payment: { ...p.payment, methods: { ...p.payment.methods, [key]: e.target.checked } } } : null)} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Client Key */}
+                  <div className="form-group">
+                    <label className="form-label">Client Key</label>
+                    <input className="form-input" type="text"
+                      placeholder={form.payment.mode === 'test' ? 'test_ck_...' : 'live_ck_...'}
+                      value={form.payment.clientKey}
+                      onChange={e => setSiteSettingsForm(p => p ? { ...p, payment: { ...p.payment, clientKey: e.target.value } } : null)}
+                      style={{ fontFamily: 'monospace', fontSize: '.82rem' }} />
+                    <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '6px' }}>
+                      프론트엔드에 노출되는 키입니다. 토스 상점관리자 → 개발설정에서 확인하세요.
+                    </div>
+                  </div>
+
+                  {/* Secret Key — 저장 시 마스킹 표시, 수정 버튼으로 토글 */}
+                  <div className="form-group">
+                    <label className="form-label">Secret Key</label>
+                    {editingSecretKey || !form.payment.secretKey ? (
+                      <>
+                        <input className="form-input" type="password"
+                          placeholder={form.payment.mode === 'test' ? 'test_sk_...' : 'live_sk_...'}
+                          value={form.payment.secretKey}
+                          onChange={e => setSiteSettingsForm(p => p ? { ...p, payment: { ...p.payment, secretKey: e.target.value } } : null)}
+                          style={{ fontFamily: 'monospace', fontSize: '.82rem' }}
+                          autoFocus={editingSecretKey} />
+                        {editingSecretKey && form.payment.secretKey && (
+                          <button type="button"
+                            onClick={() => setEditingSecretKey(false)}
+                            style={{ marginTop: '6px', fontSize: '.72rem', color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                            ← 마스킹 보기로 돌아가기
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ flex: 1, padding: '10px 14px', background: 'rgba(255,255,255,.02)', border: '1px solid var(--line)', borderRadius: 'var(--r2)', fontFamily: 'monospace', fontSize: '.82rem', color: 'var(--t2)' }}>
+                          {form.payment.secretKey.startsWith('live_sk_') ? 'live_sk_' : form.payment.secretKey.startsWith('test_sk_') ? 'test_sk_' : ''}
+                          ••••••••••••{form.payment.secretKey.slice(-4)}
+                        </div>
+                        <button type="button"
+                          onClick={() => setEditingSecretKey(true)}
+                          className="btn btn-ghost"
+                          style={{ fontSize: '.8rem', padding: '8px 14px' }}>
+                          변경
+                        </button>
+                      </div>
+                    )}
+                    <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '6px' }}>
+                      결제 승인에 사용됩니다. 토스 상점관리자 → 개발설정에서 확인하세요.
+                    </div>
+                  </div>
+
+                  {/* 모드/키 불일치 경고 */}
+                  {form.payment.secretKey && (
+                    (form.payment.mode === 'real' && form.payment.secretKey.startsWith('test_sk_')) ||
+                    (form.payment.mode === 'test' && form.payment.secretKey.startsWith('live_sk_'))
+                  ) && (
+                    <div style={{ padding: '10px 14px', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.35)', borderRadius: 'var(--r2)', fontSize: '.78rem', color: 'var(--warn, #f59e0b)' }}>
+                      ⚠ 주의: 사용 모드는 <strong>{form.payment.mode.toUpperCase()}</strong>인데 Secret Key는 반대 모드 키로 보입니다. 실제 결제 시 오류가 발생합니다.
+                    </div>
+                  )}
                 </div>
 
                 {/* 정책 관리 */}
@@ -2187,6 +2408,53 @@ export default function AdminPage() {
                     value={arForm.text} onChange={e => setArForm(p => ({ ...p, text: e.target.value }))} />
                 </div>
                 <button type="submit" className="btn btn-primary w-full">리뷰 등록</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 리뷰 수정 모달 ── */}
+      {editReviewModal && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '460px' }}>
+            <button className="modal-close" onClick={() => setEditReviewModal(null)}>✕</button>
+            <div className="modal-head">
+              <h2>리뷰 수정</h2>
+              <p style={{ fontSize: '.82rem', color: 'var(--t3)' }}>
+                {(() => {
+                  const c = courses.find(x => x.id === editReviewModal.courseId)
+                  return c ? `${c.emoji} ${c.title}` : '강의 정보 없음'
+                })()}
+              </p>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleEditReview}>
+                <div className="form-group">
+                  <label className="form-label">작성자 이름</label>
+                  <input className="form-input" type="text" required
+                    value={editReviewModal.userName}
+                    onChange={e => setEditReviewModal(p => p ? { ...p, userName: e.target.value } : null)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">별점</label>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button key={n} type="button"
+                        onClick={() => setEditReviewModal(p => p ? { ...p, rating: n } : null)}
+                        style={{ fontSize: '1.5rem', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, filter: editReviewModal.rating >= n ? 'none' : 'grayscale(1) opacity(.3)' }}>
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">리뷰 내용</label>
+                  <textarea className="form-input" rows={5} required
+                    value={editReviewModal.text}
+                    onChange={e => setEditReviewModal(p => p ? { ...p, text: e.target.value } : null)} />
+                </div>
+                <button type="submit" className="btn btn-primary w-full">수정 저장</button>
               </form>
             </div>
           </div>

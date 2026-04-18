@@ -1,19 +1,47 @@
 import { Link } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
+import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useToast } from '../components/ui/Toast'
 import CourseCard from '../components/course/CourseCard'
-import { TESTIMONIALS } from '../data/courses'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import HeroBg from '../components/ui/HeroBg'
+import { readCachedStats, computeAndCacheStats, type HomeStats } from '../lib/homeStats'
 
 export default function HomePage() {
-  const { getPublicCourses, getEnrolledCount } = useCourses()
+  const { getPublicCourses, getEnrolledCount, getAllReviews, getCourse } = useCourses()
+  const { getPublicInstructors } = useInstructors()
   const { openAuth } = useAuthModal()
   const { user } = useAuth()
   const toast = useToast()
-  const courses = getPublicCourses().slice(0, 3)
+  const publicCourses = getPublicCourses()
+  const [stats, setStats] = useState<HomeStats | null>(() => readCachedStats())
+
+  // 인기 강의 — stats.topCourseIds 있으면 그 순서로, 없으면 기본 순서로 상위 3
+  const courses = (() => {
+    if (stats && stats.topCourseIds.length > 0) {
+      const idOrder = new Map(stats.topCourseIds.map((id, i) => [id, i]))
+      const sorted = [...publicCourses].sort((a, b) => {
+        const ia = idOrder.has(a.id) ? idOrder.get(a.id)! : Infinity
+        const ib = idOrder.has(b.id) ? idOrder.get(b.id)! : Infinity
+        return ia - ib
+      })
+      return sorted.slice(0, 3)
+    }
+    return publicCourses.slice(0, 3)
+  })()
+
+  // 월간 통계 로드 (캐시 없을 때만 재계산 — 캐시는 매월 1일에 만료)
+  useEffect(() => {
+    if (stats) return
+    const instructorCount = getPublicInstructors().length
+    computeAndCacheStats({
+      publicCourses: publicCourses.map(c => ({ id: c.id, lessons: c.lessons })),
+      instructorCount,
+    }).then(setStats).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
 
@@ -31,17 +59,29 @@ export default function HomePage() {
         <div className="container" style={{ position: 'relative', zIndex: 1 }}>
           <div className="hero-inner page-enter">
             <div className="hero-kicker">타로 전문 교육 플랫폼</div>
-            <h1>타로의 언어를<br /><em>내 것으로</em> 만드세요</h1>
-            <p className="hero-desc">입문부터 자격증까지, 현직 리더의 영상 강의로 배우는 타로. 혼자 공부하다 막힐 때, 여기서 답을 찾으세요.</p>
+            <h1>타로 리딩,<br /><em>제대로</em> 배워보세요</h1>
+            <p className="hero-desc">입문부터 자격증까지, 현직 리더의 영상 강의로 배우는 타로.<br />혼자 공부하다 막힐 때, 여기서 답을 찾으세요.</p>
             <div className="hero-cta">
               <Link to="/courses" className="btn btn-gold btn-xl">강의 둘러보기 →</Link>
               <button className="btn btn-ghost btn-xl" onClick={() => openAuth('signup')}>무료로 시작하기</button>
             </div>
             <div className="hero-stats">
-              <div className="hero-stat"><div className="num">3,800+</div><div className="lbl">수강생</div></div>
-              <div className="hero-stat"><div className="num">4</div><div className="lbl">전문 강사</div></div>
-              <div className="hero-stat"><div className="num">98강</div><div className="lbl">총 강의</div></div>
-              <div className="hero-stat"><div className="num">4.9★</div><div className="lbl">평균 평점</div></div>
+              <div className="hero-stat">
+                <div className="num">{stats ? stats.studentCount.toLocaleString() : '—'}</div>
+                <div className="lbl">수강생</div>
+              </div>
+              <div className="hero-stat">
+                <div className="num">{stats ? stats.instructorCount : '—'}</div>
+                <div className="lbl">전문 강사</div>
+              </div>
+              <div className="hero-stat">
+                <div className="num">{stats ? `${stats.lessonCount}강` : '—'}</div>
+                <div className="lbl">총 강의</div>
+              </div>
+              <div className="hero-stat">
+                <div className="num">{stats && stats.reviewCount > 0 ? `${stats.avgRating.toFixed(1)}★` : '—'}</div>
+                <div className="lbl">평균 평점</div>
+              </div>
             </div>
           </div>
         </div>
@@ -66,85 +106,179 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 특징 */}
+      {/* 특징 — 실제 등록된 강의 기준 팩트 */}
       <section className="section" style={{ background: 'rgba(255,255,255,.018)', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
         <div className="container">
           <div className="section-header">
-            <span className="section-kicker">왜 JUMCLASS인가</span>
-            <h2>이런 점이 다릅니다</h2>
-            <p>독학이 어려운 타로, 제대로 배울 수 있는 환경을 만들었습니다.</p>
+            <span className="section-kicker">점클래스 소개</span>
+            <h2>숫자로 보는 점클래스</h2>
+            <p>현재 운영 중인 강의와 환경을 한눈에 확인해보세요.</p>
           </div>
-          <div className="feat-grid">
-            {[
-              { ic: '🎬', t: 'HD 영상 강의', d: '촬영 퀄리티에 신경 쓴 깨끗한 영상. PC, 모바일 어디서든 수강 가능합니다.' },
-              { ic: '📜', t: '자격증 과정', d: '수료 후 바로 활동할 수 있는 전문 리더 자격증 과정을 운영합니다.' },
-              { ic: '🔮', t: '현직 강사진', d: '실제 리딩 현장에서 활동 중인 강사들이 직접 가르칩니다.' },
-              { ic: '⏳', t: '넉넉한 수강 기간', d: '한 번 결제하면 수강 기간 내 무제한 반복. 업데이트 영상도 추가 비용 없이 제공.' },
-              { ic: '📱', t: '어디서든 수강', d: 'PC, 태블릿, 스마트폰 — 기기 제한 없이 이어서 볼 수 있습니다.' },
-              { ic: '📎', t: '학습 자료 포함', d: 'PDF 자료, 워크시트, 저널링 템플릿이 강의에 포함되어 있습니다.' },
-            ].map(f => (
-              <div key={f.t} className="feat-card">
-                <span className="feat-ic">{f.ic}</span>
-                <h3>{f.t}</h3>
-                <p>{f.d}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 후기 */}
-      <section className="section">
-        <div className="container">
-          <div className="section-header">
-            <span className="section-kicker">수강생 후기</span>
-            <h2>수강생들의 이야기</h2>
-          </div>
-          <div className="testi-grid">
-            {TESTIMONIALS.map((t, i) => (
-              <div key={i} className="testi-card">
-                <p className="testi-quote">"{t.quote}"</p>
-                <div className="testi-author">
-                  <div className="testi-av">{t.avatar}</div>
-                  <div>
-                    <div className="testi-name">{t.name}</div>
-                    <div className="testi-role">{t.role}</div>
+          {(() => {
+            const totalLessons = publicCourses.reduce((s, c) => s + (c.lessons ?? 0), 0)
+            const certCourses = publicCourses.filter(c => c.level === '자격증')
+            const certLessons = certCourses.reduce((s, c) => s + (c.lessons ?? 0), 0)
+            const instructorCount = getPublicInstructors().length
+            // 최장 수강 기간 — pricingTiers에서 무제한(9999+) 있으면 무제한, 없으면 최대 일수
+            const maxDays = publicCourses.reduce((max, c) => {
+              const tierDays = (c.pricingTiers ?? []).map(t => t.days)
+              const cand = Math.max(0, ...tierDays)
+              return Math.max(max, cand)
+            }, 0)
+            const periodLabel = maxDays >= 9999
+              ? '무제한 수강'
+              : maxDays > 0 ? `최대 ${maxDays}일` : '수강 기간 안내'
+            const avgLabel = stats && stats.reviewCount > 0
+              ? `${stats.avgRating.toFixed(1)}★`
+              : '—'
+            const feats = [
+              {
+                ic: '📹',
+                headline: `${publicCourses.length}개 강의`,
+                sub: `총 ${totalLessons}강 수록`,
+                d: '입문부터 고급·자격증까지 체계적인 커리큘럼.',
+              },
+              {
+                ic: '📜',
+                headline: certCourses.length > 0 ? `자격증 과정 ${certCourses.length}개` : '자격증 과정',
+                sub: certCourses.length > 0 ? `${certLessons}강 심화 커리큘럼` : '곧 오픈 예정',
+                d: '수료 후 전문 리더로 활동할 수 있는 과정.',
+              },
+              {
+                ic: '🔮',
+                headline: `현직 강사 ${instructorCount}명`,
+                sub: '실제 리딩 현장 경험',
+                d: '매일 리딩을 진행하는 프로 강사가 직접 가르칩니다.',
+              },
+              {
+                ic: '⏳',
+                headline: periodLabel,
+                sub: '반복 수강 가능',
+                d: '한 번 결제로 수강 기간 내 무제한 반복 학습.',
+              },
+              {
+                ic: '⭐',
+                headline: avgLabel,
+                sub: stats && stats.reviewCount > 0 ? `리뷰 ${stats.reviewCount}건 기준` : '수강생 평점',
+                d: '실제 수강생들이 남긴 평점과 후기.',
+              },
+              {
+                ic: '📱',
+                headline: '멀티 디바이스',
+                sub: 'PC · 태블릿 · 모바일',
+                d: '기기 제한 없이 언제 어디서든 이어서 수강.',
+              },
+            ]
+            return (
+              <div className="feat-grid">
+                {feats.map(f => (
+                  <div key={f.headline} className="feat-card" style={{ paddingTop: '24px' }}>
+                    <span className="feat-ic">{f.ic}</span>
+                    <div style={{ fontSize: '1.35rem', fontWeight: 800, letterSpacing: '-.02em', color: 'var(--t1)', marginBottom: '4px' }}>
+                      {f.headline}
+                    </div>
+                    <div style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--purple-2)', marginBottom: '10px' }}>
+                      {f.sub}
+                    </div>
+                    <p style={{ fontSize: '.84rem', color: 'var(--t2)', lineHeight: 1.65, margin: 0 }}>{f.d}</p>
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )
+          })()}
         </div>
       </section>
 
-      {/* CTA 배너 */}
+      {/* 후기 — 실제 리뷰 데이터 기반 (최신 6개) */}
+      {(() => {
+        const reviews = getAllReviews().slice(0, 6)
+        if (reviews.length === 0) return null
+        return (
+          <section className="section">
+            <div className="container">
+              <div className="section-header">
+                <span className="section-kicker">수강생 후기</span>
+                <h2>수강생들의 이야기</h2>
+                <p>실제 수강생들이 남긴 평점과 후기를 확인해보세요.</p>
+              </div>
+              <div className="testi-grid">
+                {reviews.map(r => {
+                  const c = getCourse(r.courseId)
+                  return (
+                    <div key={r.id} className="testi-card">
+                      <div style={{ fontSize: '.9rem', color: 'var(--gold)', marginBottom: '10px', letterSpacing: '2px' }}>
+                        {'★'.repeat(r.rating)}
+                        <span style={{ color: 'rgba(255,255,255,.12)' }}>{'★'.repeat(5 - r.rating)}</span>
+                      </div>
+                      <p className="testi-quote">"{r.text}"</p>
+                      <div className="testi-author">
+                        <div className="testi-av">{r.userAvatar || r.userName.charAt(0)}</div>
+                        <div>
+                          <div className="testi-name">{r.userName}</div>
+                          <div className="testi-role">{c ? `${c.emoji} ${c.title}` : '수강생'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        )
+      })()}
+
+      {/* CTA 배너 — 로그인/비로그인 분기 + 간단한 혜택 요약 */}
       <section style={{ padding: '16px 0 80px' }}>
         <div className="container">
           <div style={{
-            padding: 'clamp(32px, 5vw, 56px) clamp(20px, 4vw, 48px)', textAlign: 'center', borderRadius: 'var(--r4)',
-            background: 'var(--bg-3)', border: '1px solid var(--line)', position: 'relative', overflow: 'hidden',
+            padding: 'clamp(40px, 6vw, 72px) clamp(22px, 5vw, 56px)', textAlign: 'center', borderRadius: 'var(--r4)',
+            background: 'linear-gradient(135deg, rgba(124,111,205,.08), rgba(201,168,76,.04) 60%, rgba(0,0,0,.3))',
+            border: '1px solid var(--line)', position: 'relative', overflow: 'hidden',
           }}>
-            <div style={{ position: 'absolute', top: '-100px', left: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(124,111,205,.12) 0%,transparent 70%)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', bottom: '-80px', right: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(201,168,76,.09) 0%,transparent 70%)', pointerEvents: 'none' }} />
-            <span className="section-kicker">{user ? '다음 강의' : '시작하기'}</span>
-            <h2 style={{ fontSize: 'clamp(1.7rem,3.5vw,2.4rem)', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>
-              {user ? '다음 강의를 찾고 계신가요?' : '타로, 한번 배워볼까요?'}
-            </h2>
-            <p style={{ color: 'var(--t2)', maxWidth: '420px', margin: '0 auto 28px', lineHeight: 1.75 }}>
-              {user ? '새로운 강의가 기다리고 있습니다.' : '회원가입 후 무료 미리보기 강의를 바로 들어보세요.'}
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              {user ? (
-                <>
-                  <Link to="/courses" className="btn btn-gold btn-xl">강의 둘러보기 →</Link>
-                  <Link to="/classroom" className="btn btn-ghost btn-xl">내 강의실</Link>
-                </>
-              ) : (
-                <>
-                  <button className="btn btn-gold btn-xl" onClick={() => openAuth('signup')}>무료 회원가입</button>
-                  <Link to="/courses" className="btn btn-ghost btn-xl">강의 보기</Link>
-                </>
+            {/* 글로우 블롭 (좀 더 중심 쪽으로 배치 — 밋밋함 개선) */}
+            <div style={{ position: 'absolute', top: '-40%', left: '50%', transform: 'translateX(-50%)', width: 'min(640px, 90%)', height: '560px', borderRadius: '50%', background: 'radial-gradient(ellipse,rgba(124,111,205,.18) 0%,transparent 65%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: '-50%', right: '-10%', width: '420px', height: '420px', borderRadius: '50%', background: 'radial-gradient(circle,rgba(201,168,76,.14) 0%,transparent 70%)', pointerEvents: 'none' }} />
+
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <span className="section-kicker">{user ? '추천 강의' : '지금 시작하기'}</span>
+              <h2 style={{ fontSize: 'clamp(1.8rem,3.8vw,2.6rem)', fontWeight: 800, letterSpacing: '-.03em', margin: '14px 0 16px', lineHeight: 1.3 }}>
+                {user
+                  ? <>다음엔 어떤 강의를<br />들어볼까요?</>
+                  : <>타로, 이제 제대로<br />배워볼 시간이에요</>
+                }
+              </h2>
+              <p style={{ color: 'var(--t2)', maxWidth: '480px', margin: '0 auto 26px', lineHeight: 1.75, fontSize: '.95rem' }}>
+                {user
+                  ? '학습 중인 강의를 이어가거나, 새로운 과정을 둘러보세요.'
+                  : '회원가입 후 무료 미리보기로 부담 없이 시작할 수 있어요.'}
+              </p>
+
+              {/* 혜택 요약 태그 — 비로그인 유저에게 추가 정보 노출 */}
+              {!user && (
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '28px' }}>
+                  {['무료 회원가입', '미리보기 제공', '수강 기간 내 무제한 반복'].map(t => (
+                    <span key={t} style={{
+                      fontSize: '.76rem', fontWeight: 600, color: 'var(--t2)',
+                      padding: '7px 14px', borderRadius: '999px',
+                      background: 'rgba(255,255,255,.04)', border: '1px solid var(--line)',
+                    }}>✓ {t}</span>
+                  ))}
+                </div>
               )}
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                {user ? (
+                  <>
+                    <Link to="/classroom" className="btn btn-gold btn-xl">내 강의실로 이동 →</Link>
+                    <Link to="/courses" className="btn btn-ghost btn-xl">새 강의 둘러보기</Link>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn btn-gold btn-xl" onClick={() => openAuth('signup')}>무료 회원가입 →</button>
+                    <Link to="/courses" className="btn btn-ghost btn-xl">강의 먼저 보기</Link>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -159,8 +293,8 @@ export default function HomePage() {
               <h2 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>궁금한 게 있으신가요?</h2>
               <p style={{ color: 'var(--t2)', marginBottom: '22px', lineHeight: 1.75 }}>어떤 강의를 들어야 할지 잘 모르겠다면 편하게 문의해주세요. 영업일 기준 24시간 내로 답변드립니다.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ fontSize: '.875rem', color: 'var(--t2)' }}>📧 &nbsp;hello@jumclass.kr</div>
-                <div style={{ fontSize: '.875rem', color: 'var(--t2)' }}>💬 &nbsp;평일 오전 9시 – 오후 6시 (채팅 상담)</div>
+                <div style={{ fontSize: '.875rem', color: 'var(--t2)' }}>📧 &nbsp;support@jumclass.com</div>
+                <div style={{ fontSize: '.875rem', color: 'var(--t2)' }}>💬 &nbsp;영업일 기준 오전 10시 – 오후 4시</div>
               </div>
             </div>
             <form style={{ background: 'var(--bg-3)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '28px' }} onSubmit={handleContact}>

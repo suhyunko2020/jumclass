@@ -1,24 +1,22 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, useNavigate, Link } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useToast } from '../components/ui/Toast'
+import { useSiteSettings } from '../hooks/useSiteSettings'
 import { formatPrice, discountRate } from '../utils/format'
-import { createProgressPage, uploadSignatureImage, saveCertificateAgreement } from '../utils/storage'
-import { sendInstructorAlimtalk } from '../utils/alimtalk'
-import type { ProgressChecklistItem } from '../data/types'
 import CertificateAgreementForm, { type AgreementFormValue } from '../components/course/CertificateAgreementForm'
-import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
+import { generateOrderId, saveIntent, requestTossPayment, type TossPaymentIntent } from '../lib/toss'
 
 export default function CheckoutPage() {
   const [params] = useSearchParams()
-  const navigate = useNavigate()
   const { getCourse } = useCourses()
   const { getInstructor } = useInstructors()
-  const { user, isEnrolled, enroll } = useAuth()
+  const { user, isEnrolled } = useAuth()
   const { openAuth } = useAuthModal()
+  const { get: getSiteSettings } = useSiteSettings()
   const toast = useToast()
 
   const courseId = params.get('course') || ''
@@ -35,7 +33,7 @@ export default function CheckoutPage() {
 
   const [paying, setPaying] = useState(false)
   const [certAgreement, setCertAgreement] = useState<AgreementFormValue>({
-    name: '', birthdate: '', phone: '', signatureDataUrl: null,
+    name: '', birthdate: '', phone: '', phoneVerified: false, signatureDataUrl: null,
   })
   const [agreements, setAgreements] = useState({ privacy: false, terms: false, refund: false, copyright: false })
   const allAgreed = agreements.privacy && agreements.terms && agreements.refund && agreements.copyright
@@ -44,6 +42,7 @@ export default function CheckoutPage() {
     certAgreement.name.trim().length > 0 &&
     certAgreement.birthdate.length > 0 &&
     certAgreement.phone.trim().length > 0 &&
+    certAgreement.phoneVerified &&
     !!certAgreement.signatureDataUrl
   )
   const canProceed = allAgreed && certAgreementReady
@@ -98,83 +97,67 @@ export default function CheckoutPage() {
     if (!user) { openAuth('login'); return }
     if (!allAgreed) { toast('약관에 모두 동의해주세요.', 'err'); return }
     if (isCertCheckout && !certAgreementReady) {
-      toast('자격증 수강 동의서의 모든 항목을 입력하고 서명해주세요.', 'err')
+      const reason = !certAgreement.phoneVerified
+        ? '휴대폰 본인 인증을 완료해주세요.'
+        : '자격증 수강 동의서의 모든 항목을 입력하고 서명해주세요.'
+      toast(reason, 'err')
       return
     }
+
+    // 결제 설정 로드
+    const settings = getSiteSettings()
+    const payment = settings.payment
+    if (!payment.enabled) {
+      toast('결제가 일시 중단되었습니다. 관리자에게 문의해주세요.', 'err')
+      return
+    }
+    if (!payment.clientKey) {
+      toast('결제 설정이 완료되지 않았습니다. 관리자에게 문의해주세요.', 'err')
+      return
+    }
+
     setPaying(true)
-    await new Promise(r => setTimeout(r, 1500))
 
-    if (isServiceCheckout) {
-      toast('서비스 신청이 완료됐습니다!', 'ok')
-      navigate(`/instructor/${instructorId}`)
-    } else {
-      const agreedKeys = policies.filter(p => agreements[p.key]).map(p => p.key)
-      await enroll(courseId, days, agreedKeys, assignedInstructorId || undefined)
+    // 결제 복원용 intent 생성 — PaymentSuccessPage에서 이 데이터로 enroll/서명/알림톡 처리
+    const orderId = generateOrderId()
+    const agreedKeys = policies.filter(p => agreements[p.key]).map(p => p.key)
+    const orderName = isServiceCheckout ? service!.title : course!.title
+    const intent: TossPaymentIntent = {
+      orderId,
+      amount: price,
+      orderName,
+      checkoutType: isServiceCheckout ? 'service' : 'course',
+      courseId: isServiceCheckout ? undefined : courseId,
+      tierIdx: isServiceCheckout ? undefined : tierIdx,
+      days: isServiceCheckout ? undefined : days,
+      assignedInstructorId: assignedInstructorId || undefined,
+      instructorId: isServiceCheckout ? instructorId : undefined,
+      serviceId: isServiceCheckout ? serviceId : undefined,
+      agreedKeys,
+      certAgreement: isCertCheckout ? certAgreement : undefined,
+    }
+    saveIntent(intent)
 
-      // 자격증 과정 — 서명·동의서 저장 (강사별로 독립 저장)
-      if (isCertCheckout && user && certAgreement.signatureDataUrl) {
-        const signatureUrl = await uploadSignatureImage(user.uid, courseId, certAgreement.signatureDataUrl)
-        if (signatureUrl) {
-          await saveCertificateAgreement({
-            userId: user.uid,
-            courseId,
-            signerName: certAgreement.name.trim(),
-            signerBirthdate: certAgreement.birthdate,
-            signerPhone: certAgreement.phone.trim(),
-            signatureUrl,
-            agreementVersion: CERTIFICATE_AGREEMENT.version,
-            agreementSnapshot: CERTIFICATE_AGREEMENT,
-            assignedInstructorId: assignedInstructorId || null,
-          })
-        } else {
-          console.warn('서명 이미지 업로드 실패 — 동의서 기록 없이 결제 진행')
-        }
-      }
-
-      // 자격증 과정 + 강사 선택 시: 강사용 진도 관리 페이지 자동 생성 + 알림톡 발송
-      if (course && course.level === '자격증' && assignedInstructorId && user) {
-        const checklist: ProgressChecklistItem[] = course.curriculum.flatMap(sec =>
-          sec.items.map(item => ({
-            id: item.id,
-            title: item.title,
-            description: sec.section,
-            checked: false,
-          }))
-        )
-        const progressPage = await createProgressPage({
-          userId: user.uid,
-          courseId: course.id,
-          instructorId: assignedInstructorId,
-          checklist,
-        })
-
-        // 알림톡 발송 (비즈엠 심사/환경변수 미완료 시 조용히 실패, 결제는 정상 진행)
-        if (progressPage) {
-          const inst = getInstructor(assignedInstructorId)
-          if (inst?.phone) {
-            const periodLabel = days === 90 ? '3개월' : days === 120 ? '4개월' : `${days}일`
-            sendInstructorAlimtalk({
-              phone: inst.phone,
-              instructorName: inst.name,
-              studentName: user.name,
-              courseName: course.title,
-              coursePeriod: periodLabel,
-              token: progressPage.id,
-            }).then(r => {
-              if (!r.ok) console.warn('[alimtalk-fail]', {
-                reason: r.reason,
-                message: r.message,
-                bizmCode: r.bizmCode,
-                bizmMessage: r.bizmMessage,
-              })
-            })
-          }
-        }
-      }
-
-      toast('수강신청이 완료됐습니다!', 'ok')
-      const successQuery = `course=${courseId}&demo=1${assignedInstructorId ? `&assignedInstructor=${assignedInstructorId}` : ''}`
-      navigate(`/payment-success?${successQuery}`)
+    // Toss 결제창 호출 → 성공 시 /payment-success, 실패 시 /payment-fail로 리디렉트
+    const origin = window.location.origin
+    try {
+      await requestTossPayment({
+        clientKey: payment.clientKey,
+        customerKey: user.uid,
+        orderId,
+        orderName,
+        amount: price,
+        successUrl: `${origin}/payment-success`,
+        failUrl: `${origin}/payment-fail`,
+        customerEmail: user.email,
+        customerName: user.name,
+      })
+      // requestPayment는 리디렉트를 일으키므로 이 줄은 정상 경로에서 실행되지 않음
+    } catch (err) {
+      // 사용자가 결제창을 닫거나 SDK 호출 단계에서 에러 발생
+      setPaying(false)
+      const message = err instanceof Error ? err.message : '결제 요청 중 오류가 발생했습니다.'
+      toast(message, 'err')
     }
   }
 
@@ -240,12 +223,21 @@ export default function CheckoutPage() {
                   </div>
                 </div>
               )}
-              <div style={{ padding: '16px', borderRadius: 'var(--r2)', background: 'rgba(61,189,132,.06)', border: '1px solid rgba(61,189,132,.2)', marginBottom: '16px' }}>
-                <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--ok)', marginBottom: '4px' }}>테스트 결제 모드</div>
-                <div style={{ fontSize: '.8rem', color: 'var(--t2)', lineHeight: 1.6 }}>
-                  결제 버튼을 누르면 <strong>테스트 {isServiceCheckout ? '신청' : '수강등록'}</strong>이 진행됩니다.
-                </div>
-              </div>
+              {/* 결제 모드 안내 배너 — 관리자 설정에 따라 자동 표시 */}
+              {(() => {
+                const mode = getSiteSettings().payment.mode
+                if (mode === 'test') {
+                  return (
+                    <div style={{ padding: '16px', borderRadius: 'var(--r2)', background: 'rgba(245,158,11,.06)', border: '1px solid rgba(245,158,11,.25)', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--warn, #f59e0b)', marginBottom: '4px' }}>⚠ TEST 결제 모드</div>
+                      <div style={{ fontSize: '.8rem', color: 'var(--t2)', lineHeight: 1.6 }}>
+                        토스페이먼츠 <strong>테스트 환경</strong>으로 결제됩니다. 실제 금액은 청구되지 않습니다.
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
               <button className="btn btn-gold w-full btn-xl" onClick={doPay} disabled={paying || !canProceed}>
                 {paying ? '처리 중…' : `${formatPrice(price)} 결제하기 →`}
               </button>

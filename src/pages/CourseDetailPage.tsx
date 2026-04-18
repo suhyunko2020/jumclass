@@ -174,9 +174,11 @@ export default function CourseDetailPage() {
               <div className="detail-section">
                 <div className="detail-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>{isCert ? '강의 진행 순서' : '강의 목차'}</span>
-                  <span style={{ fontSize: '.8rem', fontWeight: 400, color: 'var(--t3)' }}>
-                    {course.curriculum.length}섹션 · {totalLessons}강 · {totalDuration}
-                  </span>
+                  {!isCert && (
+                    <span style={{ fontSize: '.8rem', fontWeight: 400, color: 'var(--t3)' }}>
+                      {course.curriculum.length}섹션 · {totalLessons}강 · {totalDuration}
+                    </span>
+                  )}
                 </div>
                 {course.curriculum.map((sec, si) => (
                   <div key={si} className="curriculum-section">

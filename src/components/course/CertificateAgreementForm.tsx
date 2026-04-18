@@ -6,6 +6,7 @@ export interface AgreementFormValue {
   name: string
   birthdate: string        // YYYY-MM-DD
   phone: string
+  phoneVerified: boolean   // 인증번호 확인 완료 여부
   signatureDataUrl: string | null
 }
 
@@ -14,9 +15,95 @@ interface Props {
   onChange: (v: AgreementFormValue) => void
 }
 
+type OtpPhase = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified' | 'error'
+
 export default function CertificateAgreementForm({ value, onChange }: Props) {
   const [agreementOpen, setAgreementOpen] = useState(false)
+  const [otpPhase, setOtpPhase] = useState<OtpPhase>(value.phoneVerified ? 'verified' : 'idle')
+  const [otpInput, setOtpInput] = useState('')
+  const [otpMessage, setOtpMessage] = useState<string | null>(null)
+  const [resendSec, setResendSec] = useState(0)
   const a = CERTIFICATE_AGREEMENT
+
+  // 전화번호 입력이 바뀌면 이전 인증 상태 리셋 (동일 번호 다시 입력해도 검증 필요)
+  function handlePhoneChange(newPhone: string) {
+    if (value.phoneVerified && newPhone !== value.phone) {
+      setOtpPhase('idle')
+      setOtpInput('')
+      setOtpMessage(null)
+      onChange({ ...value, phone: newPhone, phoneVerified: false })
+    } else {
+      onChange({ ...value, phone: newPhone })
+    }
+  }
+
+  async function handleSendOtp() {
+    if (!/^01[016789]-?\d{3,4}-?\d{4}$/.test(value.phone.replace(/\s/g, ''))) {
+      setOtpMessage('올바른 휴대폰 번호를 입력해주세요. (예: 010-1234-5678)')
+      setOtpPhase('error')
+      return
+    }
+    setOtpPhase('sending')
+    setOtpMessage(null)
+    try {
+      const res = await fetch('/api/sms-otp-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: value.phone }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        setOtpPhase('error')
+        setOtpMessage(data.message || '인증번호 전송에 실패했습니다.')
+        return
+      }
+      setOtpPhase('sent')
+      const devHint = data.devCode ? ` (테스트 모드: ${data.devCode})` : ''
+      setOtpMessage(`인증번호를 발송했습니다. 5분 안에 입력해주세요.${devHint}`)
+      // 재전송 쿨다운 60초
+      setResendSec(60)
+      const timer = setInterval(() => {
+        setResendSec(s => {
+          if (s <= 1) { clearInterval(timer); return 0 }
+          return s - 1
+        })
+      }, 1000)
+    } catch (err) {
+      setOtpPhase('error')
+      setOtpMessage(err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.')
+    }
+  }
+
+  async function handleVerifyOtp() {
+    if (!/^\d{6}$/.test(otpInput)) {
+      setOtpMessage('6자리 숫자를 입력해주세요.')
+      return
+    }
+    setOtpPhase('verifying')
+    setOtpMessage(null)
+    try {
+      const res = await fetch('/api/sms-otp-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: value.phone, code: otpInput }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        setOtpPhase('sent')  // 다시 시도 가능하도록 sent 상태 유지
+        setOtpMessage(data.message || '인증번호가 일치하지 않습니다.')
+        return
+      }
+      setOtpPhase('verified')
+      setOtpMessage('✓ 본인 인증이 완료되었습니다.')
+      onChange({ ...value, phoneVerified: true })
+    } catch (err) {
+      setOtpPhase('sent')
+      setOtpMessage(err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.')
+    }
+  }
+
+  const isVerified = otpPhase === 'verified' && value.phoneVerified
+  const inputLocked = isVerified
 
   return (
     <div style={{
@@ -123,22 +210,100 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
             }}
           />
         </div>
+
+        {/* 휴대폰 + 인증번호 */}
         <div>
           <label style={{ display: 'block', fontSize: '.74rem', color: 'var(--t3)', marginBottom: '4px' }}>
             연락처 <span style={{ color: 'var(--fail)' }}>*</span>
+            {isVerified && (
+              <span style={{ marginLeft: '8px', fontSize: '.68rem', fontWeight: 700, color: 'var(--ok)', padding: '2px 8px', background: 'rgba(52,211,153,.14)', border: '1px solid rgba(52,211,153,.35)', borderRadius: '999px' }}>
+                ✓ 인증 완료
+              </span>
+            )}
           </label>
-          <input
-            type="tel"
-            value={value.phone}
-            onChange={e => onChange({ ...value, phone: e.target.value })}
-            placeholder="010-0000-0000"
-            style={{
-              width: '100%', padding: '10px 12px',
-              background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)',
-              borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
-              outline: 'none',
-            }}
-          />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="tel"
+              value={value.phone}
+              onChange={e => handlePhoneChange(e.target.value)}
+              placeholder="010-0000-0000"
+              disabled={inputLocked}
+              style={{
+                flex: 1, padding: '10px 12px',
+                background: inputLocked ? 'rgba(52,211,153,.06)' : 'rgba(6,7,15,.4)',
+                border: `1px solid ${inputLocked ? 'rgba(52,211,153,.35)' : 'var(--line)'}`,
+                borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
+                outline: 'none',
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleSendOtp}
+              disabled={otpPhase === 'sending' || isVerified || resendSec > 0 || !value.phone}
+              style={{
+                padding: '10px 14px', fontSize: '.78rem', fontWeight: 700,
+                background: isVerified ? 'rgba(52,211,153,.14)' : 'rgba(124,111,205,.16)',
+                border: `1px solid ${isVerified ? 'rgba(52,211,153,.35)' : 'rgba(124,111,205,.35)'}`,
+                color: isVerified ? 'var(--ok)' : 'var(--purple-2)',
+                borderRadius: 'var(--r2)', cursor: isVerified ? 'default' : 'pointer',
+                flexShrink: 0, minWidth: '110px',
+                opacity: (otpPhase === 'sending' || resendSec > 0) ? 0.6 : 1,
+              }}
+            >
+              {isVerified ? '인증 완료'
+                : otpPhase === 'sending' ? '전송 중…'
+                : resendSec > 0 ? `${resendSec}초 후 재전송`
+                : (otpPhase === 'sent' || otpPhase === 'error') ? '다시 전송'
+                : '인증번호 받기'}
+            </button>
+          </div>
+
+          {/* 인증번호 입력 영역 — 전송 이후에만 표시 */}
+          {(otpPhase === 'sent' || otpPhase === 'verifying' || otpPhase === 'error') && !isVerified && (
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={otpInput}
+                onChange={e => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                placeholder="6자리 인증번호"
+                style={{
+                  flex: 1, padding: '10px 12px',
+                  background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)',
+                  borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
+                  letterSpacing: '4px', fontFamily: 'monospace',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleVerifyOtp}
+                disabled={otpPhase === 'verifying' || otpInput.length !== 6}
+                style={{
+                  padding: '10px 18px', fontSize: '.82rem', fontWeight: 700,
+                  background: 'var(--purple)',
+                  border: '1px solid var(--purple-sat)',
+                  color: 'white', borderRadius: 'var(--r2)',
+                  cursor: otpInput.length === 6 ? 'pointer' : 'not-allowed',
+                  flexShrink: 0, opacity: otpPhase === 'verifying' ? 0.6 : 1,
+                }}
+              >
+                {otpPhase === 'verifying' ? '확인 중…' : '확인'}
+              </button>
+            </div>
+          )}
+
+          {otpMessage && (
+            <div style={{
+              marginTop: '6px', fontSize: '.74rem',
+              color: otpPhase === 'verified' ? 'var(--ok)'
+                : otpPhase === 'error' ? 'var(--fail)'
+                : 'var(--t3)',
+            }}>
+              {otpMessage}
+            </div>
+          )}
         </div>
       </div>
 

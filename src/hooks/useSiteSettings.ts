@@ -1,5 +1,19 @@
 import { useCallback } from 'react'
 
+export interface PaymentSettings {
+  enabled: boolean                 // 결제 기능 ON/OFF
+  mode: 'test' | 'real'            // 토스페이먼츠 TEST/REAL 모드
+  methods: {
+    card: boolean                  // 신용카드
+    virtualAccount: boolean        // 가상계좌
+    transfer: boolean              // 계좌이체
+    phone: boolean                 // 휴대폰
+    cashReceipt: boolean           // 무통장/현금영수증
+  }
+  clientKey: string                // 토스 Client Key (프론트 노출 전제)
+  secretKey: string                // 토스 Secret Key (localStorage 저장, UI에서 마스킹 표시)
+}
+
 export interface SiteSettings {
   copyright: string
   businessInfo: string
@@ -8,6 +22,7 @@ export interface SiteSettings {
   seoDescription: string
   seoKeywords: string
   ogImage: string
+  payment: PaymentSettings
   policies: {
     privacy: string
     terms: string
@@ -26,6 +41,19 @@ const DEFAULTS: SiteSettings = {
   seoDescription: '전문 강사의 HD 영상 강의로 입문부터 공인 자격증까지. 체계적인 커리큘럼으로 진짜 타로 실력을 키우세요.',
   seoKeywords: '타로, 타로 강의, 타로 배우기, 타로 자격증, 타로 리딩, 온라인 강의',
   ogImage: '',
+  payment: {
+    enabled: true,
+    mode: 'test',
+    methods: {
+      card: true,
+      virtualAccount: true,
+      transfer: true,
+      phone: true,
+      cashReceipt: true,
+    },
+    clientKey: '',
+    secretKey: '',
+  },
   policies: {
     refund: `# 환불 정책
 
@@ -279,7 +307,16 @@ function getCached(): SiteSettings {
     const v = localStorage.getItem(STORAGE_KEY)
     if (!v) return DEFAULTS
     const parsed = JSON.parse(v)
-    return { ...DEFAULTS, ...parsed, policies: { ...DEFAULTS.policies, ...(parsed.policies || {}) } }
+    return {
+      ...DEFAULTS,
+      ...parsed,
+      policies: { ...DEFAULTS.policies, ...(parsed.policies || {}) },
+      payment: {
+        ...DEFAULTS.payment,
+        ...(parsed.payment || {}),
+        methods: { ...DEFAULTS.payment.methods, ...((parsed.payment && parsed.payment.methods) || {}) },
+      },
+    }
   } catch { return DEFAULTS }
 }
 
