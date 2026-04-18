@@ -20,22 +20,25 @@ export default function Footer() {
           <div className="footer-col">
             <h4>강의</h4>
             <Link to="/courses">전체 강의</Link>
-            <Link to="/courses">자격증 과정</Link>
+            <Link to="/courses?filter=자격증">자격증 과정</Link>
             <Link to="/instructors">강사 소개</Link>
           </div>
           <div className="footer-col">
             <h4>플랫폼</h4>
-            <Link to="/classroom">내 강의실</Link>
-            <Link to="/instructors">강사 소개</Link>
-            {!user && (
+            {user ? (
+              <>
+                <Link to="/classroom">내 강의실</Link>
+                <Link to="/my">마이페이지</Link>
+              </>
+            ) : (
               <button
-                style={{ textAlign: 'left', fontSize: '.83rem', color: 'var(--t2)', display: 'block', marginBottom: '9px' }}
+                style={{ textAlign: 'left', fontSize: '.83rem', color: 'var(--t2)', display: 'block', marginBottom: '9px', cursor: 'pointer' }}
                 onClick={() => openAuth('signup')}
               >
                 무료 시작
               </button>
             )}
-            <Link to="/#contact">문의</Link>
+            <Link to="/#contact">1:1 문의</Link>
           </div>
           <div className="footer-col">
             <h4>정책</h4>

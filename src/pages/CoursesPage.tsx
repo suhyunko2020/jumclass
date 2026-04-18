@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import CourseCard from '../components/course/CourseCard'
 
@@ -6,7 +7,10 @@ const FILTERS = ['전체', '입문', '중급', '고급', '자격증']
 
 export default function CoursesPage() {
   const { getPublicCourses, getEnrolledCount } = useCourses()
-  const [filter, setFilter] = useState('전체')
+  const [searchParams] = useSearchParams()
+  // URL 쿼리 ?filter=자격증 등으로 진입 시 해당 필터로 시작
+  const initialFilter = searchParams.get('filter') || '전체'
+  const [filter, setFilter] = useState(FILTERS.includes(initialFilter) ? initialFilter : '전체')
 
   const all = getPublicCourses()
   const filtered = filter === '전체' ? all : all.filter(c => c.level === filter)

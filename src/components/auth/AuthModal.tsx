@@ -152,16 +152,19 @@ function AuthModal({ tab, setTab, onClose }: Props) {
           {err && <div className="err-msg">{err}</div>}
 
           {tab === 'login' ? (
-            <form onSubmit={handleLogin}>
+            // autoComplete: 브라우저 비밀번호 매니저가 이메일을 username으로 정확히 인식하도록 명시
+            <form onSubmit={handleLogin} autoComplete="on">
               <div className="form-group">
-                <label className="form-label">이메일</label>
-                <input className="form-input" type="email" placeholder="이메일 주소" required
+                <label className="form-label" htmlFor="login-email">이메일</label>
+                <input className="form-input" id="login-email" name="email" type="email"
+                  placeholder="이메일 주소" required autoComplete="username"
                   value={loginForm.email}
                   onChange={e => setLoginForm(p => ({ ...p, email: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">비밀번호</label>
-                <input className="form-input" type="password" placeholder="비밀번호" required
+                <label className="form-label" htmlFor="login-password">비밀번호</label>
+                <input className="form-input" id="login-password" name="password" type="password"
+                  placeholder="비밀번호" required autoComplete="current-password"
                   value={loginForm.password}
                   onChange={e => setLoginForm(p => ({ ...p, password: e.target.value }))} />
               </div>
@@ -170,22 +173,26 @@ function AuthModal({ tab, setTab, onClose }: Props) {
               </button>
             </form>
           ) : (
-            <form onSubmit={handleSignup}>
+            <form onSubmit={handleSignup} autoComplete="on">
               <div className="form-group">
-                <label className="form-label">이름</label>
-                <input className="form-input" type="text" placeholder="이름" required
+                <label className="form-label" htmlFor="signup-name">이름</label>
+                {/* 이름은 username이 아님을 명시 — 비밀번호 매니저가 이메일을 우선 잡도록 */}
+                <input className="form-input" id="signup-name" name="name" type="text"
+                  placeholder="이름" required autoComplete="name"
                   value={signupForm.name}
                   onChange={e => setSignupForm(p => ({ ...p, name: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">이메일</label>
-                <input className="form-input" type="email" placeholder="이메일 주소" required
+                <label className="form-label" htmlFor="signup-email">이메일</label>
+                <input className="form-input" id="signup-email" name="email" type="email"
+                  placeholder="이메일 주소" required autoComplete="username"
                   value={signupForm.email}
                   onChange={e => setSignupForm(p => ({ ...p, email: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">비밀번호</label>
-                <input className="form-input" type="password" placeholder="비밀번호 (6자 이상)" required minLength={6}
+                <label className="form-label" htmlFor="signup-password">비밀번호</label>
+                <input className="form-input" id="signup-password" name="new-password" type="password"
+                  placeholder="비밀번호 (6자 이상)" required minLength={6} autoComplete="new-password"
                   value={signupForm.password}
                   onChange={e => setSignupForm(p => ({ ...p, password: e.target.value }))} />
               </div>

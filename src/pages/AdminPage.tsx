@@ -1541,7 +1541,8 @@ export default function AdminPage() {
                     <label className="form-label">이모지</label>
                     <input className="form-input" type="text" placeholder="📚"
                       value={courseEditModal.emoji}
-                      onChange={e => setCourseEditModal(p => p ? { ...p, emoji: e.target.value } : null)} />
+                      onChange={e => setCourseEditModal(p => p ? { ...p, emoji: e.target.value } : null)}
+                      style={{ fontSize: '1.4rem', textAlign: 'center', padding: '6px 4px' }} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">강의명 *</label>
@@ -1550,6 +1551,40 @@ export default function AdminPage() {
                       onChange={e => setCourseEditModal(p => p ? { ...p, title: e.target.value } : null)} />
                   </div>
                 </div>
+
+                {/* 추천 이모지 — 레벨에 따라 자동 전환 (자격증: 수료/인증 / 일반: 콘텐츠·타로 분위기) */}
+                {(() => {
+                  const certEmojis = ['📜', '🏆', '🎓', '🎖️', '🏅', '💎', '📚', '📘', '🔖', '☯️', '🌹', '✅']
+                  const normalEmojis = ['🎬', '📺', '💻', '📖', '🎨', '🎵', '🃏', '🔮', '✨', '🌙', '⭐', '🎴']
+                  const isCert = courseEditModal.level === '자격증'
+                  const list = isCert ? certEmojis : normalEmojis
+                  return (
+                    <div className="form-group" style={{ marginTop: '-6px' }}>
+                      <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginBottom: '8px' }}>
+                        추천 이모지 ({isCert ? '자격증 과정' : '일반 강의'}) — 클릭해서 적용
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {list.map(emo => {
+                          const selected = courseEditModal.emoji === emo
+                          return (
+                            <button key={emo} type="button"
+                              onClick={() => setCourseEditModal(p => p ? { ...p, emoji: emo } : null)}
+                              style={{
+                                width: '38px', height: '38px',
+                                background: selected ? 'rgba(124,111,205,.18)' : 'rgba(255,255,255,.04)',
+                                border: `1px solid ${selected ? 'rgba(124,111,205,.5)' : 'var(--line)'}`,
+                                borderRadius: 'var(--r2)',
+                                fontSize: '1.2rem', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all .15s',
+                              }}
+                            >{emo}</button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div className="form-group">
                   <label className="form-label">부제목</label>
                   <input className="form-input" type="text" placeholder="한 줄 설명"
