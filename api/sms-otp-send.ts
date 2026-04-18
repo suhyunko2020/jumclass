@@ -117,7 +117,8 @@ export default async function handler(req: Request): Promise<Response> {
     })
   }
 
-  // mobile_auth 템플릿 본문 (#{shop_name}, #{auth_number} 치환) — 한 글자도 달라지면 M120
+  // mobile_auth 템플릿 본문 (#{shop_name}, #{auth_number} 치환)
+  // Bizm은 msg 전체와 템플릿을 렌더한 결과를 바이트 비교함 — 공백/줄바꿈/구두점 하나도 달라지면 K105/M120
   const shopName = '점클래스'
   const msgBody = [
     `[${shopName}]`,
@@ -140,6 +141,11 @@ export default async function handler(req: Request): Promise<Response> {
     msgSms: `[${shopName}] 인증번호 ${code} (5분 유효)`,
     smsLmsTit: `[${shopName}] 인증번호`,
     smsSender: '',
+    // 일부 Bizm 계정은 치환 변수를 별도 필드로도 기대함 — 안전하게 같이 전달
+    var1: shopName,
+    var2: code,
+    shop_name: shopName,
+    auth_number: code,
   }
 
   try {
@@ -158,7 +164,12 @@ export default async function handler(req: Request): Promise<Response> {
         ok: false,
         code: 'BIZM_SEND_FAILED',
         message: `알림톡 발송 실패${first?.message ? ': ' + first.message : ''}`,
+        bizmCode,
+        bizmMessage: first?.message ?? null,
         rawData: first,
+        // 진단용 — 실제로 보낸 msg 본문 (템플릿과 차이 비교 위해 에코)
+        sentMsgPreview: msgBody,
+        sentMsgCharCount: msgBody.length,
         ...(DEV_OTP_ECHO ? { devCode: code } : {}),
       })
     }
