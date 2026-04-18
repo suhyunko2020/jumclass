@@ -89,10 +89,20 @@ export default async function handler(req: Request): Promise<Response> {
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!SUPABASE_URL || !SERVICE_KEY) {
+    // 어느 변수가 비어있는지 구체적으로 알려줌 (값은 노출하지 않음)
+    const diag = {
+      SUPABASE_URL: SUPABASE_URL ? `set (len=${SUPABASE_URL.length})` : 'MISSING',
+      SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY ? `set (len=${SERVICE_KEY.length})` : 'MISSING',
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'set' : 'MISSING',
+      availableEnvKeys: Object.keys(process.env).filter(k =>
+        k.includes('SUPABASE') || k.includes('SOLAPI')
+      ),
+    }
     return json(500, {
       ok: false,
       code: 'SUPABASE_MISSING_ENV',
       message: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 환경변수를 설정해주세요.',
+      diagnostic: diag,
     })
   }
 
