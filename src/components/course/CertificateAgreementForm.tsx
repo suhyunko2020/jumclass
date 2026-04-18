@@ -122,10 +122,18 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: value.phone }),
       })
-      const data = await res.json().catch(() => ({}))
+      // 서버 응답이 JSON이 아닐 수도 있음 (Vercel 함수 오류 페이지 등) — 원문까지 로깅
+      const raw = await res.text()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any = {}
+      try { data = raw ? JSON.parse(raw) : {} } catch { data = {} }
       if (!res.ok || !data.ok) {
+        console.warn('[otp-send-fail]', { status: res.status, data, raw: raw.slice(0, 200) })
         setOtpPhase('error')
-        setOtpMessage(data.message || '인증번호 전송에 실패했습니다.')
+        const base = data.message || '인증번호 전송에 실패했습니다.'
+        const codeHint = data.code ? ` [${data.code}]` : ''
+        const statusHint = res.status !== 200 ? ` (HTTP ${res.status})` : ''
+        setOtpMessage(base + codeHint + statusHint)
         return
       }
       setOtpPhase('sent')

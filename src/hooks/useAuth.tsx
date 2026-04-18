@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // user가 바뀔 때마다 admin_users 테이블에서 권한 확인
   // RLS 정책: 자기 자신의 row만 SELECT 가능 → 관리자면 1 row, 아니면 0 row
+  // 테이블이 아직 없거나 조회 실패해도 무한 loading 방지
   useEffect(() => {
     if (!user) {
       setIsAdminLoggedIn(false)
@@ -77,12 +78,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setAdminCheckLoading(true)
     let cancelled = false
-    supabase.from('admin_users').select('user_id').eq('user_id', user.uid).maybeSingle()
-      .then(({ data }) => {
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('admin_users').select('user_id').eq('user_id', user.uid).maybeSingle()
         if (cancelled) return
-        setIsAdminLoggedIn(!!data)
-        setAdminCheckLoading(false)
-      })
+        if (error) {
+          console.warn('admin_users 조회 실패 (테이블 미생성 가능):', error.message)
+          setIsAdminLoggedIn(false)
+        } else {
+          setIsAdminLoggedIn(!!data)
+        }
+      } catch (err) {
+        if (cancelled) return
+        console.warn('admin_users 조회 예외:', err)
+        setIsAdminLoggedIn(false)
+      } finally {
+        if (!cancelled) setAdminCheckLoading(false)
+      }
+    })()
     return () => { cancelled = true }
   }, [user])
 
@@ -148,8 +162,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (!error) return null
-    if (error.message.includes('Email not confirmed'))
-      return '이메일 인증이 필요합니다. 받은편지함을 확인해주세요.'
+    // 이메일 미인증 (유효기간 만료 포함) — 인증 메일 자동 재발송
+    if (error.message.includes('Email not confirmed')) {
+      const { error: resendErr } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: window.location.origin },
+      })
+      if (resendErr) {
+        return '이메일 인증이 필요합니다. 인증 메일 재발송에 실패했어요: ' + resendErr.message
+      }
+      return '이메일 인증이 필요합니다. 새로운 인증 메일을 방금 다시 보냈어요. 받은편지함을 확인해주세요.'
+    }
     if (error.message.includes('Invalid login credentials'))
       return '이메일 또는 비밀번호가 올바르지 않습니다.'
     return error.message
