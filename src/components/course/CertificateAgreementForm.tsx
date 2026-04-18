@@ -348,12 +348,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
         <div>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '.74rem', color: 'var(--t3)', marginBottom: '4px' }}>
             <span>연락처 <span style={{ color: 'var(--fail)' }}>*</span></span>
-            {isVerified && (
-              <span style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--ok)', padding: '2px 8px', background: 'rgba(52,211,153,.14)', border: '1px solid rgba(52,211,153,.35)', borderRadius: '999px' }}>
-                ✓ 인증 완료
-              </span>
-            )}
-            {/* 만료 타이머 — 라벨 우측에 인라인으로 표시 (깔끔한 위치) */}
+            {/* 만료 타이머 — 라벨 우측에 인라인으로 표시 (깔끔한 위치). 인증 완료 뱃지는 버튼에 "인증 완료"로 이미 표시되므로 중복 제거 */}
             {expiresAtMs !== null && !hasExpired && !isVerified && (
               <span style={{
                 marginLeft: 'auto', fontSize: '.72rem', fontFamily: 'monospace', fontWeight: 700,

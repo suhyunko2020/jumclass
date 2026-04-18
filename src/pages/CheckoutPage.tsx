@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
@@ -12,6 +12,7 @@ import { generateOrderId, saveIntent, requestTossPayment, type TossPaymentIntent
 
 export default function CheckoutPage() {
   const [params] = useSearchParams()
+  const navigate = useNavigate()
   const { getCourse } = useCourses()
   const { getInstructor } = useInstructors()
   const { user, loading: authLoading, isEnrolled } = useAuth()
@@ -19,15 +20,19 @@ export default function CheckoutPage() {
   const { get: getSiteSettings } = useSiteSettings()
   const toast = useToast()
 
-  // 결제 페이지 최초 진입 시 비로그인이면 로그인 모달 자동 오픈 — 페이지는 유지해서 로그인 후 자연스럽게 이어지도록
-  const [autoOpened, setAutoOpened] = useState(false)
+  // 비회원이 /checkout에 접근 시 — 이전 페이지로 강제 복귀 (URL 공유 차단).
+  // 이전 페이지가 없으면(새 탭/외부 링크) 홈으로. 어느 경우든 로그인 모달 자동 오픈.
   useEffect(() => {
     if (authLoading) return
-    if (!user && !autoOpened) {
+    if (!user) {
+      if (window.history.length > 1) {
+        navigate(-1)
+      } else {
+        navigate('/', { replace: true })
+      }
       openAuth('login')
-      setAutoOpened(true)
     }
-  }, [user, authLoading, openAuth, autoOpened])
+  }, [user, authLoading, navigate, openAuth])
 
   const courseId = params.get('course') || ''
   const tierParam = params.get('tier')
@@ -76,10 +81,11 @@ export default function CheckoutPage() {
     document.title = isServiceCheckout ? '서비스 신청 — JUMCLASS' : '수강신청 — JUMCLASS'
   }, [isServiceCheckout])
 
-  // 인증 복원 중엔 스피너. 비로그인 상태라도 페이지는 유지(로그인 모달 자동 오픈 + 결제 버튼 비활성)
+  // 인증 복원 중엔 스피너. 비회원은 위 useEffect가 즉시 리디렉트하므로 그 사이엔 빈 화면.
   if (authLoading) {
     return <div className="loading" style={{ paddingTop: '140px' }}><div className="spinner" /></div>
   }
+  if (!user) return null
 
   if (!course && !isServiceCheckout) {
     return (
