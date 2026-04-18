@@ -45,10 +45,30 @@ export default function HomePage() {
 
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
 
+  // 문의 보안 코드 — 스팸 봇 차단용. 페이지 진입 시 랜덤 4자리 생성, 제출 성공/취소 시 재발급
+  const [captchaCode, setCaptchaCode] = useState(() => genCaptcha())
+  const [captchaInput, setCaptchaInput] = useState('')
+
+  function genCaptcha() {
+    // 혼동 방지: 0/O, 1/l/I 제외
+    const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+    let out = ''
+    for (let i = 0; i < 4; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)]
+    return out
+  }
+
   function handleContact(e: React.FormEvent) {
     e.preventDefault()
+    if (captchaInput.trim().toUpperCase() !== captchaCode) {
+      toast('보안 코드가 일치하지 않습니다. 다시 확인해주세요.', 'err')
+      setCaptchaInput('')
+      setCaptchaCode(genCaptcha())
+      return
+    }
     toast('문의가 접수됐습니다. 24시간 내로 답변드릴게요 ✦', 'ok')
     setContactForm({ name: '', email: '', message: '' })
+    setCaptchaInput('')
+    setCaptchaCode(genCaptcha())
   }
 
   return (
@@ -314,6 +334,48 @@ export default function HomePage() {
                   style={{ resize: 'vertical' }}
                   value={contactForm.message} onChange={e => setContactForm(p => ({ ...p, message: e.target.value }))} />
               </div>
+
+              {/* 보안 코드 — 스팸 봇 차단용 자체 캡차 */}
+              <div className="form-group">
+                <label className="form-label">보안 코드</label>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div style={{
+                    padding: '10px 18px',
+                    background: 'linear-gradient(135deg, rgba(124,111,205,.14), rgba(232,156,56,.08))',
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--r2)',
+                    fontFamily: 'monospace',
+                    fontSize: '1.15rem',
+                    fontWeight: 800,
+                    letterSpacing: '6px',
+                    color: 'var(--t1)',
+                    textDecoration: 'line-through wavy rgba(255,255,255,.1)',
+                    userSelect: 'none',
+                    flexShrink: 0,
+                  }}>
+                    {captchaCode}
+                  </div>
+                  <input className="form-input" type="text" placeholder="위 코드를 입력"
+                    required maxLength={4}
+                    value={captchaInput}
+                    onChange={e => setCaptchaInput(e.target.value.toUpperCase())}
+                    style={{ flex: 1, fontFamily: 'monospace', letterSpacing: '2px' }} />
+                  <button type="button"
+                    onClick={() => { setCaptchaCode(genCaptcha()); setCaptchaInput('') }}
+                    title="코드 새로고침"
+                    style={{
+                      padding: '10px 12px', background: 'transparent',
+                      border: '1px solid var(--line)', borderRadius: 'var(--r2)',
+                      color: 'var(--t2)', cursor: 'pointer', fontSize: '1rem',
+                    }}>
+                    ↻
+                  </button>
+                </div>
+                <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '6px' }}>
+                  스팸 차단을 위한 보안 코드입니다. 대소문자 구분 없이 입력해주세요.
+                </div>
+              </div>
+
               <button type="submit" className="btn btn-primary w-full">문의 보내기</button>
             </form>
           </div>

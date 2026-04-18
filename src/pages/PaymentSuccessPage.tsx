@@ -59,6 +59,11 @@ export default function PaymentSuccessPage() {
         setState({ phase: 'error', message: '결제 금액이 일치하지 않습니다.' })
         return
       }
+      // 사용자 본인 확인 — intent 생성자와 현재 로그인 유저가 동일해야 함
+      if (!user || (intent.userId && intent.userId !== user.uid)) {
+        setState({ phase: 'error', message: '다른 계정의 결제 정보입니다. 본인 계정으로 로그인 후 다시 시도해주세요.' })
+        return
+      }
 
       // Secret Key 로드 (관리자 설정)
       const secretKey = getSiteSettings().payment.secretKey

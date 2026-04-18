@@ -31,9 +31,9 @@ interface AuthContextType {
   pauseCourse: (courseId: string) => Promise<boolean>
   resumeCourse: (courseId: string) => Promise<boolean>
   enrollManual: (uid: string, courseId: string, days: number) => Promise<boolean>
-  adminLogin: (id: string, pw: string) => boolean
+  // 관리자 권한 — admin_users 테이블 조회 결과 (user가 있을 때만 true 가능)
   isAdminLoggedIn: boolean
-  adminLogout: () => void
+  adminCheckLoading: boolean   // admin_users 조회 중 여부 (초기 가드용)
   refreshUser: () => Promise<void>
 }
 
@@ -63,10 +63,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(
-    () => sessionStorage.getItem('arcana_admin') === '1'
-  )
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false)
+  const [adminCheckLoading, setAdminCheckLoading] = useState(false)
   const { getCourse, syncFromSupabase } = useCourses()
+
+  // user가 바뀔 때마다 admin_users 테이블에서 권한 확인
+  // RLS 정책: 자기 자신의 row만 SELECT 가능 → 관리자면 1 row, 아니면 0 row
+  useEffect(() => {
+    if (!user) {
+      setIsAdminLoggedIn(false)
+      setAdminCheckLoading(false)
+      return
+    }
+    setAdminCheckLoading(true)
+    let cancelled = false
+    supabase.from('admin_users').select('user_id').eq('user_id', user.uid).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        setIsAdminLoggedIn(!!data)
+        setAdminCheckLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [user])
 
   // ── 세션 초기화 & 구독 ─────────────────────────────────────
   useEffect(() => {
@@ -349,28 +367,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true
   }, [user, refreshUser])
 
-  // ── 관리자 로그인 (세션스토리지 기반 유지) ─────────────────
-  const adminLogin = useCallback((id: string, pw: string) => {
-    if (id === 'admin' && pw === 'admin123!') {
-      sessionStorage.setItem('arcana_admin', '1')
-      setIsAdminLoggedIn(true)
-      return true
-    }
-    return false
-  }, [])
-
-  const adminLogout = useCallback(() => {
-    sessionStorage.removeItem('arcana_admin')
-    setIsAdminLoggedIn(false)
-  }, [])
-
   return (
     <AuthContext.Provider value={{
       user, loading,
       login, signup, loginWithGoogle, logout,
       enroll, isEnrolled, isPaused, getEnrollment,
       completeLesson, logAttachmentDownload, pauseCourse, resumeCourse, enrollManual,
-      adminLogin, isAdminLoggedIn, adminLogout, refreshUser,
+      isAdminLoggedIn, adminCheckLoading, refreshUser,
     }}>
       {children}
     </AuthContext.Provider>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useAuthModal } from '../components/auth/AuthModal'
 import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
@@ -78,7 +79,8 @@ const CERT_TIER_DAYS_OPTIONS: { days: number; label: string }[] = [
 ]
 
 export default function AdminPage() {
-  const { isAdminLoggedIn, adminLogin, adminLogout, enrollManual } = useAuth()
+  const { user, loading: authLoading, isAdminLoggedIn, adminCheckLoading, logout, enrollManual } = useAuth()
+  const { openAuth } = useAuthModal()
   const { getAllCourses, getEnrolledCount, saveCourseOverride, saveCustomCourse, deleteCustomCourse, deleteReviewById, addReview, updateReview, saveCourseOrder } = useCourses()
   const [dragCourseId, setDragCourseId] = useState<string | null>(null)
   const { getAll: getAllInstructors, saveInstructor, deleteInstructor, saveInstructorOrder } = useInstructors()
@@ -91,9 +93,6 @@ export default function AdminPage() {
   const navigate = useNavigate()
 
   const [sec, setSec] = useState<Section>('overview')
-  const [aid, setAid] = useState('')
-  const [apw, setApw] = useState('')
-  const [loginErr, setLoginErr] = useState(false)
 
   // 모달 상태
   const [answerModal, setAnswerModal] = useState<{ inq: Inquiry; text: string } | null>(null)
@@ -202,34 +201,48 @@ export default function AdminPage() {
   }
 
   // ── 로그인 게이트 ───────────────────────────────────────────
+  // 인증 복원 중 또는 관리자 여부 확인 중 → 스피너
+  if (authLoading || (user && adminCheckLoading)) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" />
+      </div>
+    )
+  }
+
+  // 로그인 안 된 경우 — 홈으로 돌려보내며 로그인 모달 오픈
+  if (!user) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+        <div style={{ background: 'var(--bg-3)', border: '1px solid var(--line-2)', borderRadius: 'var(--r4)', padding: '44px 40px', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+          <div style={{ fontSize: '2.2rem', marginBottom: '10px' }}>🔐</div>
+          <div style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-.02em', marginBottom: '8px' }}>관리자 전용</div>
+          <div style={{ fontSize: '.85rem', color: 'var(--t3)', marginBottom: '22px', lineHeight: 1.6 }}>
+            관리자 권한을 가진 계정으로 먼저 로그인해주세요.
+          </div>
+          <button className="btn btn-primary w-full" onClick={() => openAuth('login')}>로그인</button>
+          <div style={{ marginTop: '14px' }}>
+            <Link to="/" style={{ fontSize: '.8rem', color: 'var(--t3)' }}>← 메인 사이트로</Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 로그인은 됐지만 admin_users에 없는 경우 — 접근 거부
   if (!isAdminLoggedIn) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-        <div style={{ background: 'var(--bg-3)', border: '1px solid var(--line-2)', borderRadius: 'var(--r4)', padding: '44px 40px', maxWidth: '400px', width: '100%' }}>
-          <div style={{ textAlign: 'center', marginBottom: '26px' }}>
-            <div style={{ fontSize: '2.2rem', marginBottom: '10px' }}>🔐</div>
-            <div style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-.02em', marginBottom: '4px' }}>JUMCLASS</div>
-            <div style={{ fontSize: '.82rem', color: 'var(--t3)' }}>관리자 전용 접근</div>
+        <div style={{ background: 'var(--bg-3)', border: '1px solid var(--line-2)', borderRadius: 'var(--r4)', padding: '44px 40px', maxWidth: '420px', width: '100%', textAlign: 'center' }}>
+          <div style={{ fontSize: '2.2rem', marginBottom: '10px' }}>🚫</div>
+          <div style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '8px' }}>관리자 권한이 없습니다</div>
+          <div style={{ fontSize: '.85rem', color: 'var(--t3)', marginBottom: '22px', lineHeight: 1.7 }}>
+            현재 계정 <strong style={{ color: 'var(--t2)' }}>{user.email}</strong>에는 관리자 권한이 없습니다.<br />
+            권한이 필요한 경우 시스템 관리자에게 문의해주세요.
           </div>
-          <form onSubmit={e => {
-            e.preventDefault()
-            if (!adminLogin(aid, apw)) setLoginErr(true)
-          }}>
-            <div className="form-group">
-              <label className="form-label">관리자 ID</label>
-              <input className="form-input" type="text" placeholder="admin" required
-                value={aid} onChange={e => { setAid(e.target.value); setLoginErr(false) }} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">비밀번호</label>
-              <input className="form-input" type="password" placeholder="••••••••" required
-                value={apw} onChange={e => { setApw(e.target.value); setLoginErr(false) }} />
-            </div>
-            {loginErr && <div className="err-msg">아이디 또는 비밀번호가 올바르지 않습니다.</div>}
-            <button type="submit" className="btn btn-primary w-full">대시보드 접속</button>
-          </form>
-          <div style={{ textAlign: 'center', marginTop: '14px' }}>
-            <Link to="/" style={{ fontSize: '.8rem', color: 'var(--t3)' }}>← 메인 사이트로</Link>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={async () => { await logout(); navigate('/') }}>로그아웃</button>
+            <Link to="/" className="btn btn-primary" style={{ flex: 1 }}>메인으로</Link>
           </div>
         </div>
       </div>
@@ -757,8 +770,8 @@ export default function AdminPage() {
             ))}
           </nav>
           <div style={{ padding: '16px', borderTop: '1px solid var(--line)' }}>
-            <div style={{ fontSize: '.76rem', color: 'var(--t3)', marginBottom: '8px' }}>관리자: admin</div>
-            <button className="btn btn-ghost btn-sm w-full" onClick={() => { adminLogout(); navigate('/') }}>로그아웃</button>
+            <div style={{ fontSize: '.76rem', color: 'var(--t3)', marginBottom: '8px' }}>관리자: {user.email}</div>
+            <button className="btn btn-ghost btn-sm w-full" onClick={async () => { await logout(); navigate('/') }}>로그아웃</button>
           </div>
         </div>
 

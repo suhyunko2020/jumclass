@@ -14,6 +14,7 @@ export interface TossPaymentIntent {
   orderId: string
   amount: number
   orderName: string
+  userId: string             // 결제 의도를 만든 사용자 UID — 복원 시 현재 유저와 대조
   // 복원용 메타 (PaymentSuccessPage에서 enroll/서명저장/알림톡 처리에 사용)
   checkoutType: 'course' | 'service'
   courseId?: string
@@ -50,10 +51,13 @@ export function clearIntent(orderId: string) {
   sessionStorage.removeItem(INTENT_PREFIX + orderId)
 }
 
-// orderId 생성 — Toss 권장 형식: 영문/숫자/-/_ 조합, 6~64자
+// orderId 생성 — 강한 난수 사용 (예측 불가 보장)
+// Toss 권장 형식: 영문/숫자/-/_ 조합, 6~64자
 export function generateOrderId(): string {
-  const rand = Math.random().toString(36).slice(2, 10)
-  return `jum_${Date.now()}_${rand}`
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+  return `jum_${Date.now()}_${hex}`
 }
 
 export interface RequestPaymentArgs {

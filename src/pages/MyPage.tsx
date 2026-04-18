@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useAuthModal } from '../components/auth/AuthModal'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useToast } from '../components/ui/Toast'
@@ -31,7 +30,6 @@ export default function MyPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user, logout, loading: authLoading } = useAuth()
-  const { openAuth } = useAuthModal()
   const { getCourse } = useCourses()
   const { getInstructor } = useInstructors()
   const toast = useToast()
@@ -57,6 +55,12 @@ export default function MyPage() {
   useEffect(() => {
     if (user) loadInquiries()
   }, [user])
+
+  // 로그아웃 시 홈으로 리디렉트
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) navigate('/', { replace: true })
+  }, [user, authLoading, navigate])
 
   // 자격증 enrollment별(강사별) 진도 일괄 조회 — 수강 완료 판단용
   useEffect(() => {
@@ -89,16 +93,8 @@ export default function MyPage() {
     )
   }
 
-  if (!user) {
-    return (
-      <div className="auth-gate" style={{ paddingTop: '140px' }}>
-        <div className="g-ico">👤</div>
-        <h2>로그인이 필요합니다</h2>
-        <p>마이페이지는 로그인 후 이용 가능합니다.</p>
-        <button className="btn btn-primary mt-16" onClick={() => openAuth('login')}>로그인</button>
-      </div>
-    )
-  }
+  // 리디렉트 대기 — useEffect가 navigate('/') 실행하는 짧은 순간 빈 화면
+  if (!user) return null
 
   const enrollments = [...(user.enrollments || [])].sort(
     (a, b) => new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()

@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import SignaturePad from './SignaturePad'
 import { CERTIFICATE_AGREEMENT } from '../../data/certificateAgreement'
 
 const OTP_TTL_MS = 5 * 60 * 1000  // 5분
+const RESEND_COOLDOWN_SEC = 60
+const MSG_AUTO_HIDE_MS = 3500     // 일반 메시지 자동 숨김 (만료 경고는 예외)
 
 function formatMmSs(totalSec: number): string {
   const m = Math.floor(totalSec / 60)
@@ -12,9 +14,9 @@ function formatMmSs(totalSec: number): string {
 
 export interface AgreementFormValue {
   name: string
-  birthdate: string        // YYYY-MM-DD
+  birthdate: string        // YYYY-MM-DD (내부 저장 포맷 유지)
   phone: string
-  phoneVerified: boolean   // 인증번호 확인 완료 여부
+  phoneVerified: boolean
   signatureDataUrl: string | null
 }
 
@@ -30,23 +32,68 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
   const [otpPhase, setOtpPhase] = useState<OtpPhase>(value.phoneVerified ? 'verified' : 'idle')
   const [otpInput, setOtpInput] = useState('')
   const [otpMessage, setOtpMessage] = useState<string | null>(null)
-  const [resendSec, setResendSec] = useState(0)
-  // 5분 카운트다운 — OTP 만료 시점(Unix ms)과 현재 시각 틱
+  const [msgVisible, setMsgVisible] = useState(false)
+
+  // 5분 만료 타이머
   const [expiresAtMs, setExpiresAtMs] = useState<number | null>(null)
+  // 60초 재전송 쿨다운
+  const [resendSec, setResendSec] = useState(0)
+  // 현재 시간 틱 — 두 타이머 공용
   const [nowMs, setNowMs] = useState(() => Date.now())
+
   const a = CERTIFICATE_AGREEMENT
 
-  // 만료 시점이 잡힌 동안 1초마다 현재 시각 갱신 (리렌더로 카운트다운 표시)
+  // 생년월일 분리 입력용 임시 상태 — value.birthdate에서 역산
+  const [birthY, setBirthY] = useState('')
+  const [birthM, setBirthM] = useState('')
+  const [birthD, setBirthD] = useState('')
+  const monthRef = useRef<HTMLInputElement>(null)
+  const dayRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
-    if (expiresAtMs === null) return
+    const m = value.birthdate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (m) {
+      setBirthY(m[1]); setBirthM(m[2]); setBirthD(m[3])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function commitBirthdate(y: string, m: string, d: string) {
+    setBirthY(y); setBirthM(m); setBirthD(d)
+    // 모두 유효한 경우에만 저장 포맷 업데이트 (부분 입력 중에도 호출 가능)
+    if (/^\d{4}$/.test(y) && /^\d{2}$/.test(m) && /^\d{2}$/.test(d)) {
+      onChange({ ...value, birthdate: `${y}-${m}-${d}` })
+    } else if (!y && !m && !d) {
+      onChange({ ...value, birthdate: '' })
+    }
+  }
+
+  // 공통 시계 — 만료/쿨다운 중일 때만 1초 간격 틱
+  useEffect(() => {
+    const active = expiresAtMs !== null || resendSec > 0
+    if (!active) return
     const t = setInterval(() => setNowMs(Date.now()), 1000)
     return () => clearInterval(t)
-  }, [expiresAtMs])
+  }, [expiresAtMs, resendSec])
+
+  // 쿨다운 감소 — resendSec은 1초마다 -1, setTimeout 체인으로 안정적 관리
+  useEffect(() => {
+    if (resendSec <= 0) return
+    const t = setTimeout(() => setResendSec(s => s - 1), 1000)
+    return () => clearTimeout(t)
+  }, [resendSec])
+
+  // 메시지 자동 숨김 — 만료 경고(phase=sent & hasExpired) 제외하고 N초 후 opacity 0
+  useEffect(() => {
+    if (!otpMessage) { setMsgVisible(false); return }
+    setMsgVisible(true)
+    const t = setTimeout(() => setMsgVisible(false), MSG_AUTO_HIDE_MS)
+    return () => clearTimeout(t)
+  }, [otpMessage])
 
   const secondsLeft = expiresAtMs === null ? 0 : Math.max(0, Math.ceil((expiresAtMs - nowMs) / 1000))
   const hasExpired = expiresAtMs !== null && secondsLeft === 0 && otpPhase !== 'verified'
 
-  // 전화번호 입력이 바뀌면 이전 인증 상태 리셋 (동일 번호 다시 입력해도 검증 필요)
   function handlePhoneChange(newPhone: string) {
     if (value.phoneVerified && newPhone !== value.phone) {
       setOtpPhase('idle')
@@ -65,7 +112,6 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       setOtpPhase('error')
       return
     }
-    // 재전송 시 이전 입력/상태 초기화
     setOtpInput('')
     setExpiresAtMs(null)
     setOtpPhase('sending')
@@ -87,14 +133,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       setNowMs(Date.now())
       const devHint = data.devCode ? ` (테스트 모드: ${data.devCode})` : ''
       setOtpMessage(`인증번호를 발송했습니다.${devHint}`)
-      // 재전송 쿨다운 60초
-      setResendSec(60)
-      const timer = setInterval(() => {
-        setResendSec(s => {
-          if (s <= 1) { clearInterval(timer); return 0 }
-          return s - 1
-        })
-      }, 1000)
+      setResendSec(RESEND_COOLDOWN_SEC)
     } catch (err) {
       setOtpPhase('error')
       setOtpMessage(err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.')
@@ -116,11 +155,10 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.ok) {
-        setOtpPhase('sent')  // 다시 시도 가능하도록 sent 상태 유지
+        setOtpPhase('sent')
         setOtpMessage(data.message || '인증번호가 일치하지 않습니다.')
-        // 서버에서 EXPIRED 반환 시 클라이언트 타이머도 만료 상태로 맞춤
         if (data.code === 'EXPIRED') {
-          setExpiresAtMs(Date.now() - 1)
+          setExpiresAtMs(Date.now() - 1)  // 클라이언트 타이머도 즉시 만료 상태로
         }
         return
       }
@@ -225,31 +263,95 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
             }}
           />
         </div>
+
+        {/* 생년월일 — YYYY / MM / DD 3분할 (연도 4자리 제한 + 자동 포커스 이동) */}
         <div>
           <label style={{ display: 'block', fontSize: '.74rem', color: 'var(--t3)', marginBottom: '4px' }}>
             생년월일 <span style={{ color: 'var(--fail)' }}>*</span>
           </label>
-          <input
-            type="date"
-            value={value.birthdate}
-            onChange={e => onChange({ ...value, birthdate: e.target.value })}
-            style={{
-              width: '100%', padding: '10px 12px',
-              background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)',
-              borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
-              outline: 'none',
-              colorScheme: 'dark',
-            }}
-          />
+          <div style={{
+            display: 'flex', gap: '6px', alignItems: 'center',
+            maxWidth: '320px',  // 데스크톱에서 과도한 가로 확장 방지
+          }}>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              value={birthY}
+              onChange={e => {
+                const v = e.target.value.replace(/\D/g, '').slice(0, 4)
+                commitBirthdate(v, birthM, birthD)
+                if (v.length === 4) monthRef.current?.focus()
+              }}
+              placeholder="YYYY"
+              style={{
+                flex: '1.6 1 0', minWidth: 0, padding: '10px 8px', textAlign: 'center',
+                background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)',
+                borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
+                fontFamily: 'inherit', outline: 'none',
+              }}
+            />
+            <span style={{ color: 'var(--t3)', fontSize: '.8rem', flexShrink: 0 }}>/</span>
+            <input
+              ref={monthRef}
+              type="text"
+              inputMode="numeric"
+              maxLength={2}
+              value={birthM}
+              onChange={e => {
+                let v = e.target.value.replace(/\D/g, '').slice(0, 2)
+                // 부분 보정: 월 2~9 첫자리 → 02, 03.. 자동 보정
+                if (v.length === 1 && Number(v) > 1) v = '0' + v
+                commitBirthdate(birthY, v, birthD)
+                if (v.length === 2) dayRef.current?.focus()
+              }}
+              placeholder="MM"
+              style={{
+                flex: '1 1 0', minWidth: 0, padding: '10px 8px', textAlign: 'center',
+                background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)',
+                borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
+                outline: 'none',
+              }}
+            />
+            <span style={{ color: 'var(--t3)', fontSize: '.8rem', flexShrink: 0 }}>/</span>
+            <input
+              ref={dayRef}
+              type="text"
+              inputMode="numeric"
+              maxLength={2}
+              value={birthD}
+              onChange={e => {
+                let v = e.target.value.replace(/\D/g, '').slice(0, 2)
+                if (v.length === 1 && Number(v) > 3) v = '0' + v
+                commitBirthdate(birthY, birthM, v)
+              }}
+              placeholder="DD"
+              style={{
+                flex: '1 1 0', minWidth: 0, padding: '10px 8px', textAlign: 'center',
+                background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)',
+                borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
+                outline: 'none',
+              }}
+            />
+          </div>
         </div>
 
         {/* 휴대폰 + 인증번호 */}
         <div>
-          <label style={{ display: 'block', fontSize: '.74rem', color: 'var(--t3)', marginBottom: '4px' }}>
-            연락처 <span style={{ color: 'var(--fail)' }}>*</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '.74rem', color: 'var(--t3)', marginBottom: '4px' }}>
+            <span>연락처 <span style={{ color: 'var(--fail)' }}>*</span></span>
             {isVerified && (
-              <span style={{ marginLeft: '8px', fontSize: '.68rem', fontWeight: 700, color: 'var(--ok)', padding: '2px 8px', background: 'rgba(52,211,153,.14)', border: '1px solid rgba(52,211,153,.35)', borderRadius: '999px' }}>
+              <span style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--ok)', padding: '2px 8px', background: 'rgba(52,211,153,.14)', border: '1px solid rgba(52,211,153,.35)', borderRadius: '999px' }}>
                 ✓ 인증 완료
+              </span>
+            )}
+            {/* 만료 타이머 — 라벨 우측에 인라인으로 표시 (깔끔한 위치) */}
+            {expiresAtMs !== null && !hasExpired && !isVerified && (
+              <span style={{
+                marginLeft: 'auto', fontSize: '.72rem', fontFamily: 'monospace', fontWeight: 700,
+                color: secondsLeft <= 30 ? 'var(--warn, #e89c38)' : 'var(--purple-2)',
+              }}>
+                ⏱ {formatMmSs(secondsLeft)}
               </span>
             )}
           </label>
@@ -278,19 +380,25 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
                 border: `1px solid ${isVerified ? 'rgba(52,211,153,.35)' : 'rgba(124,111,205,.35)'}`,
                 color: isVerified ? 'var(--ok)' : 'var(--purple-2)',
                 borderRadius: 'var(--r2)', cursor: isVerified ? 'default' : 'pointer',
-                flexShrink: 0, minWidth: '110px',
+                flexShrink: 0, minWidth: '120px',
                 opacity: (otpPhase === 'sending' || resendSec > 0) ? 0.6 : 1,
+                transition: 'opacity .2s',
               }}
             >
               {isVerified ? '인증 완료'
                 : otpPhase === 'sending' ? '전송 중…'
-                : resendSec > 0 ? `${resendSec}초 후 재전송`
+                : resendSec > 0 ? (
+                  <span>
+                    <span style={{ fontFamily: 'monospace', fontSize: '.9rem' }}>{resendSec}</span>
+                    <span style={{ fontSize: '.72rem' }}>초 후 재전송</span>
+                  </span>
+                )
                 : (otpPhase === 'sent' || otpPhase === 'error') ? '다시 전송'
                 : '인증번호 받기'}
             </button>
           </div>
 
-          {/* 인증번호 입력 영역 — 전송 이후에만 표시 */}
+          {/* 인증번호 입력창 — 전송 후 표시 */}
           {(otpPhase === 'sent' || otpPhase === 'verifying' || otpPhase === 'error') && !isVerified && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
               <input
@@ -327,23 +435,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
             </div>
           )}
 
-          {/* 카운트다운 타이머 — 발송 직후 ~ 만료 전까지 */}
-          {expiresAtMs !== null && !hasExpired && otpPhase !== 'verified' && (
-            <div style={{
-              marginTop: '8px', fontSize: '.78rem',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
-            }}>
-              <span style={{ color: 'var(--t3)' }}>인증번호를 발송했습니다. 5분 안에 입력해주세요.</span>
-              <span style={{
-                fontFamily: 'monospace', fontWeight: 700, flexShrink: 0,
-                color: secondsLeft <= 30 ? 'var(--warn, #e89c38)' : 'var(--purple-2)',
-              }}>
-                ⏱ {formatMmSs(secondsLeft)}
-              </span>
-            </div>
-          )}
-
-          {/* 만료 경고 — 눈에 띄는 빨간 박스 */}
+          {/* 만료 경고 — 강조 박스 (fade 대상 아님) */}
           {hasExpired && (
             <div style={{
               marginTop: '10px',
@@ -361,14 +453,16 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
             </div>
           )}
 
-          {/* 메시지 — 전송 기본 안내문은 타이머에서 보여주므로 중복 제외하고, 에러/완료만 여기 표시 */}
-          {otpMessage && !hasExpired && !otpMessage.startsWith('인증번호를 발송했습니다') && (
+          {/* 일반 메시지 — 3.5초 후 서서히 사라짐 */}
+          {otpMessage && !hasExpired && (
             <div style={{
               marginTop: '6px', fontSize: '.78rem',
               color: otpPhase === 'verified' ? 'var(--ok)'
-                : otpPhase === 'error' ? 'var(--fail)'
-                : otpPhase === 'sent' ? 'var(--fail)'  // sent 상태에서 남은 메시지는 검증 에러
+                : (otpPhase === 'error' || otpPhase === 'sent') ? 'var(--fail)'
                 : 'var(--t3)',
+              opacity: msgVisible ? 1 : 0,
+              transition: 'opacity .6s ease',
+              pointerEvents: msgVisible ? 'auto' : 'none',
             }}>
               {otpMessage}
             </div>

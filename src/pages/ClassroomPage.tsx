@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useAuthModal } from '../components/auth/AuthModal'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useToast } from '../components/ui/Toast'
@@ -23,7 +22,6 @@ export default function ClassroomPage() {
   const { user, loading: authLoading, getEnrollment, pauseCourse, resumeCourse } = useAuth()
   const { getPublicCourses, getCourse, hasReviewed, addReview } = useCourses()
   const { getInstructor } = useInstructors()
-  const { openAuth } = useAuthModal()
   const navigate = useNavigate()
   const toast = useToast()
   const [tab, setTab] = useState<'active' | 'expired'>('active')
@@ -41,6 +39,12 @@ export default function ClassroomPage() {
   const [agreementModal, setAgreementModal] = useState<{ courseId: string; courseTitle: string; instructorId?: string } | null>(null)
   const [agreementRecord, setAgreementRecord] = useState<CertificateAgreementRecord | null>(null)
   const [agreementLoading, setAgreementLoading] = useState(false)
+
+  // 로그아웃(또는 비로그인) 시 홈으로 리디렉트 — 보호 페이지 공통 동작
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) navigate('/', { replace: true })
+  }, [user, authLoading, navigate])
 
   // 자격증 enrollment별(강사별) 진도 페이지를 일괄 조회
   useEffect(() => {
@@ -94,19 +98,8 @@ export default function ClassroomPage() {
     )
   }
 
-  if (!user) {
-    return (
-      <div className="auth-gate" style={{ paddingTop: '140px' }}>
-        <div className="g-ico">🔮</div>
-        <h2>강의실에 오신 것을 환영합니다</h2>
-        <p>로그인하면 수강 중인 강의와 진도를 확인할 수 있습니다.</p>
-        <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-          <button className="btn btn-primary" onClick={() => openAuth('login')}>로그인</button>
-          <button className="btn btn-ghost" onClick={() => openAuth('signup')}>무료 회원가입</button>
-        </div>
-      </div>
-    )
-  }
+  // 리디렉트 대기 — useEffect가 navigate('/') 실행하는 짧은 순간 빈 화면으로 대기
+  if (!user) return null
 
   const enrollments = user.enrollments || []
   const active = enrollments.filter(e => e.paused || new Date(e.expiryDate) > new Date())

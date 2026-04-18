@@ -25,7 +25,12 @@ function getCachedReviews(): Review[] {
   return getJSON(REVIEWS_KEY, [])
 }
 
-export interface LessonAtt { name: string; ext: string; url: string }
+// url: 레거시 public URL (하위호환), path: Supabase Storage 경로 (신규, signed URL용)
+// 다운로드 시점에 `path`가 있으면 signed URL 생성, 없으면 `url` 사용
+export interface LessonAtt { name: string; ext: string; url?: string; path?: string }
+
+const ATTACHMENT_BUCKET = 'lesson-attachments'
+const SIGNED_URL_EXPIRES = 300  // 5분 유효 signed URL
 
 function getAttachmentMeta(): Record<string, LessonAtt[]> {
   try { const v = localStorage.getItem(ATTACH_KEY); return v ? JSON.parse(v) : {} } catch { return {} }
@@ -40,7 +45,7 @@ export async function uploadLessonAttachment(lessonId: string, file: File): Prom
   const safeLessonId = lessonId.replace(/[^a-zA-Z0-9_-]/g, '_')
   const fileName = `${safeLessonId}/${Date.now()}.${ext}`
 
-  const { error } = await supabase.storage.from('lesson-attachments').upload(fileName, file, {
+  const { error } = await supabase.storage.from(ATTACHMENT_BUCKET).upload(fileName, file, {
     cacheControl: '3600',
     upsert: false,
   })
@@ -49,8 +54,8 @@ export async function uploadLessonAttachment(lessonId: string, file: File): Prom
     return null
   }
 
-  const { data: urlData } = supabase.storage.from('lesson-attachments').getPublicUrl(fileName)
-  const att: LessonAtt = { name: file.name.replace(/\.[^.]+$/, ''), ext, url: urlData.publicUrl }
+  // path만 저장. 다운로드 시점에 signed URL 생성 (private 버킷 대비)
+  const att: LessonAtt = { name: file.name.replace(/\.[^.]+$/, ''), ext, path: fileName }
 
   const store = getAttachmentMeta()
   if (!store[lessonId]) store[lessonId] = []
@@ -58,6 +63,21 @@ export async function uploadLessonAttachment(lessonId: string, file: File): Prom
   saveAttachmentMeta(store)
 
   return att
+}
+
+// 다운로드용 URL 반환 — path 기반이면 signed URL 생성, 레거시 url이면 그대로
+export async function getAttachmentDownloadUrl(att: LessonAtt): Promise<string | null> {
+  if (att.path) {
+    const { data, error } = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .createSignedUrl(att.path, SIGNED_URL_EXPIRES)
+    if (error || !data) {
+      console.warn('signed URL 생성 실패:', error?.message)
+      return att.url ?? null
+    }
+    return data.signedUrl
+  }
+  return att.url ?? null
 }
 
 export function saveAllLessonAttachments(items: { id: string; attachments?: LessonAtt[] }[]) {

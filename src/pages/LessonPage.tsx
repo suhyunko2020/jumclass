@@ -4,23 +4,36 @@ import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/ui/Toast'
 import { calcTotalDuration } from '../utils/format'
-import { getLessonAttachments } from '../hooks/useCourses'
+import { getLessonAttachments, getAttachmentDownloadUrl } from '../hooks/useCourses'
+import type { LessonAtt } from '../hooks/useCourses'
 
 export default function LessonPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { getCourse, addReview, hasReviewed } = useCourses()
-  const { user, isEnrolled, getEnrollment, completeLesson, logAttachmentDownload } = useAuth()
+  const { user, loading: authLoading, isEnrolled, getEnrollment, completeLesson, logAttachmentDownload, refreshUser } = useAuth()
   const toast = useToast()
+
+  // 로그아웃/비로그인 시 홈으로 리디렉트 — 강의 시청 페이지는 공유 차단 필수
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) navigate('/', { replace: true })
+  }, [user, authLoading, navigate])
+
+  // 진입 시 최신 수강 상태 강제 새로고침 — 캐시된 만료된 수강권으로 접근 차단
+  useEffect(() => {
+    if (user) refreshUser()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [reviewModal, setReviewModal] = useState(false)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewText, setReviewText] = useState('')
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
 
-  // 첨부파일 다운로드 동의 모달
+  // 첨부파일 다운로드 동의 모달 — att는 LessonAtt (path 또는 url 보유)
   const [downloadModal, setDownloadModal] = useState<{
-    url: string; filename: string; name: string; lessonId: string;
+    att: LessonAtt; filename: string; name: string; lessonId: string;
   } | null>(null)
   const [downloadAgreed, setDownloadAgreed] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -33,6 +46,17 @@ export default function LessonPage() {
     if (course) document.title = `${course.title} — JUMCLASS`
     return () => { document.title = 'JUMCLASS' }
   }, [course])
+
+  if (authLoading) {
+    return (
+      <div className="loading" style={{ paddingTop: '140px' }}>
+        <div className="spinner" />
+      </div>
+    )
+  }
+
+  // 리디렉트 대기
+  if (!user) return null
 
   if (!course) {
     return (
@@ -148,13 +172,15 @@ export default function LessonPage() {
             downloadHistory.some(d => d.lessonId === cur!.id && d.attachmentName === filename)
 
           // 이미 동의/다운로드한 항목은 모달 없이 즉시 다운로드 (수강 기간 내에서만)
-          async function directDownload(att: { url: string; name: string; ext: string }) {
+          async function directDownload(att: LessonAtt) {
             if (!enrolled) { toast('수강 신청 후 자료를 다운로드할 수 있습니다.', 'err'); return }
             const filename = `${att.name}.${att.ext}`
             try {
+              const url = await getAttachmentDownloadUrl(att)
+              if (!url) { toast('다운로드 링크를 생성할 수 없습니다.', 'err'); return }
               await logAttachmentDownload(courseId, cur!.id, filename)
               const link = document.createElement('a')
-              link.href = att.url
+              link.href = url
               link.download = filename
               link.target = '_blank'
               link.rel = 'noopener noreferrer'
@@ -186,7 +212,7 @@ export default function LessonPage() {
                       }
                       setDownloadAgreed(false)
                       setDownloadModal({
-                        url: a.url,
+                        att: a,
                         filename,
                         name: a.name,
                         lessonId: cur!.id,
@@ -387,9 +413,11 @@ export default function LessonPage() {
                     if (!downloadAgreed || !downloadModal) return
                     setDownloading(true)
                     try {
+                      const url = await getAttachmentDownloadUrl(downloadModal.att)
+                      if (!url) { toast('다운로드 링크를 생성할 수 없습니다.', 'err'); return }
                       await logAttachmentDownload(courseId, downloadModal.lessonId, downloadModal.filename)
                       const a = document.createElement('a')
-                      a.href = downloadModal.url
+                      a.href = url
                       a.download = downloadModal.filename
                       a.target = '_blank'
                       a.rel = 'noopener noreferrer'

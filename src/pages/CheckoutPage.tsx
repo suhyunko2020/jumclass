@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
@@ -12,12 +12,22 @@ import { generateOrderId, saveIntent, requestTossPayment, type TossPaymentIntent
 
 export default function CheckoutPage() {
   const [params] = useSearchParams()
+  const navigate = useNavigate()
   const { getCourse } = useCourses()
   const { getInstructor } = useInstructors()
-  const { user, isEnrolled } = useAuth()
+  const { user, loading: authLoading, isEnrolled } = useAuth()
   const { openAuth } = useAuthModal()
   const { get: getSiteSettings } = useSiteSettings()
   const toast = useToast()
+
+  // 결제 페이지는 반드시 회원만 — 비로그인이면 홈으로 보내며 회원가입 모달 자동 오픈
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      navigate('/', { replace: true })
+      openAuth('signup')
+    }
+  }, [user, authLoading, navigate, openAuth])
 
   const courseId = params.get('course') || ''
   const tierParam = params.get('tier')
@@ -65,6 +75,12 @@ export default function CheckoutPage() {
   useEffect(() => {
     document.title = isServiceCheckout ? '서비스 신청 — JUMCLASS' : '수강신청 — JUMCLASS'
   }, [isServiceCheckout])
+
+  // 인증 복원 중엔 스피너, 비로그인은 useEffect가 홈으로 이동 — 여기선 리디렉트 대기
+  if (authLoading) {
+    return <div className="loading" style={{ paddingTop: '140px' }}><div className="spinner" /></div>
+  }
+  if (!user) return null
 
   if (!course && !isServiceCheckout) {
     return (
@@ -126,6 +142,7 @@ export default function CheckoutPage() {
       orderId,
       amount: price,
       orderName,
+      userId: user.uid,
       checkoutType: isServiceCheckout ? 'service' : 'course',
       courseId: isServiceCheckout ? undefined : courseId,
       tierIdx: isServiceCheckout ? undefined : tierIdx,
