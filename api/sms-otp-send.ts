@@ -117,18 +117,29 @@ export default async function handler(req: Request): Promise<Response> {
     })
   }
 
+  // mobile_auth 템플릿 본문 (#{shop_name}, #{auth_number} 치환) — 한 글자도 달라지면 M120
+  const shopName = '점클래스'
+  const msgBody = [
+    `[${shopName}]`,
+    '본인 확인을 위한 인증번호는 아래와 같습니다.',
+    '인증번호란에 입력 바랍니다.',
+    '',
+    `인증번호 : ${code}`,
+    '',
+    '감사합니다.',
+  ].join('\n')
+
   const payload = {
     message_type: 'AT',
     phn: phone,
     profile: BIZM_PROFILE,
     tmplId: BIZM_OTP_TEMPLATE_ID,
-    msg: `[점클래스] 본인 확인 인증번호\n\n인증번호: ${code}\n\n5분 안에 입력해주세요.\n본인 요청이 아니라면 무시해주세요.`,
+    msg: msgBody,
     reserveDt: '00000000000000',
     smsKind: 'L',
-    msgSms: `[점클래스] 인증번호 ${code} (5분 유효)`,
-    smsLmsTit: '[점클래스] 인증번호',
+    msgSms: `[${shopName}] 인증번호 ${code} (5분 유효)`,
+    smsLmsTit: `[${shopName}] 인증번호`,
     smsSender: '',
-    var1: code,
   }
 
   try {
