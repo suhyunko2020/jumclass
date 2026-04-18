@@ -12,8 +12,17 @@ export default function CourseDetailPage() {
   const [searchParams] = useSearchParams()
   const { getCourse, getEnrolledCount, getReviewsByCourse, getReviewStats } = useCourses()
   const { getPublicInstructors } = useInstructors()
-  const { isEnrolled, getEnrollment } = useAuth()
-  useAuthModal()
+  const { user, isEnrolled, getEnrollment } = useAuth()
+  const { openAuth } = useAuthModal()
+
+  // 미리보기/무료 강의 클릭 공통 가드 — 비회원이면 페이지 이동 대신 로그인 모달 오픈
+  function openLesson(lessonId: string) {
+    if (!user) {
+      openAuth('login')
+      return
+    }
+    navigate(`/lesson?course=${courseId}&lesson=${lessonId}`)
+  }
 
   const course = getCourse(courseId || '')
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({ 0: true })
@@ -198,7 +207,7 @@ export default function CourseDetailPage() {
                               <div key={item.id}
                                 className="curr-item"
                                 style={{ cursor: hasVimeo ? 'pointer' : 'default' }}
-                                onClick={() => { if (hasVimeo) navigate(`/lesson?course=${course.id}&lesson=${item.id}`) }}
+                                onClick={() => { if (hasVimeo) openLesson(item.id) }}
                               >
                                 <div className="curr-item-icon" style={{
                                   background: 'rgba(124,111,205,.12)',
@@ -221,7 +230,7 @@ export default function CourseDetailPage() {
                               className={`curr-item ${isLocked ? 'locked' : ''}`}
                               style={{ cursor: isLocked ? 'default' : 'pointer' }}
                               onClick={() => {
-                                if (canPlay) navigate(`/lesson?course=${course.id}&lesson=${item.id}`)
+                                if (canPlay) openLesson(item.id)
                               }}
                             >
                               <div className={`curr-item-icon ${canPlay ? 'ic-free' : 'ic-lock'}`}>{canPlay ? '▶' : '🔒'}</div>
@@ -457,7 +466,7 @@ export default function CourseDetailPage() {
                     <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid var(--line)' }}>
                       <p style={{ fontSize: '.8rem', color: 'var(--t2)', marginBottom: '8px' }}>무료 미리보기 {freeLessons}강 제공</p>
                       <button className="btn btn-outline-purple w-full btn-sm"
-                        onClick={() => navigate(`/lesson?course=${course.id}&lesson=${course.curriculum[0].items[0].id}`)}>
+                        onClick={() => openLesson(course.curriculum[0].items[0].id)}>
                         첫 강의 무료로 보기
                       </button>
                     </div>
