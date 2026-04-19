@@ -33,9 +33,9 @@ export default function HomePage() {
     return publicCourses.slice(0, 3)
   })()
 
-  // 월간 통계 로드 (캐시 없을 때만 재계산 — 캐시는 매월 1일에 만료)
+  // 통계 로드 — 매 mount 시 백그라운드에서 새로 fetch (stale-while-revalidate)
+  // 캐시는 즉시 표시용으로만 사용하고, 항상 최신 데이터로 갱신
   useEffect(() => {
-    if (stats) return
     const instructorCount = getPublicInstructors().length
     computeAndCacheStats({
       publicCourses: publicCourses.map(c => ({ id: c.id, lessons: c.lessons })),
