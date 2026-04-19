@@ -35,6 +35,14 @@ export function readCachedStats(): HomeStats | null {
   }
 }
 
+// 통계 캐시 강제 무효화 — 리뷰/등록 변경 후 즉시 갱신이 필요할 때 호출
+export function invalidateStatsCache() {
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i)
+    if (k && k.startsWith(CACHE_KEY_PREFIX)) localStorage.removeItem(k)
+  }
+}
+
 function writeCache(stats: HomeStats) {
   try {
     localStorage.setItem(CACHE_KEY_PREFIX + stats.month, JSON.stringify(stats))
@@ -65,16 +73,18 @@ export async function computeAndCacheStats(opts: {
   const publicCourseIds = new Set(opts.publicCourses.map(c => c.id))
   const lessonCount = opts.publicCourses.reduce((sum, c) => sum + (c.lessons ?? 0), 0)
 
-  // 2) 수강생 수 & 인기 강의 — enrollments 테이블에서 집계
+  // 2) 수강생 수 & 인기 강의
+  // - 수강생: enrollments + reviews의 user_id 합집합 (관리자 시드 리뷰 포함)
+  // - 인기 강의: 결제(enrollments.type='payment') + 리뷰 둘 다 카운트
   let studentCount = 0
   const courseEnrollCount = new Map<string, number>()
+  const uniqueUsers = new Set<string>()
 
   try {
     const { data } = await supabase
       .from('enrollments')
       .select('user_id, course_id, type')
     if (Array.isArray(data)) {
-      const uniqueUsers = new Set<string>()
       for (const row of data) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const r = row as any
@@ -82,16 +92,32 @@ export async function computeAndCacheStats(opts: {
         const cid = r.course_id as string | undefined
         const type = (r.type ?? 'payment') as string
         if (uid) uniqueUsers.add(uid)
-        // 인기 강의: 결제 기반만 카운트 (수동 등록/데모 제외)
         if (cid && type === 'payment' && publicCourseIds.has(cid)) {
           courseEnrollCount.set(cid, (courseEnrollCount.get(cid) ?? 0) + 1)
         }
       }
-      studentCount = uniqueUsers.size
     }
-  } catch {
-    // 네트워크 실패 시 0으로 두고 계속 진행
-  }
+  } catch { /* 무시 */ }
+
+  try {
+    const { data } = await supabase
+      .from('reviews')
+      .select('user_id, course_id')
+    if (Array.isArray(data)) {
+      for (const row of data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const r = row as any
+        const uid = r.user_id as string | undefined
+        const cid = r.course_id as string | undefined
+        if (uid) uniqueUsers.add(uid)
+        if (cid && publicCourseIds.has(cid)) {
+          courseEnrollCount.set(cid, (courseEnrollCount.get(cid) ?? 0) + 1)
+        }
+      }
+    }
+  } catch { /* 무시 */ }
+
+  studentCount = uniqueUsers.size
 
   // 인기 강의 정렬 (결제 많은 순, 동률이면 원래 순서 유지)
   const topCourseIds = Array.from(courseEnrollCount.entries())

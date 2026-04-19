@@ -18,6 +18,7 @@ import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, Instru
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
 import { useSiteSettings, type SiteSettings } from '../hooks/useSiteSettings'
+import { invalidateStatsCache } from '../lib/homeStats'
 
 type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews' | 'settings'
 
@@ -89,6 +90,7 @@ export default function AdminPage() {
   const [siteSettingsForm, setSiteSettingsForm] = useState<SiteSettings | null>(null)
   // 토스 Secret Key 편집 모드 토글 (기본: 마스킹 표시, 클릭 시 입력창 노출)
   const [editingSecretKey, setEditingSecretKey] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'basic' | 'seo' | 'payment' | 'policy'>('basic')
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -620,6 +622,7 @@ export default function AdminPage() {
   async function handleDeleteReview(id: string) {
     if (!confirm('리뷰를 삭제하시겠습니까?')) return
     await deleteReviewById(id)
+    invalidateStatsCache()
     toast('리뷰가 삭제되었습니다.', 'ok')
     refresh()
   }
@@ -628,7 +631,12 @@ export default function AdminPage() {
   async function handleAdminReview(e: React.FormEvent) {
     e.preventDefault()
     if (!arForm.courseId || !arForm.userName || !arForm.text) return
-    await addReview(arForm.courseId, 'admin-' + Date.now(), arForm.userName, '✍', arForm.rating, arForm.text, 'admin')
+    const ok = await addReview(arForm.courseId, crypto.randomUUID(), arForm.userName, '✍', arForm.rating, arForm.text, 'admin')
+    if (!ok) {
+      toast('리뷰 등록에 실패했습니다. 콘솔의 [addReview] 에러를 확인하세요.', 'err')
+      return
+    }
+    invalidateStatsCache()
     toast('리뷰가 등록되었습니다.', 'ok')
     setAdminReviewModal(false)
     setArForm({ courseId: '', userName: '', rating: 5, text: '' })
@@ -645,6 +653,7 @@ export default function AdminPage() {
       userName: editReviewModal.userName,
     })
     if (ok) {
+      invalidateStatsCache()
       toast('리뷰가 수정되었습니다.', 'ok')
       setEditReviewModal(null)
       refresh()
@@ -653,52 +662,142 @@ export default function AdminPage() {
     }
   }
 
-  // ── 샘플 리뷰 시드 — 현재 공개 강의별로 2건씩 임시 생성 ──────
+  // ── 샘플 리뷰 시드 ──────────────────────────────────────────
+  // 한글 70% : 영문 30% 닉네임을 랜덤 생성하고, 공개된 강의에 분배.
+  // 리뷰 텍스트는 풀에서 랜덤 선택 (레벨 60% / 공통 40%) — 통문장 풀로 자연스러운 톤 유지.
   async function handleSeedReviews() {
     if (seedingReviews) return
-    if (!confirm('현재 공개 중인 강의에 샘플 리뷰를 생성합니다.\n이미 등록된 리뷰는 유지되며, 샘플만 추가로 등록됩니다. 진행할까요?')) return
+
+    const allCourses = courses.filter(c => c.status !== 'private')
+    if (allCourses.length === 0) {
+      toast('공개된 강의가 없습니다. 먼저 강의를 등록해주세요.', 'err')
+      return
+    }
+
+    const input = window.prompt(
+      `샘플 리뷰를 몇 개 생성할까요? (1~100)\n\n• 한글 닉네임 70% : 영문 닉네임 30%\n• 공개된 강의 ${allCourses.length}개에 랜덤 분배\n• 자연스러운 톤의 후기 풀에서 선택`,
+      '20',
+    )
+    if (input === null) return
+    const count = parseInt(input.trim(), 10)
+    if (isNaN(count) || count < 1 || count > 100) {
+      toast('1~100 사이의 숫자를 입력해주세요.', 'err')
+      return
+    }
+
     setSeedingReviews(true)
 
-    // 레벨별 리뷰 문구 — 강의 컨텐츠와 어울리는 현실적인 톤
-    const textsByLevel: Record<string, string[]> = {
+    const koreanLastNames = ['김','이','박','정','최','조','강','윤','장','서','오','한','임','유','황','신','권','안','송','홍','전','문','손','배','백']
+    const koreanFirstNames = ['수현','민지','지영','현우','진아','서연','예진','도윤','준호','하윤','나경','주원','소영','예나','지호','연우','서윤','민서','하늘','시우','다은','서진','채원','윤아','승민']
+    const englishNames = ['amy','alex','james','sophia','oliver','emma','noah','liam','ava','ethan','isla','lucas','zoe','leo','mason','lily','jack','maya','eric','nina','ryan','hannah','kevin','grace','daniel']
+    const avatars = ['🌙','✨','🌟','🔮','☯️','🌹','🕊️','🪄','🦋','🌻','🌿','🍀','🌼','⭐','💫','🌈','🪐','🌸','🍃','🍂']
+
+    // 공통 후기 풀 — 레벨 무관, 다양한 말투/길이/어미
+    const commonReviews = [
+      '강사님 목소리도 차분하고 설명이 친절해서 끝까지 들었어요.',
+      '한 번 듣고 다시 돌려봐도 새로 보이는 부분이 있어요. 알찹니다.',
+      '솔직히 큰 기대 없이 시작했는데, 들으면서 메모를 엄청 했네요',
+      '책으로만 봤을 땐 헷갈렸던 부분이 영상 보고 한 번에 정리됐어요!',
+      '진짜 깔끔합니다. 군더더기 없어서 좋았어요.',
+      '내용은 알찬데 좀 빠른 편이라 두 번 봤어요. 그래도 만족',
+      '카드 한 장 한 장 그림을 짚어가면서 설명해주셔서 머리에 잘 남아요',
+      '강의 듣고 친구한테 리딩해줬는데 반응 너무 좋았어요 ㅎㅎ',
+      '음… 처음엔 반신반의했는데 듣고 나니까 추천하게 되네요.',
+      '결제하고 살짝 걱정했는데 영상 퀄리티가 생각보다 훨씬 좋아서 놀랐습니다.',
+      '평일 저녁마다 한 강의씩 듣고 있어요. 이 페이스로 갈 수 있을 것 같아요',
+      '설명이 정말 따뜻해요. 듣는 동안 편안했습니다 :)',
+      '복습용으로 자주 돌려보는 중입니다. 짧은 강의도 알찬 게 좋네요',
+      '이 가격에 이 퀄리티면 진짜 가성비 미쳤다고 생각해요',
+      '몇 번 반복해서 보니까 카드 보는 눈이 달라지는 게 느껴져요. 추천!',
+      '강사님이 본인 경험을 곁들여서 설명해주시는 부분이 특히 좋았어요',
+      '딱딱하지 않고 친한 친구한테 배우는 느낌이에요',
+    ]
+
+    // 레벨별 후기 풀
+    const reviewsByLevel: Record<string, string[]> = {
       입문: [
-        '타로를 처음 접했는데 카드 한 장 한 장 의미를 차근차근 짚어줘서 이해가 정말 잘 됐어요. 혼자 책으로만 공부했을 때 답답했던 부분이 풀렸습니다.',
-        '기초를 탄탄하게 잡아주는 강의예요. 영상이 깔끔하고 설명이 친근해서 부담 없이 들을 수 있었습니다.',
+        '타로 처음인데도 따라갈 수 있게 구성되어 있어서 좋았습니다.',
+        '카드 의미를 외우려고만 했는데 흐름으로 이해하니까 훨씬 쉽네요',
+        '입문 강의로 이만한 게 없는 것 같아요. 강사님 짱 ✨',
+        '정말 기초부터 짚어주셔서 감사했어요. 카드가 이제 무섭지 않아요!',
+        '아무것도 모르고 시작했는데 한 챕터 끝낼 때마다 뿌듯해요',
+        '메이저 아르카나만 봐도 한참인데 차근차근 잡아주시네요',
+        '책 사서 끄적이다가 답답해서 결제했는데 잘한 선택이었습니다',
       ],
       중급: [
-        '어느 정도 감은 있었는데 스프레드 해석이 넓어지는 느낌이에요. 실전 리딩에 바로 적용해볼 수 있는 팁이 많았습니다.',
-        '기본기를 넘어서 한 단계 올라가고 싶을 때 딱 좋은 강의입니다. 설명이 군더더기 없어서 집중이 잘 돼요.',
+        '기초만 알고 막혀있던 부분이 풀렸어요. 스프레드 응용이 가능해졌습니다.',
+        '실제 리딩에 적용할 만한 팁이 많아서 도움 됐어요',
+        '리딩이 어려웠는데 강사님 노하우 듣고 감 잡았네요',
+        '중급 강의를 찾고 있었는데 딱 맞는 깊이였어요. 만족',
+        '셀프 리딩만 하다가 처음으로 남에게 봐줬습니다. 자신감이 붙었어요',
+        '카드 조합 해석이 어려웠는데 패턴이 보이기 시작했어요',
       ],
       고급: [
-        '심화 해석 기법을 체계적으로 배울 수 있어서 좋았어요. 중급에서 막혔던 부분이 명쾌하게 풀렸습니다.',
-        '고급 스프레드 풀이가 특히 도움이 많이 됐어요. 리더로 활동하면서 바로 적용해보고 있습니다.',
+        '심화 해석 기법이 정말 알찼습니다. 리더 활동에 바로 적용 중이에요.',
+        '깊이 있는 내용을 이렇게 풀어내기 쉽지 않은데 대단하다고 느꼈어요',
+        '고급 스프레드 부분에서 머리 한 대 맞은 느낌이었습니다. 새로운 시각',
+        '디테일이 살아있는 강의입니다. 진짜 감사해요 :)',
+        '여러 강의를 들어봤는데 깊이가 다르네요. 추천합니다',
+        '책에서도 잘 안 나오는 응용 해석법이 핵심이에요',
       ],
       자격증: [
-        '자격증 과정 자체도 탄탄하지만, 비즈니스와 윤리 파트까지 포함되어 있어 실제 리더로 활동할 준비가 됐어요.',
-        '강사님 진도 관리가 꼼꼼해서 완주할 수 있었습니다. 수료 후에도 궁금한 건 물어볼 수 있어 든든해요.',
+        '자격증 과정인 만큼 윤리·실무까지 다뤄줘서 좋았어요. 강사님 진도 관리도 꼼꼼하셨습니다.',
+        '체크리스트 받아가면서 한 회차씩 끝낼 때 성취감이 있어요',
+        '담당 강사님이 1:1로 봐주시니까 든든합니다. 모르는 거 바로바로 물어봤네요',
+        '커리어 시작하려고 등록했는데 비즈니스 파트가 특히 도움 됐어요',
+        '결제하고 강사님 알림톡 빨리 와서 놀랐고, 친절하셨어요. 추천합니다',
+        '진도 챙겨주시는 시스템이 좋아요. 혼자였으면 중간에 포기했을 듯',
+        '수료 동의서 작성부터 진도 관리까지 체계적입니다. 신뢰가 가요',
       ],
     }
-    const defaultTexts = [
-      '영상 품질이 깨끗하고 강사님 설명도 정리되어 있어서 집중하기 좋았어요.',
-      '여러 번 반복해서 볼 수 있어 복습하기 편했습니다. 내용이 알차요.',
-    ]
-    const lastNames = ['김', '이', '박', '정', '최', '조', '강', '윤', '장', '서', '오', '한', '임', '유', '황']
-    const avatars = ['🌙', '✨', '🌟', '🔮', '☯️', '🌹', '🕊️', '🪄', '🦋', '🌻']
+
+    function pick<T>(arr: T[]): T {
+      return arr[Math.floor(Math.random() * arr.length)]
+    }
+    function makeKoreanName(): string {
+      return pick(koreanLastNames) + pick(koreanFirstNames)
+    }
+    function makeEnglishName(): string {
+      return pick(englishNames)
+    }
+    function pickReviewText(level: string): string {
+      const levelPool = reviewsByLevel[level]
+      const useLevel = levelPool && levelPool.length > 0 && Math.random() < 0.6
+      return pick(useLevel ? levelPool : commonReviews)
+    }
 
     let added = 0
-    const allCourses = courses.filter(c => c.status !== 'private')
-    for (const c of allCourses) {
-      const pool = textsByLevel[c.level] ?? defaultTexts
-      for (let i = 0; i < Math.min(2, pool.length); i++) {
-        const name = `${lastNames[Math.floor(Math.random() * lastNames.length)]}**`
-        const avatar = avatars[Math.floor(Math.random() * avatars.length)]
-        const rating = Math.random() < 0.7 ? 5 : 4
-        const uniqueUserId = `seed-${c.id}-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-        const ok = await addReview(c.id, uniqueUserId, name, avatar, rating, pool[i], 'admin')
-        if (ok) added++
+    for (let i = 0; i < count; i++) {
+      const c = pick(allCourses)
+      const isKorean = Math.random() < 0.7
+      const name = isKorean ? makeKoreanName() : makeEnglishName()
+      const avatar = pick(avatars)
+      // 평점: 5점 80%, 4점 20% (별 3개 이하 제외 — 노출 페이지 신뢰감)
+      const rating = Math.random() < 0.8 ? 5 : 4
+      const text = pickReviewText(c.level)
+      // reviews.user_id는 UUID 타입 → crypto.randomUUID() 필수
+      const uniqueUserId = crypto.randomUUID()
+      const ok = await addReview(c.id, uniqueUserId, name, avatar, rating, text, 'admin')
+      if (ok) {
+        added++
+      } else {
+        // 첫 실패 시 즉시 중단 — 보통 RLS/스키마 문제이므로 모두 같은 사유로 실패함.
+        // 100건 시도 후 통째로 실패 안내하는 것보다, 1건만 시도하고 원인 안내하는 게 빠름.
+        setSeedingReviews(false)
+        if (added > 0) invalidateStatsCache()
+        toast(
+          added > 0
+            ? `${added}건 생성 후 실패. 브라우저 콘솔에서 [addReview] 로그 확인해주세요.`
+            : '리뷰 등록 실패. 브라우저 콘솔의 [addReview] Supabase 에러 메시지를 확인해주세요. (RLS 정책 또는 user_id 컬럼 타입 문제 가능성)',
+          'err',
+        )
+        refresh()
+        return
       }
     }
+
     setSeedingReviews(false)
+    invalidateStatsCache()
     toast(`샘플 리뷰 ${added}건이 생성되었습니다.`, 'ok')
     refresh()
   }
@@ -1536,11 +1635,49 @@ export default function AdminPage() {
           {sec === 'settings' && (() => {
             const form = siteSettingsForm || getSettings()
             if (!siteSettingsForm) setTimeout(() => setSiteSettingsForm(form), 0)
+            const SETTINGS_TABS: { key: typeof settingsTab; label: string }[] = [
+              { key: 'basic',   label: '기본 정보' },
+              { key: 'seo',     label: 'SEO 설정' },
+              { key: 'payment', label: '결제 설정' },
+              { key: 'policy',  label: '정책 관리' },
+            ]
             return (
               <div>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '28px' }}>사이트 설정</h1>
+                {/* 헤더: 좌측 타이틀, 우측 탭 (모바일은 자동 줄바꿈) */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  flexWrap: 'wrap', gap: '14px', marginBottom: '24px',
+                }}>
+                  <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', margin: 0 }}>사이트 설정</h1>
+                  <div style={{
+                    display: 'flex', flexWrap: 'wrap', gap: '6px',
+                    background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)',
+                    borderRadius: 'var(--r2)', padding: '4px',
+                  }}>
+                    {SETTINGS_TABS.map(t => {
+                      const active = settingsTab === t.key
+                      return (
+                        <button key={t.key} type="button"
+                          onClick={() => setSettingsTab(t.key)}
+                          style={{
+                            padding: '8px 14px',
+                            borderRadius: 'var(--r1)',
+                            background: active ? 'rgba(124,111,205,.18)' : 'transparent',
+                            border: `1px solid ${active ? 'rgba(124,111,205,.5)' : 'transparent'}`,
+                            color: active ? 'var(--purple-2)' : 'var(--t2)',
+                            fontSize: '.82rem', fontWeight: active ? 700 : 500,
+                            cursor: 'pointer',
+                            transition: 'all .15s',
+                          }}>
+                          {t.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
 
                 {/* 기본 정보 */}
+                {settingsTab === 'basic' && (
                 <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
                   <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '16px' }}>기본 정보</div>
                   <div className="form-group">
@@ -1559,8 +1696,10 @@ export default function AdminPage() {
                       onChange={e => setSiteSettingsForm(p => p ? { ...p, brandDescription: e.target.value } : null)} />
                   </div>
                 </div>
+                )}
 
                 {/* SEO */}
+                {settingsTab === 'seo' && (
                 <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
                   <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '16px' }}>SEO 설정</div>
                   <div className="form-group">
@@ -1584,8 +1723,10 @@ export default function AdminPage() {
                       onChange={e => setSiteSettingsForm(p => p ? { ...p, ogImage: e.target.value } : null)} />
                   </div>
                 </div>
+                )}
 
                 {/* 결제 설정 (토스페이먼츠) */}
+                {settingsTab === 'payment' && (
                 <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <div style={{ fontSize: '.85rem', fontWeight: 700 }}>결제 설정 (토스페이먼츠)</div>
@@ -1717,8 +1858,10 @@ export default function AdminPage() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* 정책 관리 */}
+                {settingsTab === 'policy' && (
                 <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
                   <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '16px' }}>정책 관리</div>
                   {(['privacy', 'terms', 'refund', 'copyright'] as const).map(key => (
@@ -1740,6 +1883,7 @@ export default function AdminPage() {
                     마크다운 형식을 지원합니다. # 제목, ## 소제목, - 목록, | 표 |
                   </div>
                 </div>
+                )}
 
                 <button className="btn btn-primary btn-lg w-full" onClick={() => {
                   if (siteSettingsForm) {

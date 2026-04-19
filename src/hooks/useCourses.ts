@@ -199,7 +199,13 @@ export function useCourses() {
   }, [])
 
   // ── 수강생 수 ─────────────────────────────────────────────
-  const getEnrolledCount = useCallback((_courseId: string): string => '0', [])
+  // 강의별 리뷰 수를 수강생 수로 사용 (한 명당 한 리뷰 가정)
+  // → 메인 페이지 통계와 일관성 유지
+  const getEnrolledCount = useCallback((courseId: string): string => {
+    const reviews = getCachedReviews()
+    const count = reviews.filter(r => r.courseId === courseId).length
+    return String(count)
+  }, [])
 
   // ── 리뷰 API (캐시 기반 동기 — syncFromSupabase 후 최신) ───
   const getReviewsByCourse = useCallback((courseId: string): Review[] => {
@@ -254,7 +260,10 @@ export function useCourses() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }).select().single() as any
 
-    if (error || !data) return null
+    if (error || !data) {
+      console.warn('[addReview] Supabase insert 실패:', error?.message, error)
+      return null
+    }
 
     const review: Review = {
       id: data.id, courseId: data.course_id, userId: data.user_id,

@@ -6,7 +6,7 @@ import { useAuthModal } from '../auth/AuthModal'
 export default function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout, loading: authLoading } = useAuth()
+  const { user, logout, loading: authLoading, isAdminLoggedIn } = useAuth()
   const { openAuth } = useAuthModal()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -120,6 +120,14 @@ export default function Navbar() {
                       문의하기
                     </Link>
                     <div style={{ height: '1px', background: 'var(--line)', margin: '0 12px' }} />
+                    {isAdminLoggedIn && (
+                      <Link to="/admin2026" style={{ display: 'block', padding: '11px 16px', fontSize: '.875rem', transition: 'var(--t)', color: 'var(--gold)', fontWeight: 600 }}
+                        onClick={() => setDropdownOpen(false)}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.05)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                        관리자 페이지
+                      </Link>
+                    )}
                     <button onClick={handleLogout} style={{
                       width: '100%', padding: '11px 16px', fontSize: '.875rem',
                       textAlign: 'left', transition: 'var(--t)', color: 'var(--t2)',
@@ -174,6 +182,9 @@ export default function Navbar() {
             </div>
             <div className="mobile-menu-divider" />
             <div className="mobile-nav-section">
+              {isAdminLoggedIn && (
+                <Link to="/admin2026" className="mobile-nav-item" style={{ color: 'var(--gold)', fontWeight: 600 }} onClick={() => setMobileOpen(false)}>관리자 페이지</Link>
+              )}
               <button className="mobile-nav-item" style={{ width: '100%', color: 'var(--t3)' }} onClick={handleLogout}>로그아웃</button>
             </div>
           </>

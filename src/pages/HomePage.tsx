@@ -8,6 +8,7 @@ import CourseCard from '../components/course/CourseCard'
 import { useEffect, useState } from 'react'
 import HeroBg from '../components/ui/HeroBg'
 import { readCachedStats, computeAndCacheStats, type HomeStats } from '../lib/homeStats'
+import { maskName } from '../utils/format'
 
 export default function HomePage() {
   const { getPublicCourses, getEnrolledCount, getAllReviews, getCourse } = useCourses()
@@ -78,31 +79,36 @@ export default function HomePage() {
         <HeroBg />
         <div className="container" style={{ position: 'relative', zIndex: 1 }}>
           <div className="hero-inner page-enter">
-            <div className="hero-kicker">타로 전문 교육 플랫폼</div>
-            <h1>타로 리딩,<br /><em>제대로</em> 배워보세요</h1>
-            <p className="hero-desc">입문부터 자격증까지, 현직 리더의 영상 강의로 배우는 타로.<br />혼자 공부하다 막힐 때, 여기서 답을 찾으세요.</p>
-            <div className="hero-cta">
-              <Link to="/courses" className="btn btn-gold btn-xl">강의 둘러보기 →</Link>
-              <button className="btn btn-ghost btn-xl" onClick={() => openAuth('signup')}>무료로 시작하기</button>
+            <div className="hero-text">
+              <div className="hero-kicker">타로 전문 교육 플랫폼</div>
+              <h1>타로 리딩,<br /><em>제대로</em> 배워보세요</h1>
+              <p className="hero-desc">입문부터 자격증까지, 현직 리더의 영상 강의로 배우는 타로.<br />혼자 공부하다 막힐 때, 여기서 답을 찾으세요.</p>
+              <div className="hero-cta">
+                <Link to="/courses" className="btn btn-gold btn-xl">강의 둘러보기 →</Link>
+                <button className="btn btn-ghost btn-xl" onClick={() => openAuth('signup')}>무료로 시작하기</button>
+              </div>
+              <div className="hero-stats">
+                <div className="hero-stat">
+                  <div className="num">{stats ? stats.studentCount.toLocaleString() : '—'}</div>
+                  <div className="lbl">수강생</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="num">{stats ? stats.instructorCount : '—'}</div>
+                  <div className="lbl">전문 강사</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="num">{stats ? `${stats.lessonCount}강` : '—'}</div>
+                  <div className="lbl">총 강의</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="num">{stats && stats.reviewCount > 0 ? `${stats.avgRating.toFixed(1)}★` : '—'}</div>
+                  <div className="lbl">평균 평점</div>
+                </div>
+              </div>
             </div>
-            <div className="hero-stats">
-              <div className="hero-stat">
-                <div className="num">{stats ? stats.studentCount.toLocaleString() : '—'}</div>
-                <div className="lbl">수강생</div>
-              </div>
-              <div className="hero-stat">
-                <div className="num">{stats ? stats.instructorCount : '—'}</div>
-                <div className="lbl">전문 강사</div>
-              </div>
-              <div className="hero-stat">
-                <div className="num">{stats ? `${stats.lessonCount}강` : '—'}</div>
-                <div className="lbl">총 강의</div>
-              </div>
-              <div className="hero-stat">
-                <div className="num">{stats && stats.reviewCount > 0 ? `${stats.avgRating.toFixed(1)}★` : '—'}</div>
-                <div className="lbl">평균 평점</div>
-              </div>
-            </div>
+
+            {/* 우측: 강의 시청 화면 목업 (장식용 — 가공된 예시 화면) */}
+            <HeroMockup />
           </div>
         </div>
       </section>
@@ -232,10 +238,18 @@ export default function HomePage() {
                       </div>
                       <p className="testi-quote">"{r.text}"</p>
                       <div className="testi-author">
-                        <div className="testi-av">{r.userAvatar || r.userName.charAt(0)}</div>
-                        <div>
-                          <div className="testi-name">{r.userName}</div>
-                          <div className="testi-role">{c ? `${c.emoji} ${c.title}` : '수강생'}</div>
+                        <div className="testi-av">{r.userAvatar || maskName(r.userName).charAt(0)}</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', minWidth: 0, flex: 1 }}>
+                          <div className="testi-name">{maskName(r.userName)}</div>
+                          {c && (
+                            <span style={{
+                              fontSize: '.72rem', color: 'var(--t3)', fontWeight: 400, opacity: .75,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              minWidth: 0, flex: 1,
+                            }}>
+                              · {c.title}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -383,5 +397,82 @@ export default function HomePage() {
       </section>
 
     </>
+  )
+}
+
+// 강의 시청 화면 목업 — 인터넷강의 시청 페이지 분위기를 재현한 장식용 가공 화면
+function HeroMockup() {
+  return (
+    <div className="hero-mockup">
+      <div className="hero-mockup-card">
+        {/* 윈도우 바 */}
+        <div className="hero-mockup-bar">
+          <span className="dot dot-r" />
+          <span className="dot dot-y" />
+          <span className="dot dot-g" />
+          <div className="url">jumclass.com / lesson</div>
+        </div>
+
+        {/* 비디오 영역 */}
+        <div className="hero-mockup-video">
+          <div className="hero-mockup-chip hero-mockup-chip-tl">CHAPTER 02</div>
+          <div className="hero-mockup-chip hero-mockup-chip-tr">1.0×</div>
+          <button className="hero-mockup-play" aria-label="재생" />
+          <div className="hero-mockup-controls">
+            <span className="hero-mockup-time">12:34 / 28:00</span>
+            <div className="hero-mockup-ctrl-icons">
+              <span title="자막">CC</span>
+              <span title="화질">HD</span>
+              <span title="전체화면">⛶</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 진도바 */}
+        <div className="hero-mockup-progress">
+          <div className="hero-mockup-progress-fill" style={{ width: '44%' }} />
+        </div>
+
+        {/* 강의 정보 */}
+        <div className="hero-mockup-info">
+          <div className="hero-mockup-info-chapter">Chapter 02 · 06강</div>
+          <div className="hero-mockup-info-title">연인(The Lovers) — 선택과 관계의 상징</div>
+          <div className="hero-mockup-info-meta">
+            <span className="badge">유니버셜웨이트</span>
+            <span>스완 강사</span>
+            <span>·</span>
+            <span>6/22회차</span>
+          </div>
+
+          {/* 다음 강의 미리보기 */}
+          <div className="hero-mockup-next">
+            <div className="hero-mockup-next-label">다음 강의</div>
+            <div className="hero-mockup-next-row">
+              <span className="hero-mockup-next-num">07</span>
+              <div className="hero-mockup-next-text">
+                <div className="hero-mockup-next-title">전차(The Chariot) — 의지와 추진력</div>
+                <div className="hero-mockup-next-dur">24분</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 떠 있는 미니 카드 — 좌상단: 평점, 우하단: 학습 진행 */}
+      <div className="hero-mockup-float hero-mockup-float-tl">
+        <div className="hero-mockup-float-icon gold">★</div>
+        <div className="hero-mockup-float-text">
+          <strong>4.9 / 5.0</strong>
+          <span>수강생 평균 평점</span>
+        </div>
+      </div>
+      <div className="hero-mockup-float hero-mockup-float-br">
+        <div className="hero-mockup-float-icon ok">✓</div>
+        <div className="hero-mockup-float-text">
+          <strong>오늘 1회차 완료</strong>
+          <span>꾸준히 한 걸음씩</span>
+        </div>
+      </div>
+    </div>
   )
 }
