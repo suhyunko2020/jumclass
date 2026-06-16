@@ -29,6 +29,7 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuthModal = () => {
   const ctx = useContext(AuthModalContext)
   if (!ctx) throw new Error('useAuthModal must be inside AuthModalProvider')
@@ -47,9 +48,18 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const [verifyEmail, setVerifyEmail] = useState('')  // 인증 대기 화면용 이메일
+  const [view, setView] = useState<'auth' | 'reset'>('auth')  // 비밀번호 재설정 화면 전환
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
   const [signupForm, setSignupForm] = useState({ name: '', email: '', password: '' })
+
+  // 비밀번호 재설정 상태
+  const [resetStep, setResetStep] = useState<'request' | 'confirm' | 'done'>('request')
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetCode, setResetCode] = useState('')
+  const [resetPw, setResetPw] = useState('')
+  const [resetPw2, setResetPw2] = useState('')
+  const [resetMsg, setResetMsg] = useState('')
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -73,6 +83,50 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   async function handleGoogle() {
     await loginWithGoogle()
     onClose()
+  }
+
+  // ── 비밀번호 재설정 핸들러 ────────────────────────────────
+  async function handleResetRequest(e?: React.FormEvent) {
+    e?.preventDefault()
+    setErr(''); setResetMsg(''); setLoading(true)
+    try {
+      const res = await fetch('/api/email-otp-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail }),
+      })
+      const data = await res.json().catch(() => ({}))
+      setLoading(false)
+      if (!res.ok || !data.ok) { setErr(data.message || '인증번호 발송에 실패했습니다.'); return }
+      setResetStep('confirm')
+      setResetMsg('가입된 이메일이라면 인증번호가 발송됩니다. 메일함(스팸함 포함)을 확인해주세요.')
+    } catch {
+      setLoading(false); setErr('네트워크 오류가 발생했습니다.')
+    }
+  }
+
+  async function handleResetConfirm(e: React.FormEvent) {
+    e.preventDefault()
+    setErr('')
+    if (resetPw !== resetPw2) { setErr('새 비밀번호가 일치하지 않습니다.'); return }
+    if (resetPw.length < 6) { setErr('비밀번호는 6자 이상이어야 합니다.'); return }
+    setLoading(true)
+    try {
+      const res = await fetch('/api/reset-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail, code: resetCode, newPassword: resetPw }),
+      })
+      const data = await res.json().catch(() => ({}))
+      setLoading(false)
+      if (!res.ok || !data.ok) { setErr(data.message || '비밀번호 변경에 실패했습니다.'); return }
+      setResetStep('done')
+    } catch {
+      setLoading(false); setErr('네트워크 오류가 발생했습니다.')
+    }
+  }
+
+  function backToLogin() {
+    setView('auth'); setTab('login')
+    setResetStep('request'); setResetCode(''); setResetPw(''); setResetPw2(''); setResetMsg(''); setErr('')
   }
 
   // ── 이메일 인증 안내 화면 ──────────────────────────────────
@@ -129,6 +183,83 @@ function AuthModal({ tab, setTab, onClose }: Props) {
     )
   }
 
+  // ── 비밀번호 재설정 화면 ──────────────────────────────────
+  if (view === 'reset') {
+    return (
+      <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        <div className="modal-box" style={{ position: 'relative' }}>
+          <button className="modal-close" onClick={onClose}>✕</button>
+          <div className="modal-head">
+            <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>🔑</div>
+            <h2>비밀번호 재설정</h2>
+            <p>{resetStep === 'done' ? '비밀번호가 변경되었습니다' : '가입한 이메일로 인증번호를 받아 재설정하세요'}</p>
+          </div>
+          <div className="modal-body">
+            {err && <div className="err-msg">{err}</div>}
+            {resetMsg && resetStep !== 'done' && (
+              <div style={{ fontSize: '.82rem', color: 'var(--purple-2)', background: 'rgba(124,111,205,.08)', borderRadius: 'var(--r2)', padding: '10px 12px', marginBottom: '14px', lineHeight: 1.5 }}>
+                {resetMsg}
+              </div>
+            )}
+
+            {resetStep === 'done' ? (
+              <>
+                <div style={{ textAlign: 'center', padding: '8px 0 20px' }}>
+                  <div style={{ fontSize: '2.2rem', marginBottom: '10px' }}>✅</div>
+                  <p style={{ color: 'var(--t2)', lineHeight: 1.6 }}>새 비밀번호로 로그인해주세요.</p>
+                </div>
+                <button className="btn btn-primary w-full" onClick={() => { setLoginForm({ email: resetEmail, password: '' }); backToLogin() }}>
+                  로그인하러 가기 →
+                </button>
+              </>
+            ) : resetStep === 'request' ? (
+              <form onSubmit={handleResetRequest}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="reset-email">가입 이메일</label>
+                  <input className="form-input" id="reset-email" type="email" placeholder="이메일 주소" required
+                    value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
+                </div>
+                <button className="btn btn-primary w-full" type="submit" disabled={loading}>
+                  {loading ? '발송 중…' : '인증번호 받기'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetConfirm}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="reset-code">인증번호</label>
+                  <input className="form-input" id="reset-code" inputMode="numeric" maxLength={6} placeholder="메일로 받은 6자리" required
+                    value={resetCode} onChange={e => setResetCode(e.target.value.replace(/\D/g, ''))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="reset-pw">새 비밀번호</label>
+                  <input className="form-input" id="reset-pw" type="password" placeholder="새 비밀번호 (6자 이상)" required minLength={6}
+                    value={resetPw} onChange={e => setResetPw(e.target.value)} autoComplete="new-password" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="reset-pw2">새 비밀번호 확인</label>
+                  <input className="form-input" id="reset-pw2" type="password" placeholder="새 비밀번호 확인" required minLength={6}
+                    value={resetPw2} onChange={e => setResetPw2(e.target.value)} autoComplete="new-password" />
+                </div>
+                <button className="btn btn-primary w-full" type="submit" disabled={loading}>
+                  {loading ? '변경 중…' : '비밀번호 변경'}
+                </button>
+                <button type="button" className="btn btn-ghost w-full" style={{ marginTop: '8px' }} disabled={loading}
+                  onClick={() => handleResetRequest()}>
+                  인증번호 재발송
+                </button>
+              </form>
+            )}
+
+            <button type="button" onClick={backToLogin}
+              style={{ display: 'block', margin: '16px auto 0', background: 'none', border: 'none', color: 'var(--t3)', fontSize: '.82rem', cursor: 'pointer' }}>
+              ← 로그인으로 돌아가기
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ── 로그인 / 회원가입 화면 ────────────────────────────────
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
@@ -170,6 +301,11 @@ function AuthModal({ tab, setTab, onClose }: Props) {
               </div>
               <button className="btn btn-primary w-full" type="submit" disabled={loading}>
                 {loading ? '로그인 중…' : '로그인'}
+              </button>
+              <button type="button"
+                onClick={() => { setView('reset'); setErr(''); setResetEmail(loginForm.email) }}
+                style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 'none', color: 'var(--t3)', fontSize: '.82rem', cursor: 'pointer', textDecoration: 'underline' }}>
+                비밀번호를 잊으셨나요?
               </button>
             </form>
           ) : (
