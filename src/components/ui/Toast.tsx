@@ -1,5 +1,5 @@
 // ── 토스트 알림 시스템 ─────────────────────────────────────
-import { useState, useCallback, createContext, useContext, type ReactNode } from 'react';
+import { useState, useCallback, useRef, createContext, useContext, type ReactNode } from 'react';
 
 type ToastType = 'ok' | 'err' | 'info';
 
@@ -7,6 +7,7 @@ interface Toast {
   id: number;
   message: string;
   type: ToastType;
+  leaving: boolean;   // 퇴장 애니메이션 중 여부
 }
 
 interface ToastContextType {
@@ -16,13 +17,20 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | null>(null);
 
+const ICONS: Record<ToastType, string> = { ok: '✓', err: '✕', info: 'i' };
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const idRef = useRef(0);
 
   const toast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+    const id = ++idRef.current;
+    setToasts(prev => [...prev, { id, message, type, leaving: false }]);
+    // 일정 시간 후 퇴장 애니메이션 → 완료되면 제거
+    setTimeout(() => {
+      setToasts(prev => prev.map(t => (t.id === id ? { ...t, leaving: true } : t)));
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 280);
+    }, 3000);
   }, []);
 
   return (
@@ -30,16 +38,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toast-container">
         {toasts.map(t => (
-          <div
-            key={t.id}
-            className={`px-5 py-3 rounded-xl text-sm font-medium shadow-2xl backdrop-blur-xl border animate-[fadeUp_0.3s_ease] ${
-              t.type === 'ok' ? 'bg-ok/15 border-ok/20 text-ok' :
-              t.type === 'err' ? 'bg-fail/15 border-fail/20 text-fail' :
-              'bg-purple/15 border-purple/20 text-purple-2'
-            }`}
-          >
-            {t.type === 'ok' ? '✓ ' : t.type === 'err' ? '✕ ' : 'ℹ '}
-            {t.message}
+          <div key={t.id} className={`toast toast-${t.type}${t.leaving ? ' toast-leaving' : ''}`} role="status">
+            <span className="toast-icon">{ICONS[t.type]}</span>
+            <span className="toast-msg">{t.message}</span>
           </div>
         ))}
       </div>
@@ -47,6 +48,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useToast = () => {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error('useToast must be inside ToastProvider');

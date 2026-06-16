@@ -263,14 +263,15 @@ export default function MyPage() {
                   <h2 className="mypage-section-title">결제/환불 내역</h2>
                 </div>
 
-                {/* 결제내역 | 환불내역 서브탭 */}
-                <div style={{ display: 'inline-flex', gap: '4px', background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r2)', padding: '4px', marginBottom: '20px' }}>
+                {/* 결제내역 | 환불내역 서브탭 — 언더라인 스타일 */}
+                <div style={{ display: 'flex', gap: '26px', borderBottom: '1px solid var(--line)', marginBottom: '24px' }}>
                   {([['active', '결제내역', activeEnrollments.length], ['refunded', '환불내역', refundedEnrollments.length]] as const).map(([key, label, count]) => {
                     const on = paymentSubTab === key
                     return (
                       <button key={key} type="button" onClick={() => setPaymentSubTab(key)}
-                        style={{ padding: '7px 16px', borderRadius: 'var(--r1)', background: on ? 'rgba(124,111,205,.18)' : 'transparent', border: `1px solid ${on ? 'rgba(124,111,205,.5)' : 'transparent'}`, color: on ? 'var(--purple-2)' : 'var(--t2)', fontSize: '.82rem', fontWeight: on ? 700 : 500, cursor: 'pointer' }}>
-                        {label} <span style={{ fontSize: '.74rem', opacity: .7 }}>({count})</span>
+                        style={{ padding: '0 2px 12px', background: 'none', border: 'none', borderBottom: `2px solid ${on ? 'var(--purple)' : 'transparent'}`, marginBottom: '-1px', cursor: 'pointer', color: on ? 'var(--t1)' : 'var(--t3)', fontSize: '.9rem', fontWeight: on ? 700 : 500, display: 'flex', alignItems: 'center', gap: '7px', transition: 'color .2s' }}>
+                        {label}
+                        <span style={{ fontSize: '.72rem', fontWeight: 700, padding: '1px 8px', borderRadius: 'var(--pill)', background: on ? 'rgba(124,111,205,.16)' : 'var(--glass-1)', color: on ? 'var(--purple-2)' : 'var(--t3)' }}>{count}</span>
                       </button>
                     )
                   })}
@@ -278,7 +279,6 @@ export default function MyPage() {
 
                 {paymentList.length === 0 ? (
                   <div className="mypage-empty">
-                    <div className="mypage-empty-ico">{paymentSubTab === 'refunded' ? '↩️' : '💳'}</div>
                     <div className="mypage-empty-text">{paymentSubTab === 'refunded' ? '환불 내역이 없습니다.' : '결제 내역이 없습니다.'}</div>
                     {paymentSubTab === 'active' && <button className="btn btn-primary btn-sm" onClick={() => navigate('/courses')}>강의 둘러보기</button>}
                   </div>
@@ -370,7 +370,6 @@ export default function MyPage() {
 
                 {inquiries.length === 0 ? (
                   <div className="mypage-empty">
-                    <div className="mypage-empty-ico">💬</div>
                     <div className="mypage-empty-text">작성한 문의가 없습니다.</div>
                     <button className="btn btn-primary btn-sm" onClick={openNewInquiry}>문의하기</button>
                   </div>
