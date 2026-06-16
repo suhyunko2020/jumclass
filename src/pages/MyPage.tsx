@@ -85,6 +85,18 @@ export default function MyPage() {
     setInquiries(data)
   }
 
+  // 환불 요청 모달 상태 — early return(authLoading/!user)보다 위에 둬야 Hook 순서 안정 (rules-of-hooks)
+  const [refundModal, setRefundModal] = useState<{
+    courseId: string; courseTitle: string; orderDate: string;
+    refundable: boolean; refundAmount: number; penalty: number; reason: string;
+    price: number; badge: string;
+    completedCount: number; totalLessons: number; progress: number;
+    daysSinceEnroll: number; totalDays: number;
+    isCert: boolean;
+  } | null>(null)
+  const [refundReason, setRefundReason] = useState('')
+  const [refundConfirmed, setRefundConfirmed] = useState(false)
+
   if (authLoading) {
     return (
       <div className="loading" style={{ paddingTop: '140px' }}>
@@ -105,17 +117,6 @@ export default function MyPage() {
     setModalTitle('새 문의 작성')
     setModalOpen(true)
   }
-
-  const [refundModal, setRefundModal] = useState<{
-    courseId: string; courseTitle: string; orderDate: string;
-    refundable: boolean; refundAmount: number; penalty: number; reason: string;
-    price: number; badge: string;
-    completedCount: number; totalLessons: number; progress: number;
-    daysSinceEnroll: number; totalDays: number;
-    isCert: boolean;
-  } | null>(null)
-  const [refundReason, setRefundReason] = useState('')
-  const [refundConfirmed, setRefundConfirmed] = useState(false)
 
   async function openRefundRequest(courseId: string, orderDate: string, assignedInstructorId?: string) {
     const course = getCourse(courseId)

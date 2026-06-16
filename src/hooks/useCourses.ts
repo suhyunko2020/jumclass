@@ -222,7 +222,7 @@ export function useCourses() {
   // 리뷰 수정 (관리자)
   const updateReview = useCallback(async (
     id: string,
-    patch: { rating?: number; text?: string; userName?: string }
+    patch: { rating?: number; text?: string; userName?: string; createdAt?: string }
   ): Promise<boolean> => {
     const all = getCachedReviews()
     const idx = all.findIndex(r => r.id === id)
@@ -234,6 +234,7 @@ export function useCourses() {
     if (typeof patch.rating === 'number') dbPatch.rating = patch.rating
     if (typeof patch.text === 'string') dbPatch.text = patch.text
     if (typeof patch.userName === 'string') dbPatch.user_name = patch.userName
+    if (typeof patch.createdAt === 'string') dbPatch.created_at = patch.createdAt
     const { error } = await supabase.from('reviews').update(dbPatch).eq('id', id)
     if (error) return false
 
@@ -241,6 +242,7 @@ export function useCourses() {
     if (typeof patch.rating === 'number') all[idx].rating = patch.rating
     if (typeof patch.text === 'string') all[idx].text = patch.text
     if (typeof patch.userName === 'string') all[idx].userName = patch.userName
+    if (typeof patch.createdAt === 'string') all[idx].date = patch.createdAt
     localStorage.setItem(REVIEWS_KEY, JSON.stringify(all))
     return true
   }, [])
@@ -248,17 +250,22 @@ export function useCourses() {
   const addReview = useCallback(async (
     courseId: string, userId: string, userName: string,
     userAvatar: string, rating: number, text: string,
-    source: 'user' | 'admin' = 'user'
+    source: 'user' | 'admin' = 'user',
+    createdAt?: string,  // ISO 문자열 — 시드 리뷰의 랜덤 날짜 지정용
   ): Promise<Review | null> => {
     const all = getCachedReviews()
     if (source === 'user' && all.some(r => r.courseId === courseId && r.userId === userId)) return null
 
-    // Supabase에 저장
-    const { data, error } = await supabase.from('reviews').insert({
+    // Supabase에 저장 — createdAt이 있으면 함께 전달
+    const insertPayload: Record<string, unknown> = {
       course_id: courseId, user_id: userId, user_name: userName,
       user_avatar: userAvatar, rating, text, source,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }).select().single() as any
+    }
+    if (createdAt) insertPayload.created_at = createdAt
+
+    const { data, error } = await supabase.from('reviews').insert(insertPayload).select().single() as
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      any
 
     if (error || !data) {
       console.warn('[addReview] Supabase insert 실패:', error?.message, error)

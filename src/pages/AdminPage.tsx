@@ -19,6 +19,10 @@ import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
 import { useSiteSettings, type SiteSettings } from '../hooks/useSiteSettings'
 import { invalidateStatsCache } from '../lib/homeStats'
+import {
+  makeSampleName, makeSampleRating, makeRandomDate,
+  pickUniqueText, pickUniqueAnyText, getPoolSize,
+} from '../lib/sampleReviews'
 
 type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews' | 'settings'
 
@@ -116,6 +120,10 @@ export default function AdminPage() {
   const [editReviewModal, setEditReviewModal] = useState<{ id: string; courseId: string; userName: string; rating: number; text: string } | null>(null)
   // 샘플 리뷰 시드 진행 상태
   const [seedingReviews, setSeedingReviews] = useState(false)
+  // 기존 admin 리뷰 일괄 수정 진행 상태 (early return 앞에 둬야 Hook 순서 안정)
+  const [refreshingReviews, setRefreshingReviews] = useState(false)
+  // 리뷰 source 필터: 전체 / 수강생(user) / 관리자(admin) — 임의 리뷰만 골라보기
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'user' | 'admin'>('all')
   const [studentSearch, setStudentSearch] = useState('')
   const [inquirySearch, setInquirySearch] = useState('')
   const [expandedInquiries, setExpandedInquiries] = useState<Set<string>>(new Set())
@@ -663,8 +671,8 @@ export default function AdminPage() {
   }
 
   // ── 샘플 리뷰 시드 ──────────────────────────────────────────
-  // 한글 70% : 영문 30% 닉네임을 랜덤 생성하고, 공개된 강의에 분배.
-  // 리뷰 텍스트는 풀에서 랜덤 선택 (레벨 60% / 공통 40%) — 통문장 풀로 자연스러운 톤 유지.
+  // 한글 70% : 영문 30% 닉네임 + 중복 없는 텍스트 풀에서 랜덤 선택 + 최근 6개월 내 랜덤 날짜.
+  // 기존 admin 리뷰의 텍스트도 unique 추적에 포함 → 새로 생성하는 리뷰가 기존과도 안 겹침.
   async function handleSeedReviews() {
     if (seedingReviews) return
 
@@ -674,121 +682,49 @@ export default function AdminPage() {
       return
     }
 
+    const poolSize = getPoolSize()
+    // 기존 admin 리뷰 텍스트를 모두 used로 등록 (이후 새 시드와 중복 안 되게)
+    const existingAdminTexts = new Set(
+      reviews.filter(r => r.source === 'admin').map(r => r.text),
+    )
+    const remaining = poolSize - existingAdminTexts.size
+    const maxAllowed = Math.max(1, remaining)
+
     const input = window.prompt(
-      `샘플 리뷰를 몇 개 생성할까요? (1~100)\n\n• 한글 닉네임 70% : 영문 닉네임 30%\n• 공개된 강의 ${allCourses.length}개에 랜덤 분배\n• 자연스러운 톤의 후기 풀에서 선택`,
-      '20',
+      `샘플 리뷰를 몇 개 생성할까요? (1~${maxAllowed})\n\n• 한글 닉네임 70% : 영문 닉네임 30%\n• 공개된 강의 ${allCourses.length}개에 랜덤 분배\n• 최근 6개월 내 랜덤 날짜로 작성됨\n• 기존 ${existingAdminTexts.size}건과 중복되지 않는 텍스트만 선택\n• 풀 잔여 개수: ${remaining}건`,
+      String(Math.min(20, maxAllowed)),
     )
     if (input === null) return
     const count = parseInt(input.trim(), 10)
-    if (isNaN(count) || count < 1 || count > 100) {
-      toast('1~100 사이의 숫자를 입력해주세요.', 'err')
+    if (isNaN(count) || count < 1 || count > maxAllowed) {
+      toast(`1~${maxAllowed} 사이의 숫자를 입력해주세요.`, 'err')
       return
     }
 
     setSeedingReviews(true)
 
-    const koreanLastNames = ['김','이','박','정','최','조','강','윤','장','서','오','한','임','유','황','신','권','안','송','홍','전','문','손','배','백']
-    const koreanFirstNames = ['수현','민지','지영','현우','진아','서연','예진','도윤','준호','하윤','나경','주원','소영','예나','지호','연우','서윤','민서','하늘','시우','다은','서진','채원','윤아','승민']
-    const englishNames = ['amy','alex','james','sophia','oliver','emma','noah','liam','ava','ethan','isla','lucas','zoe','leo','mason','lily','jack','maya','eric','nina','ryan','hannah','kevin','grace','daniel']
-    const avatars = ['🌙','✨','🌟','🔮','☯️','🌹','🕊️','🪄','🦋','🌻','🌿','🍀','🌼','⭐','💫','🌈','🪐','🌸','🍃','🍂']
-
-    // 공통 후기 풀 — 레벨 무관, 다양한 말투/길이/어미
-    const commonReviews = [
-      '강사님 목소리도 차분하고 설명이 친절해서 끝까지 들었어요.',
-      '한 번 듣고 다시 돌려봐도 새로 보이는 부분이 있어요. 알찹니다.',
-      '솔직히 큰 기대 없이 시작했는데, 들으면서 메모를 엄청 했네요',
-      '책으로만 봤을 땐 헷갈렸던 부분이 영상 보고 한 번에 정리됐어요!',
-      '진짜 깔끔합니다. 군더더기 없어서 좋았어요.',
-      '내용은 알찬데 좀 빠른 편이라 두 번 봤어요. 그래도 만족',
-      '카드 한 장 한 장 그림을 짚어가면서 설명해주셔서 머리에 잘 남아요',
-      '강의 듣고 친구한테 리딩해줬는데 반응 너무 좋았어요 ㅎㅎ',
-      '음… 처음엔 반신반의했는데 듣고 나니까 추천하게 되네요.',
-      '결제하고 살짝 걱정했는데 영상 퀄리티가 생각보다 훨씬 좋아서 놀랐습니다.',
-      '평일 저녁마다 한 강의씩 듣고 있어요. 이 페이스로 갈 수 있을 것 같아요',
-      '설명이 정말 따뜻해요. 듣는 동안 편안했습니다 :)',
-      '복습용으로 자주 돌려보는 중입니다. 짧은 강의도 알찬 게 좋네요',
-      '이 가격에 이 퀄리티면 진짜 가성비 미쳤다고 생각해요',
-      '몇 번 반복해서 보니까 카드 보는 눈이 달라지는 게 느껴져요. 추천!',
-      '강사님이 본인 경험을 곁들여서 설명해주시는 부분이 특히 좋았어요',
-      '딱딱하지 않고 친한 친구한테 배우는 느낌이에요',
-    ]
-
-    // 레벨별 후기 풀
-    const reviewsByLevel: Record<string, string[]> = {
-      입문: [
-        '타로 처음인데도 따라갈 수 있게 구성되어 있어서 좋았습니다.',
-        '카드 의미를 외우려고만 했는데 흐름으로 이해하니까 훨씬 쉽네요',
-        '입문 강의로 이만한 게 없는 것 같아요. 강사님 짱 ✨',
-        '정말 기초부터 짚어주셔서 감사했어요. 카드가 이제 무섭지 않아요!',
-        '아무것도 모르고 시작했는데 한 챕터 끝낼 때마다 뿌듯해요',
-        '메이저 아르카나만 봐도 한참인데 차근차근 잡아주시네요',
-        '책 사서 끄적이다가 답답해서 결제했는데 잘한 선택이었습니다',
-      ],
-      중급: [
-        '기초만 알고 막혀있던 부분이 풀렸어요. 스프레드 응용이 가능해졌습니다.',
-        '실제 리딩에 적용할 만한 팁이 많아서 도움 됐어요',
-        '리딩이 어려웠는데 강사님 노하우 듣고 감 잡았네요',
-        '중급 강의를 찾고 있었는데 딱 맞는 깊이였어요. 만족',
-        '셀프 리딩만 하다가 처음으로 남에게 봐줬습니다. 자신감이 붙었어요',
-        '카드 조합 해석이 어려웠는데 패턴이 보이기 시작했어요',
-      ],
-      고급: [
-        '심화 해석 기법이 정말 알찼습니다. 리더 활동에 바로 적용 중이에요.',
-        '깊이 있는 내용을 이렇게 풀어내기 쉽지 않은데 대단하다고 느꼈어요',
-        '고급 스프레드 부분에서 머리 한 대 맞은 느낌이었습니다. 새로운 시각',
-        '디테일이 살아있는 강의입니다. 진짜 감사해요 :)',
-        '여러 강의를 들어봤는데 깊이가 다르네요. 추천합니다',
-        '책에서도 잘 안 나오는 응용 해석법이 핵심이에요',
-      ],
-      자격증: [
-        '자격증 과정인 만큼 윤리·실무까지 다뤄줘서 좋았어요. 강사님 진도 관리도 꼼꼼하셨습니다.',
-        '체크리스트 받아가면서 한 회차씩 끝낼 때 성취감이 있어요',
-        '담당 강사님이 1:1로 봐주시니까 든든합니다. 모르는 거 바로바로 물어봤네요',
-        '커리어 시작하려고 등록했는데 비즈니스 파트가 특히 도움 됐어요',
-        '결제하고 강사님 알림톡 빨리 와서 놀랐고, 친절하셨어요. 추천합니다',
-        '진도 챙겨주시는 시스템이 좋아요. 혼자였으면 중간에 포기했을 듯',
-        '수료 동의서 작성부터 진도 관리까지 체계적입니다. 신뢰가 가요',
-      ],
-    }
-
-    function pick<T>(arr: T[]): T {
-      return arr[Math.floor(Math.random() * arr.length)]
-    }
-    function makeKoreanName(): string {
-      return pick(koreanLastNames) + pick(koreanFirstNames)
-    }
-    function makeEnglishName(): string {
-      return pick(englishNames)
-    }
-    function pickReviewText(level: string): string {
-      const levelPool = reviewsByLevel[level]
-      const useLevel = levelPool && levelPool.length > 0 && Math.random() < 0.6
-      return pick(useLevel ? levelPool : commonReviews)
-    }
-
+    const usedTexts = new Set(existingAdminTexts)
     let added = 0
     for (let i = 0; i < count; i++) {
-      const c = pick(allCourses)
-      const isKorean = Math.random() < 0.7
-      const name = isKorean ? makeKoreanName() : makeEnglishName()
-      const avatar = pick(avatars)
-      // 평점: 5점 80%, 4점 20% (별 3개 이하 제외 — 노출 페이지 신뢰감)
-      const rating = Math.random() < 0.8 ? 5 : 4
-      const text = pickReviewText(c.level)
-      // reviews.user_id는 UUID 타입 → crypto.randomUUID() 필수
+      const c = allCourses[Math.floor(Math.random() * allCourses.length)]
+      const text = pickUniqueText(c.level, usedTexts)
+      if (!text) break  // 풀 소진 시 중단
+
+      const { name, avatar } = makeSampleName()
+      const rating = makeSampleRating()
+      const createdAt = makeRandomDate(180)
       const uniqueUserId = crypto.randomUUID()
-      const ok = await addReview(c.id, uniqueUserId, name, avatar, rating, text, 'admin')
+
+      const ok = await addReview(c.id, uniqueUserId, name, avatar, rating, text, 'admin', createdAt)
       if (ok) {
         added++
       } else {
-        // 첫 실패 시 즉시 중단 — 보통 RLS/스키마 문제이므로 모두 같은 사유로 실패함.
-        // 100건 시도 후 통째로 실패 안내하는 것보다, 1건만 시도하고 원인 안내하는 게 빠름.
         setSeedingReviews(false)
         if (added > 0) invalidateStatsCache()
         toast(
           added > 0
             ? `${added}건 생성 후 실패. 브라우저 콘솔에서 [addReview] 로그 확인해주세요.`
-            : '리뷰 등록 실패. 브라우저 콘솔의 [addReview] Supabase 에러 메시지를 확인해주세요. (RLS 정책 또는 user_id 컬럼 타입 문제 가능성)',
+            : '리뷰 등록 실패. 브라우저 콘솔의 [addReview] Supabase 에러 메시지를 확인해주세요.',
           'err',
         )
         refresh()
@@ -799,6 +735,77 @@ export default function AdminPage() {
     setSeedingReviews(false)
     invalidateStatsCache()
     toast(`샘플 리뷰 ${added}건이 생성되었습니다.`, 'ok')
+    refresh()
+  }
+
+  // ── 기존 admin 리뷰 일괄 수정 ───────────────────────────────
+  // 모든 admin 리뷰의 날짜를 최근 6개월 내 랜덤으로 재설정 + 중복된 텍스트는 다른 텍스트로 교체.
+  async function handleRefreshAdminReviews() {
+    if (refreshingReviews) return
+    const targets = reviews.filter(r => r.source === 'admin')
+    if (targets.length === 0) {
+      toast('수정할 임의 리뷰가 없습니다.', 'err')
+      return
+    }
+    if (!confirm(
+      `임의로 등록된 리뷰 ${targets.length}건을 일괄 수정합니다.\n\n` +
+      `• 모든 날짜를 최근 6개월 내 랜덤으로 재설정\n` +
+      `• 중복된 텍스트는 다른 후기로 교체 (가능한 범위 내)\n\n` +
+      `진행할까요?`,
+    )) return
+
+    setRefreshingReviews(true)
+    const usedTexts = new Set<string>()
+    let dateUpdated = 0
+    let textUpdated = 0
+    let failed = 0
+
+    for (const r of targets) {
+      const patch: { createdAt: string; text?: string } = { createdAt: makeRandomDate(180) }
+      // 같은 텍스트가 이미 사용된 경우 다른 unique 텍스트로 교체 시도
+      if (usedTexts.has(r.text)) {
+        const newText = pickUniqueAnyText(usedTexts)
+        if (newText) {
+          patch.text = newText
+          textUpdated++
+        }
+      } else {
+        usedTexts.add(r.text)
+      }
+
+      const ok = await updateReview(r.id, patch)
+      if (ok) dateUpdated++
+      else failed++
+    }
+
+    setRefreshingReviews(false)
+    invalidateStatsCache()
+    toast(
+      `날짜 갱신 ${dateUpdated}건${textUpdated > 0 ? ` · 텍스트 교체 ${textUpdated}건` : ''}` +
+      (failed > 0 ? ` · 실패 ${failed}건` : ''),
+      failed > 0 ? 'err' : 'ok',
+    )
+    refresh()
+  }
+
+  // ── 임의 리뷰 일괄 삭제 ─────────────────────────────────────
+  async function handleDeleteAllAdminReviews() {
+    const targets = reviews.filter(r => r.source === 'admin')
+    if (targets.length === 0) {
+      toast('삭제할 임의 리뷰가 없습니다.', 'err')
+      return
+    }
+    if (!confirm(`임의로 등록된 리뷰 ${targets.length}건을 모두 삭제합니다. 진행할까요?`)) return
+
+    let deleted = 0
+    for (const r of targets) {
+      try {
+        await deleteReviewById(r.id)
+        deleted++
+      } catch { /* 무시 */ }
+    }
+    invalidateStatsCache()
+    toast(`임의 리뷰 ${deleted}건이 삭제되었습니다.`, 'ok')
     refresh()
   }
 
@@ -1570,24 +1577,87 @@ export default function AdminPage() {
           )}
 
           {/* ═══ 리뷰 관리 ═══ */}
-          {sec === 'reviews' && (
+          {sec === 'reviews' && (() => {
+            const userCount = reviews.filter(r => r.source !== 'admin').length
+            const adminCount = reviews.filter(r => r.source === 'admin').length
+            const filtered = reviewFilter === 'all'
+              ? reviews
+              : reviewFilter === 'user'
+                ? reviews.filter(r => r.source !== 'admin')
+                : reviews.filter(r => r.source === 'admin')
+
+            const FILTER_TABS: { key: typeof reviewFilter; label: string; count: number }[] = [
+              { key: 'all',   label: '전체',   count: reviews.length },
+              { key: 'user',  label: '수강생', count: userCount },
+              { key: 'admin', label: '임의',   count: adminCount },
+            ]
+
+            return (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '8px', flexWrap: 'wrap' }}>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', margin: 0 }}>
                   리뷰 관리 ({reviews.length}개)
                 </h1>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={handleRefreshAdminReviews} disabled={refreshingReviews || adminCount === 0}>
+                    {refreshingReviews ? '수정 중…' : '🔄 임의 리뷰 일괄 수정'}
+                  </button>
                   <button className="btn btn-ghost btn-sm" onClick={handleSeedReviews} disabled={seedingReviews}>
                     {seedingReviews ? '생성 중…' : '🎲 샘플 생성'}
                   </button>
                   <button className="btn btn-primary btn-sm" onClick={() => setAdminReviewModal(true)}>+ 리뷰 작성</button>
                 </div>
               </div>
-              {reviews.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>등록된 리뷰가 없습니다.</div>
+
+              {/* 필터 탭 + 일괄 삭제 */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: '12px', marginBottom: '20px', flexWrap: 'wrap',
+              }}>
+                <div style={{
+                  display: 'inline-flex', gap: '4px',
+                  background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)',
+                  borderRadius: 'var(--r2)', padding: '4px',
+                }}>
+                  {FILTER_TABS.map(t => {
+                    const active = reviewFilter === t.key
+                    return (
+                      <button key={t.key} type="button"
+                        onClick={() => setReviewFilter(t.key)}
+                        style={{
+                          padding: '7px 14px', borderRadius: 'var(--r1)',
+                          background: active ? 'rgba(124,111,205,.18)' : 'transparent',
+                          border: `1px solid ${active ? 'rgba(124,111,205,.5)' : 'transparent'}`,
+                          color: active ? 'var(--purple-2)' : 'var(--t2)',
+                          fontSize: '.8rem', fontWeight: active ? 700 : 500,
+                          cursor: 'pointer',
+                        }}>
+                        {t.label} <span style={{ fontSize: '.72rem', opacity: .7 }}>({t.count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {reviewFilter === 'admin' && adminCount > 0 && (
+                  <button
+                    onClick={handleDeleteAllAdminReviews}
+                    style={{
+                      fontSize: '.78rem', padding: '8px 14px', borderRadius: 'var(--r2)',
+                      background: 'rgba(224,82,82,.1)', color: 'var(--fail)',
+                      border: '1px solid rgba(224,82,82,.25)', cursor: 'pointer',
+                      fontWeight: 600,
+                    }}>
+                    🗑 임의 리뷰 {adminCount}건 일괄 삭제
+                  </button>
+                )}
+              </div>
+
+              {filtered.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>
+                  {reviews.length === 0 ? '등록된 리뷰가 없습니다.' : '해당 필터에 일치하는 리뷰가 없습니다.'}
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {reviews.map(r => {
+                  {filtered.map(r => {
                     const c = courses.find(x => x.id === r.courseId)
                     const isAdmin = r.source === 'admin'
                     return (
@@ -1629,7 +1699,8 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-          )}
+            )
+          })()}
 
           {/* ═══ 설정 ═══ */}
           {sec === 'settings' && (() => {
