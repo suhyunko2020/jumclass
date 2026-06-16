@@ -174,6 +174,7 @@ export interface Inquiry {
   status: 'pending' | 'answered';
   answer: string;
   answeredAt?: string;
+  refundedAt?: string;   // 환불 요청(type='refund')이 관리자에 의해 환불 처리된 시각
   date: string;
   metadata?: {
     courseId?: string;

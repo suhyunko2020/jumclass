@@ -6,7 +6,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
-  getInquiries, answerInquiry,
+  getInquiries, answerInquiry, markInquiryRefunded,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
@@ -1432,16 +1432,21 @@ export default function AdminPage() {
                               onClick={() => setAnswerModal({ inq, text: inq.answer || '' })}>
                               {inq.status !== 'answered' ? '답변 작성' : '답변 수정'}
                             </button>
-                            {inq.type === 'refund' && inq.status !== 'answered' && (
+                            {inq.type === 'refund' && !inq.refundedAt && (
                               <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
                                 onClick={async () => {
-                                  if (!confirm('환불 처리 하시겠습니까? (수강 내역은 유지됩니다)')) return
-                                  await answerInquiry(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
-                                  toast('환불 처리 완료', 'ok')
+                                  if (!confirm('환불 처리하시겠습니까?\n\n수강생의 해당 강의 수강이 즉시 종료되고, 결제 내역이 환불 내역으로 이동합니다.')) return
+                                  const ok = await markInquiryRefunded(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
+                                  toast(ok ? '환불 처리 완료' : '환불 처리 실패 — 콘솔을 확인해주세요.', ok ? 'ok' : 'err')
                                   refresh()
                                 }}>
                                 환불 처리
                               </button>
+                            )}
+                            {inq.type === 'refund' && inq.refundedAt && (
+                              <span style={{ fontSize: '.78rem', padding: '8px 12px', borderRadius: 'var(--r2)', background: 'rgba(224,82,82,.1)', color: 'var(--fail)', fontWeight: 600, alignSelf: 'center' }}>
+                                ✓ 환불 처리됨 · {new Date(inq.refundedAt).toLocaleDateString('ko-KR')}
+                              </span>
                             )}
                           </div>
                         </div>

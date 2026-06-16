@@ -10,6 +10,7 @@ import {
   getProgressPageByEnrollment,
 } from '../utils/storage'
 import type { Inquiry, InstructorProgressPage } from '../data/types'
+import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
 
 const certKey = (courseId: string, instructorId?: string | null) =>
   `${courseId}:${instructorId || ''}`
@@ -96,6 +97,8 @@ export default function MyPage() {
   } | null>(null)
   const [refundReason, setRefundReason] = useState('')
   const [refundConfirmed, setRefundConfirmed] = useState(false)
+  // 결제/환불 내역 서브탭
+  const [paymentSubTab, setPaymentSubTab] = useState<'active' | 'refunded'>('active')
 
   if (authLoading) {
     return (
@@ -111,6 +114,11 @@ export default function MyPage() {
   const enrollments = [...(user.enrollments || [])].sort(
     (a, b) => new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()
   )
+  // 환불 처리된 결제건 분리 — 환불 완료된 문의의 결제건은 환불 내역으로 이동
+  const refundedSet = refundedKeySet(inquiries)
+  const activeEnrollments = enrollments.filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet))
+  const refundedEnrollments = enrollments.filter(e => isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet))
+  const paymentList = paymentSubTab === 'active' ? activeEnrollments : refundedEnrollments
 
   function openNewInquiry() {
     setForm(emptyForm)
@@ -248,25 +256,38 @@ export default function MyPage() {
           {/* ── 메인 콘텐츠 ── */}
           <main className="mypage-content" key={tab}>
 
-            {/* ════ 결제 내역 ════ */}
+            {/* ════ 결제/환불 내역 ════ */}
             {tab === 'payments' && (
               <div>
                 <div className="mypage-section-header">
-                  <h2 className="mypage-section-title">결제 내역</h2>
-                  <span className="mypage-section-count">{enrollments.length}건</span>
+                  <h2 className="mypage-section-title">결제/환불 내역</h2>
                 </div>
 
-                {enrollments.length === 0 ? (
+                {/* 결제내역 | 환불내역 서브탭 */}
+                <div style={{ display: 'inline-flex', gap: '4px', background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r2)', padding: '4px', marginBottom: '20px' }}>
+                  {([['active', '결제내역', activeEnrollments.length], ['refunded', '환불내역', refundedEnrollments.length]] as const).map(([key, label, count]) => {
+                    const on = paymentSubTab === key
+                    return (
+                      <button key={key} type="button" onClick={() => setPaymentSubTab(key)}
+                        style={{ padding: '7px 16px', borderRadius: 'var(--r1)', background: on ? 'rgba(124,111,205,.18)' : 'transparent', border: `1px solid ${on ? 'rgba(124,111,205,.5)' : 'transparent'}`, color: on ? 'var(--purple-2)' : 'var(--t2)', fontSize: '.82rem', fontWeight: on ? 700 : 500, cursor: 'pointer' }}>
+                        {label} <span style={{ fontSize: '.74rem', opacity: .7 }}>({count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {paymentList.length === 0 ? (
                   <div className="mypage-empty">
-                    <div className="mypage-empty-ico">💳</div>
-                    <div className="mypage-empty-text">결제 내역이 없습니다.</div>
-                    <button className="btn btn-primary btn-sm" onClick={() => navigate('/courses')}>강의 둘러보기</button>
+                    <div className="mypage-empty-ico">{paymentSubTab === 'refunded' ? '↩️' : '💳'}</div>
+                    <div className="mypage-empty-text">{paymentSubTab === 'refunded' ? '환불 내역이 없습니다.' : '결제 내역이 없습니다.'}</div>
+                    {paymentSubTab === 'active' && <button className="btn btn-primary btn-sm" onClick={() => navigate('/courses')}>강의 둘러보기</button>}
                   </div>
                 ) : (
                   <div className="payment-list">
-                    {enrollments.map(e => {
+                    {paymentList.map(e => {
                       const c = getCourse(e.courseId)
                       if (!c) return null
+                      const isRefunded = paymentSubTab === 'refunded'
                       const date = new Date(e.enrolledAt).toLocaleDateString('ko-KR')
                       const expiry = new Date(e.expiryDate)
                       const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / 86400000)
@@ -287,7 +308,7 @@ export default function MyPage() {
                       const itemKey = `${e.courseId}:${e.assignedInstructorId || 'none'}:${e.enrolledAt}`
 
                       return (
-                        <div key={itemKey} className="payment-item">
+                        <div key={itemKey} className="payment-item" style={isRefunded ? { opacity: .6, filter: 'grayscale(.4)' } : undefined}>
                           <div className="payment-item-thumb">{c.emoji}</div>
                           <div className="payment-item-body">
                             <div className="payment-item-top">
@@ -299,7 +320,9 @@ export default function MyPage() {
                                   </span>
                                 )}
                               </div>
-                              {e.type === 'manual'
+                              {isRefunded
+                                ? <span style={{ fontSize: '.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.12)', color: 'var(--fail)', flexShrink: 0 }}>환불 완료</span>
+                                : e.type === 'manual'
                                 ? <span className="badge-manual">수동 등록</span>
                                 : isExpired
                                 ? <span className="badge-expired">만료</span>
@@ -309,17 +332,17 @@ export default function MyPage() {
                             </div>
                             <div className="payment-item-meta">
                               결제일 {date} &nbsp;·&nbsp; {c.level} &nbsp;·&nbsp;
-                              {isUnlimited ? ' 무제한 시청' : isExpired ? ' 만료됨' : ` 잔여 ${daysLeft}일`}
+                              {isRefunded ? ' 환불됨' : isUnlimited ? ' 무제한 시청' : isExpired ? ' 만료됨' : ` 잔여 ${daysLeft}일`}
                             </div>
                             <div className="payment-item-bottom">
                               <span className="payment-item-price">{formatPrice(c.price)}</span>
-                              {e.type !== 'manual' && !isExpired && (
+                              {!isRefunded && e.type !== 'manual' && !isExpired && (
                                 <button className="btn btn-ghost btn-sm"
                                   onClick={() => openRefundRequest(c.id, date, e.assignedInstructorId)}>
                                   환불 요청
                                 </button>
                               )}
-                              {isExpired && (
+                              {!isRefunded && isExpired && (
                                 <button className="btn btn-ghost btn-sm"
                                   onClick={() => navigate(`/checkout?course=${c.id}`)}>
                                   재수강 신청

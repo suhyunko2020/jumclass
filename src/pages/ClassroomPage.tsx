@@ -9,10 +9,12 @@ import { calcTotalDuration } from '../utils/format'
 import {
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
+  getMyInquiries,
   type CertificateAgreementRecord,
 } from '../utils/storage'
 import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
-import type { InstructorProgressPage } from '../data/types'
+import type { InstructorProgressPage, Inquiry } from '../data/types'
+import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
 
 // 자격증 강사별 진도 맵 캐시 키 — courseId+instructorId 조합
 const certKey = (courseId: string, instructorId?: string | null) =>
@@ -39,6 +41,8 @@ export default function ClassroomPage() {
   const [agreementModal, setAgreementModal] = useState<{ courseId: string; courseTitle: string; instructorId?: string } | null>(null)
   const [agreementRecord, setAgreementRecord] = useState<CertificateAgreementRecord | null>(null)
   const [agreementLoading, setAgreementLoading] = useState(false)
+  // 환불 처리된 강의 숨김용 — 본인 환불 문의 조회
+  const [inquiries, setInquiries] = useState<Inquiry[]>([])
 
   // 로그아웃(또는 비로그인) 시 홈으로 리디렉트 — 보호 페이지 공통 동작
   useEffect(() => {
@@ -62,6 +66,13 @@ export default function ClassroomPage() {
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, (user?.enrollments || []).length])
+
+  // 본인 환불 문의 조회 — 환불 처리된 결제건은 강의실에서 숨김
+  useEffect(() => {
+    if (!user) { setInquiries([]); return }
+    getMyInquiries(user.uid).then(setInquiries)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid])
 
   // 약관 모달 열릴 때 서명 정보 로드 (강사별 독립)
   useEffect(() => {
@@ -101,7 +112,9 @@ export default function ClassroomPage() {
   // 리디렉트 대기 — useEffect가 navigate('/') 실행하는 짧은 순간 빈 화면으로 대기
   if (!user) return null
 
-  const enrollments = user.enrollments || []
+  // 환불 처리된 결제건은 강의실 목록에서 제외
+  const refundedSet = refundedKeySet(inquiries)
+  const enrollments = (user.enrollments || []).filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet))
   const active = enrollments.filter(e => e.paused || new Date(e.expiryDate) > new Date())
   const expired = enrollments.filter(e => !e.paused && new Date(e.expiryDate) <= new Date())
   const all = getPublicCourses()

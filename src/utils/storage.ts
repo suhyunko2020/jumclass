@@ -37,6 +37,7 @@ function rowToInquiry(r: any): Inquiry {
     status: r.status as 'pending' | 'answered',
     answer: r.answer ?? '',
     answeredAt: r.answered_at ?? undefined,
+    refundedAt: r.refunded_at ?? undefined,
     date: r.created_at,
     metadata: (r.course_id || r.order_date)
       ? { courseId: r.course_id ?? undefined, orderDate: r.order_date ?? undefined }
@@ -85,6 +86,16 @@ export async function editInquiry(id: string, subject: string, message: string):
 export async function answerInquiry(id: string, answer: string): Promise<boolean> {
   const { error } = await supabase.from('inquiries')
     .update({ status: 'answered', answer, answered_at: new Date().toISOString() })
+    .eq('id', id)
+  return !error
+}
+
+// 환불 처리 — 환불 요청(type='refund') 문의를 환불 완료로 마킹.
+// refunded_at이 채워지면 해당 결제건(courseId+orderDate)이 마이페이지/강의실에서 환불 처리됨.
+export async function markInquiryRefunded(id: string, answer: string): Promise<boolean> {
+  const now = new Date().toISOString()
+  const { error } = await supabase.from('inquiries')
+    .update({ status: 'answered', answer, answered_at: now, refunded_at: now })
     .eq('id', id)
   return !error
 }
