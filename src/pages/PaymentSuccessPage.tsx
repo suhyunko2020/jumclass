@@ -20,7 +20,7 @@ export default function PaymentSuccessPage() {
   const navigate = useNavigate()
   const { getCourse } = useCourses()
   const { getInstructor } = useInstructors()
-  const { user, enroll } = useAuth()
+  const { user, enroll, loading: authLoading } = useAuth()
   const { get: getSiteSettings } = useSiteSettings()
 
   const paymentKey = params.get('paymentKey')
@@ -34,6 +34,10 @@ export default function PaymentSuccessPage() {
 
   useEffect(() => {
     document.title = '결제 처리 중 — JUMCLASS'
+    // Supabase 세션 복구 대기 — 토스 리디렉트 직후엔 user가 아직 null이라
+    // 여기서 본인 확인(intent.userId === user.uid)을 하면 잘못 실패함.
+    // loading이 끝나 user가 확정된 뒤에만 승인 절차를 진행한다.
+    if (authLoading) return
     if (ranRef.current) return
     ranRef.current = true
 
@@ -169,7 +173,7 @@ export default function PaymentSuccessPage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [authLoading])
 
   if (state.phase === 'loading') {
     return (
