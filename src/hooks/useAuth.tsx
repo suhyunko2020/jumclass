@@ -244,7 +244,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? await supabase.from('enrollments').insert(row)
       : await supabase.from('enrollments').upsert(row, { onConflict: 'user_id,course_id' })
 
-    if (error) return false
+    if (error) {
+      console.error('[enroll] enrollments 등록 실패:', error.code, error.message, error.details, error.hint)
+      return false
+    }
     await refreshUser()
     return true
   }, [user, refreshUser])
