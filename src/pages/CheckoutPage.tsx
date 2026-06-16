@@ -8,7 +8,7 @@ import { useToast } from '../components/ui/Toast'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { formatPrice, discountRate } from '../utils/format'
 import CertificateAgreementForm, { type AgreementFormValue } from '../components/course/CertificateAgreementForm'
-import { generateOrderId, saveIntent, requestTossPayment, type TossPaymentIntent } from '../lib/toss'
+import { generateOrderId, saveIntent, requestTossPayment, type TossPaymentIntent, type TossMethod } from '../lib/toss'
 
 export default function CheckoutPage() {
   const [params] = useSearchParams()
@@ -51,6 +51,17 @@ export default function CheckoutPage() {
     name: '', birthdate: '', phone: '', phoneVerified: false, signatureDataUrl: null,
   })
   const [agreements, setAgreements] = useState({ privacy: false, terms: false, refund: false, copyright: false })
+  const [payMethod, setPayMethod] = useState<TossMethod>('CARD')
+
+  // 관리자가 카드 결제를 끈 경우 등 — 활성화된 첫 결제수단으로 기본값 보정
+  useEffect(() => {
+    const m = getSiteSettings().payment.methods
+    const allowed = (['CARD', 'TRANSFER', 'MOBILE_PHONE'] as TossMethod[]).filter(k =>
+      k === 'CARD' ? m.card : k === 'TRANSFER' ? m.transfer : m.phone,
+    )
+    if (allowed.length && !allowed.includes(payMethod)) setPayMethod(allowed[0])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const allAgreed = agreements.privacy && agreements.terms && agreements.refund && agreements.copyright
   const isCertCheckout = !!course && course.level === '자격증'
   const certAgreementReady = !isCertCheckout || (
@@ -173,6 +184,7 @@ export default function CheckoutPage() {
         failUrl: `${origin}/payment-fail`,
         customerEmail: user.email,
         customerName: user.name,
+        method: payMethod,
       })
       // requestPayment는 리디렉트를 일으키므로 이 줄은 정상 경로에서 실행되지 않음
     } catch (err) {
@@ -260,6 +272,42 @@ export default function CheckoutPage() {
                 }
                 return null
               })()}
+
+              {/* 결제수단 선택 — 가로 라디오 (관리자 설정에서 켜진 수단만 노출) */}
+              {(() => {
+                const m = getSiteSettings().payment.methods
+                const opts: { key: TossMethod; label: string }[] = [
+                  ...(m.card ? [{ key: 'CARD' as const, label: '카드' }] : []),
+                  ...(m.transfer ? [{ key: 'TRANSFER' as const, label: '계좌이체' }] : []),
+                  ...(m.phone ? [{ key: 'MOBILE_PHONE' as const, label: '휴대폰' }] : []),
+                ]
+                if (opts.length <= 1) return null
+                return (
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--t2)', marginBottom: '9px' }}>결제수단</div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {opts.map(o => {
+                        const on = payMethod === o.key
+                        return (
+                          <label key={o.key} style={{
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+                            padding: '12px 8px', borderRadius: 'var(--r2)', cursor: 'pointer',
+                            background: on ? 'rgba(124,111,205,.12)' : 'var(--glass-1)',
+                            border: `1.5px solid ${on ? 'var(--purple)' : 'var(--line)'}`,
+                            transition: 'var(--t)',
+                          }}>
+                            <input type="radio" name="payMethod" checked={on}
+                              onChange={() => setPayMethod(o.key)}
+                              style={{ accentColor: 'var(--purple-2)', cursor: 'pointer', flexShrink: 0 }} />
+                            <span style={{ fontSize: '.82rem', fontWeight: on ? 700 : 500, color: on ? 'var(--t1)' : 'var(--t2)' }}>{o.label}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+
               <button className="btn btn-gold w-full btn-xl" onClick={doPay} disabled={paying || !canProceed}>
                 {paying ? '처리 중…' : `${formatPrice(price)} 결제하기 →`}
               </button>

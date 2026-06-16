@@ -60,6 +60,9 @@ export function generateOrderId(): string {
   return `jum_${Date.now()}_${hex}`
 }
 
+// 토스 v2 SDK가 지원하는 결제수단 (즉시결제). 가상계좌(VIRTUAL_ACCOUNT)는 입금확인 흐름이 별도라 추후 추가.
+export type TossMethod = 'CARD' | 'TRANSFER' | 'MOBILE_PHONE'
+
 export interface RequestPaymentArgs {
   clientKey: string
   customerKey?: string
@@ -70,19 +73,24 @@ export interface RequestPaymentArgs {
   failUrl: string
   customerEmail?: string
   customerName?: string
+  method?: TossMethod
 }
 
 export async function requestTossPayment(args: RequestPaymentArgs): Promise<void> {
   const toss = await loadTossPayments(args.clientKey)
   const payment = toss.payment({ customerKey: args.customerKey || ANONYMOUS })
-  await payment.requestPayment({
-    method: 'CARD',
-    amount: { currency: 'KRW', value: args.amount },
+  const base = {
+    amount: { currency: 'KRW' as const, value: args.amount },
     orderId: args.orderId,
     orderName: args.orderName,
     successUrl: args.successUrl,
     failUrl: args.failUrl,
     customerEmail: args.customerEmail,
     customerName: args.customerName,
-  })
+  }
+  // 토스 SDK는 method별 파라미터 오버로드라 리터럴로 분기 호출해야 타입이 맞음
+  const m = args.method ?? 'CARD'
+  if (m === 'TRANSFER') await payment.requestPayment({ method: 'TRANSFER', ...base })
+  else if (m === 'MOBILE_PHONE') await payment.requestPayment({ method: 'MOBILE_PHONE', ...base })
+  else await payment.requestPayment({ method: 'CARD', ...base })
 }
