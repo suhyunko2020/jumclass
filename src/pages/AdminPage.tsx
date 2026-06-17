@@ -17,7 +17,7 @@ import { formatPrice, getLevelColor } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
-import { useSiteSettings, type SiteSettings } from '../hooks/useSiteSettings'
+import { useSiteSettings, getPaymentSecret, type SiteSettings } from '../hooks/useSiteSettings'
 import { invalidateStatsCache } from '../lib/homeStats'
 import {
   makeSampleName, makeSampleRating, makeRandomDate,
@@ -97,6 +97,19 @@ export default function AdminPage() {
   const [settingsTab, setSettingsTab] = useState<'basic' | 'seo' | 'payment' | 'policy'>('basic')
   const toast = useToast()
   const navigate = useNavigate()
+
+  // 시크릿 키는 localStorage가 아닌 Supabase(payment_secret)에 보관 — 관리자만 조회 가능.
+  // 마운트 시 한 번 불러와 설정 폼에 병합(마스킹 표시·재저장용).
+  useEffect(() => {
+    getPaymentSecret().then(sk => {
+      if (!sk) return
+      setSiteSettingsForm(prev => {
+        const base = prev || getSettings()
+        return { ...base, payment: { ...base.payment, secretKey: sk } }
+      })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [sec, setSec] = useState<Section>('overview')
 
@@ -1978,10 +1991,14 @@ export default function AdminPage() {
                 </div>
                 )}
 
-                <button className="btn btn-primary btn-lg w-full" onClick={() => {
-                  if (siteSettingsForm) {
-                    saveSettings(siteSettingsForm)
-                    toast('설정이 저장되었습니다.', 'ok')
+                <button className="btn btn-primary btn-lg w-full" onClick={async () => {
+                  if (!siteSettingsForm) return
+                  try {
+                    await saveSettings(siteSettingsForm)
+                    setEditingSecretKey(false)
+                    toast('설정이 저장되었습니다. (전 사용자에게 즉시 적용)', 'ok')
+                  } catch {
+                    toast('설정 저장에 실패했습니다. 관리자 권한을 확인해주세요.', 'err')
                   }
                 }}>설정 저장</button>
               </div>

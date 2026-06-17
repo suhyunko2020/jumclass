@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js'
 import type { Enrollment } from '../data/types'
 import { useCourses } from './useCourses'
 import { sendWelcome } from '../utils/alimtalk'
+import { syncSiteSettingsFromSupabase } from './useSiteSettings'
 
 // ── 앱 내부에서 사용하는 User 타입 ──────────────────────────
 export interface AppUser {
@@ -106,6 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // 강의 데이터(overrides/custom/reviews) Supabase→localStorage 동기화
     syncFromSupabase()
+    // 사이트 설정(결제 모드/키 등) Supabase→localStorage 동기화 — 전 사용자 공유
+    syncSiteSettingsFromSupabase()
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)

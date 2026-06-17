@@ -76,7 +76,7 @@ async function buildSolapiAuthHeader(apiKey: string, apiSecret: string): Promise
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json(405, { ok: false, code: 'METHOD_NOT_ALLOWED' })
 
-  let body: { phone?: string }
+  let body: { phone?: string; purpose?: string }
   try { body = await req.json() } catch { return json(400, { ok: false, code: 'INVALID_JSON' }) }
 
   const rawPhone = (body.phone || '').trim()
@@ -85,6 +85,8 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const phone = normalizePhone(rawPhone)
+  // purpose='signup'이면 한 휴대폰당 한 계정만 허용 — 이미 가입된 번호는 인증 발송 차단
+  const purpose = (body.purpose || '').trim()
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -104,6 +106,27 @@ export default async function handler(req: Request): Promise<Response> {
       message: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 환경변수를 설정해주세요.',
       diagnostic: diag,
     })
+  }
+
+  // 0) 회원가입 시 휴대폰 중복 차단 — 한 휴대폰당 한 계정만 (service_role이라 RLS 우회)
+  if (purpose === 'signup') {
+    try {
+      const dupRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?phone=eq.${phone}&select=id&limit=1`,
+        { headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` } }
+      )
+      if (dupRes.ok) {
+        const rows = await dupRes.json().catch(() => [])
+        if (Array.isArray(rows) && rows.length > 0) {
+          return json(409, {
+            ok: false, code: 'ALREADY_REGISTERED',
+            message: '이미 가입된 휴대폰 번호입니다. 로그인 또는 비밀번호 찾기를 이용해주세요.',
+          })
+        }
+      }
+    } catch {
+      // 조회 실패는 치명적이지 않음 — DB 유니크 제약이 최종 방어선
+    }
   }
 
   // 1) Rate limit — 같은 번호로 60초 내 재요청 차단

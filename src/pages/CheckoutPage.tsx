@@ -136,20 +136,6 @@ export default function CheckoutPage() {
       return
     }
 
-    // 결제 설정 로드
-    const settings = getSiteSettings()
-    const payment = settings.payment
-    if (!payment.enabled) {
-      toast('결제가 일시 중단되었습니다. 관리자에게 문의해주세요.', 'err')
-      return
-    }
-    if (!payment.clientKey) {
-      toast('결제 설정이 완료되지 않았습니다. 관리자에게 문의해주세요.', 'err')
-      return
-    }
-
-    setPaying(true)
-
     // 결제 복원용 intent 생성 — PaymentSuccessPage에서 이 데이터로 enroll/서명/알림톡 처리
     const orderId = generateOrderId()
     const agreedKeys = policies.filter(p => agreements[p.key]).map(p => p.key)
@@ -169,6 +155,29 @@ export default function CheckoutPage() {
       agreedKeys,
       certAgreement: isCertCheckout ? certAgreement : undefined,
     }
+
+    // 무료 강의(관리자가 금액 미입력) — 토스 결제 없이 즉시 등록.
+    // 결제 플로우는 동일하게 유지하고, PaymentSuccessPage가 free 모드로 등록/서명/알림톡 처리.
+    if (price <= 0) {
+      setPaying(true)
+      saveIntent(intent)
+      navigate(`/payment-success?orderId=${orderId}&free=1`)
+      return
+    }
+
+    // 결제 설정 로드 (유료 강의만)
+    const settings = getSiteSettings()
+    const payment = settings.payment
+    if (!payment.enabled) {
+      toast('결제가 일시 중단되었습니다. 관리자에게 문의해주세요.', 'err')
+      return
+    }
+    if (!payment.clientKey) {
+      toast('결제 설정이 완료되지 않았습니다. 관리자에게 문의해주세요.', 'err')
+      return
+    }
+
+    setPaying(true)
     saveIntent(intent)
 
     // Toss 결제창 호출 → 성공 시 /payment-success, 실패 시 /payment-fail로 리디렉트
@@ -257,8 +266,9 @@ export default function CheckoutPage() {
                   </div>
                 </div>
               )}
-              {/* 결제 모드 안내 배너 — 관리자 설정에 따라 자동 표시 */}
+              {/* 결제 모드 안내 배너 — 관리자 설정에 따라 자동 표시 (무료 강의는 숨김) */}
               {(() => {
+                if (price <= 0) return null
                 const mode = getSiteSettings().payment.mode
                 if (mode === 'test') {
                   return (
@@ -273,8 +283,9 @@ export default function CheckoutPage() {
                 return null
               })()}
 
-              {/* 결제수단 선택 — 가로 라디오 (관리자 설정에서 켜진 수단만 노출) */}
+              {/* 결제수단 선택 — 가로 라디오 (관리자 설정에서 켜진 수단만 노출, 무료 강의는 숨김) */}
               {(() => {
+                if (price <= 0) return null
                 const m = getSiteSettings().payment.methods
                 const opts: { key: TossMethod; label: string }[] = [
                   ...(m.card ? [{ key: 'CARD' as const, label: '카드' }] : []),
@@ -309,7 +320,7 @@ export default function CheckoutPage() {
               })()}
 
               <button className="btn btn-gold w-full btn-xl" onClick={doPay} disabled={paying || !canProceed}>
-                {paying ? '처리 중…' : `${formatPrice(price)} 결제하기 →`}
+                {paying ? '처리 중…' : price <= 0 ? '무료로 수강 신청 →' : `${formatPrice(price)} 결제하기 →`}
               </button>
               <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '.76rem', color: 'var(--t3)' }}>
                 토스페이먼츠 보안 결제 · SSL 암호화

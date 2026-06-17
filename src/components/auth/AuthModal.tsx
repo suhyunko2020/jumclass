@@ -93,7 +93,7 @@ function AuthModal({ tab, setTab, onClose }: Props) {
     try {
       const res = await fetch('/api/sms-otp-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: signupForm.phone }),
+        body: JSON.stringify({ phone: signupForm.phone, purpose: 'signup' }),
       })
       const data = await res.json().catch(() => ({}))
       setOtpLoading(false)

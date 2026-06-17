@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
-import { useSiteSettings } from '../hooks/useSiteSettings'
 import { loadIntent, clearIntent, type TossPaymentIntent } from '../lib/toss'
 import { createProgressPage, uploadSignatureImage, saveCertificateAgreement } from '../utils/storage'
 import { sendPaymentComplete, sendInstructorProgress, sendCourseStart } from '../utils/alimtalk'
@@ -22,11 +21,11 @@ export default function PaymentSuccessPage() {
   const { getCourse } = useCourses()
   const { getInstructor } = useInstructors()
   const { user, enroll, loading: authLoading } = useAuth()
-  const { get: getSiteSettings } = useSiteSettings()
 
   const paymentKey = params.get('paymentKey')
   const orderId = params.get('orderId')
   const amountStr = params.get('amount')
+  const isFree = params.get('free') === '1'
 
   const [state, setState] = useState<ConfirmState>({ phase: 'loading' })
 
@@ -43,6 +42,32 @@ export default function PaymentSuccessPage() {
     ranRef.current = true
 
     ;(async () => {
+      // ── 무료 강의 — 토스 승인 없이 즉시 등록 ──────────────
+      if (isFree) {
+        if (!orderId) {
+          setState({ phase: 'error', message: '수강 신청 정보가 올바르지 않습니다.' })
+          return
+        }
+        const intent = loadIntent(orderId)
+        if (!intent) {
+          setState({ phase: 'error', message: '수강 신청 정보를 찾을 수 없습니다.' })
+          return
+        }
+        if (!user || (intent.userId && intent.userId !== user.uid)) {
+          setState({ phase: 'error', message: '다른 계정의 신청 정보입니다. 본인 계정으로 로그인 후 다시 시도해주세요.' })
+          return
+        }
+        try {
+          await applyIntent(intent)
+        } catch (err) {
+          console.error('무료 수강 등록 중 오류', err)
+        }
+        clearIntent(orderId)
+        setState({ phase: 'ok', intent })
+        document.title = '수강 신청 완료 — JUMCLASS'
+        return
+      }
+
       // 유효성 검사
       if (!paymentKey || !orderId || !amountStr) {
         setState({ phase: 'error', message: '결제 정보가 올바르지 않습니다. (paymentKey 누락)' })
@@ -70,20 +95,13 @@ export default function PaymentSuccessPage() {
         return
       }
 
-      // Secret Key 로드 (관리자 설정)
-      const secretKey = getSiteSettings().payment.secretKey
-      if (!secretKey) {
-        setState({ phase: 'error', message: '결제 승인 키가 설정되지 않았습니다. 관리자에게 문의해주세요.' })
-        return
-      }
-
-      // 서버 Confirm API 호출
+      // 서버 Confirm API 호출 — 시크릿 키는 서버가 Supabase에서 직접 읽으므로 전달하지 않음
       let confirmRes: Response
       try {
         confirmRes = await fetch('/api/toss-confirm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentKey, orderId, amount, secretKey }),
+          body: JSON.stringify({ paymentKey, orderId, amount }),
         })
       } catch (err) {
         const msg = err instanceof Error ? err.message : '네트워크 오류'

@@ -6,15 +6,15 @@
 //   paymentKey: string        // Toss에서 successUrl로 전달된 paymentKey
 //   orderId: string           // CheckoutPage에서 생성한 주문 ID
 //   amount: number            // 결제 금액 (원)
-//   secretKey: string         // 토스 Secret Key (관리자 설정, localStorage 저장)
 // }
 //
 // 응답:
 // 성공: 200 { ok: true, payment: { /* Toss 응답 원본 */ } }
 // 실패: 400/500 { ok: false, code: string, message: string }
 //
-// 주의: Secret Key는 클라이언트에서 body로 전달됨 — HTTPS 전송이지만 서버 env var 대비
-// 네트워크 노출 면적이 조금 더 큼. 관리자 UI 편의를 위해 의도적으로 이 구조를 채택.
+// 시크릿 키는 더 이상 클라이언트에서 받지 않는다. 서버가 Supabase payment_secret
+// 테이블(service_role)에서 직접 읽어 사용 → 고객 브라우저에 절대 노출되지 않음.
+// 필수 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 export const config = { runtime: 'edge' }
 
@@ -22,7 +22,6 @@ interface ConfirmBody {
   paymentKey?: string
   orderId?: string
   amount?: number
-  secretKey?: string
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -37,12 +36,36 @@ export default async function handler(req: Request): Promise<Response> {
     return json(400, { ok: false, code: 'INVALID_JSON', message: '요청 본문이 유효한 JSON이 아닙니다.' })
   }
 
-  const { paymentKey, orderId, amount, secretKey } = body
-  if (!paymentKey || !orderId || typeof amount !== 'number' || !secretKey) {
+  const { paymentKey, orderId, amount } = body
+  if (!paymentKey || !orderId || typeof amount !== 'number') {
     return json(400, {
       ok: false,
       code: 'MISSING_PARAMS',
-      message: 'paymentKey, orderId, amount, secretKey는 모두 필수입니다.',
+      message: 'paymentKey, orderId, amount는 모두 필수입니다.',
+    })
+  }
+
+  // 시크릿 키 — Supabase payment_secret 테이블에서 서버측 조회 (service_role, RLS 우회)
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!SUPABASE_URL || !SERVICE_KEY) {
+    return json(500, { ok: false, code: 'SUPABASE_MISSING_ENV', message: '서버 결제 설정이 누락되었습니다.' })
+  }
+  let secretKey = ''
+  try {
+    const secRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/payment_secret?id=eq.main&select=secret_key&limit=1`,
+      { headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` } }
+    )
+    const rows = await secRes.json().catch(() => [])
+    secretKey = Array.isArray(rows) && rows[0]?.secret_key ? String(rows[0].secret_key) : ''
+  } catch {
+    return json(502, { ok: false, code: 'SECRET_FETCH_FAILED', message: '결제 키 조회에 실패했습니다.' })
+  }
+  if (!secretKey) {
+    return json(400, {
+      ok: false, code: 'SECRET_NOT_CONFIGURED',
+      message: '결제 승인 키가 설정되지 않았습니다. 관리자에서 시크릿 키를 저장해주세요.',
     })
   }
 

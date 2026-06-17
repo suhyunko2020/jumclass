@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { supabase } from '../lib/supabase'
 
 export interface PaymentSettings {
   enabled: boolean                 // 결제 기능 ON/OFF
@@ -320,13 +321,64 @@ function getCached(): SiteSettings {
   } catch { return DEFAULTS }
 }
 
+// 공개 설정에서 시크릿 키를 제거한 사본 — localStorage 캐시/Supabase 공개행에는 시크릿을 두지 않는다.
+function stripSecret(s: SiteSettings): SiteSettings {
+  return { ...s, payment: { ...s.payment, secretKey: '' } }
+}
+
+// 공개 사이트 설정 Supabase → localStorage 캐시 동기화 (앱 시작 시 1회 호출).
+// 시크릿 키는 여기 포함되지 않음 (서버 전용 payment_secret 테이블).
+export async function syncSiteSettingsFromSupabase(): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from('site_settings').select('data').eq('id', 'main').maybeSingle()
+    if (error || !data?.data) return
+    const remote = data.data as Partial<SiteSettings>
+    const merged = stripSecret({ ...getCached(), ...remote,
+      payment: { ...DEFAULTS.payment, ...getCached().payment, ...(remote.payment || {}) },
+      policies: { ...DEFAULTS.policies, ...getCached().policies, ...(remote.policies || {}) },
+    })
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+  } catch { /* 동기화 실패는 무시 — 캐시/기본값으로 동작 */ }
+}
+
+// 관리자 화면 마스킹 표시용 — 시크릿 키 조회 (admin_users RLS로 관리자만 접근 가능)
+export async function getPaymentSecret(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('payment_secret').select('secret_key').eq('id', 'main').maybeSingle()
+    return (data?.secret_key ?? '') as string
+  } catch { return '' }
+}
+
 export function useSiteSettings() {
   const get = useCallback((): SiteSettings => getCached(), [])
 
-  const save = useCallback((settings: Partial<SiteSettings>) => {
+  // 저장: 공개 설정은 site_settings(전 사용자 공유), 시크릿 키는 payment_secret(서버 전용)로 분리 저장.
+  const save = useCallback(async (settings: Partial<SiteSettings>) => {
     const current = getCached()
     const merged = { ...current, ...settings }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+    const secretKey = settings.payment?.secretKey
+
+    // 1) localStorage 캐시 — 시크릿 제외하고 즉시 반영 (동기 UI용)
+    const publicMerged = stripSecret(merged)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(publicMerged))
+
+    // 2) Supabase 공개행 upsert — 모든 방문자가 동일한 결제 설정을 읽도록 (실패 시 throw)
+    const { error: pubErr } = await supabase.from('site_settings').upsert(
+      { id: 'main', data: publicMerged, updated_at: new Date().toISOString() },
+      { onConflict: 'id' },
+    )
+    if (pubErr) throw pubErr
+
+    // 3) 시크릿 키가 새로 입력된 경우에만 payment_secret upsert (실패 시 throw)
+    if (secretKey && secretKey.trim()) {
+      const { error: secErr } = await supabase.from('payment_secret').upsert(
+        { id: 'main', secret_key: secretKey.trim(), updated_at: new Date().toISOString() },
+        { onConflict: 'id' },
+      )
+      if (secErr) throw secErr
+    }
   }, [])
 
   return { get, save }
