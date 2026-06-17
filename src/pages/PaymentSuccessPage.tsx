@@ -6,7 +6,8 @@ import { useAuth } from '../hooks/useAuth'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { loadIntent, clearIntent, type TossPaymentIntent } from '../lib/toss'
 import { createProgressPage, uploadSignatureImage, saveCertificateAgreement } from '../utils/storage'
-import { sendInstructorAlimtalk } from '../utils/alimtalk'
+import { sendPaymentComplete, sendInstructorProgress, sendCourseStart } from '../utils/alimtalk'
+import { formatPrice } from '../utils/format'
 import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
 import type { ProgressChecklistItem } from '../data/types'
 
@@ -117,9 +118,24 @@ export default function PaymentSuccessPage() {
 
       await enroll(intent.courseId, intent.days ?? 365, intent.agreedKeys, intent.assignedInstructorId || undefined)
 
-      // 자격증 — 서명·동의서 저장
       const course = getCourse(intent.courseId)
       const isCert = course?.level === '자격증'
+      const days = intent.days ?? 365
+      const periodLabel = days === 90 ? '3개월' : days === 120 ? '4개월' : days >= 9999 ? '무제한' : `${days}일`
+      // 고객 연락처 — 프로필 우선, 자격증 동의서에 입력한 번호로 폴백
+      const customerPhone = user.phone || intent.certAgreement?.phone?.trim() || ''
+
+      // 결제완료 알림톡 (고객) — 모든 유료 강의 공통
+      if (customerPhone && course) {
+        sendPaymentComplete({
+          phone: customerPhone,
+          customerName: user.name,
+          courseName: course.title,
+          amount: formatPrice(intent.amount),
+          period: periodLabel,
+        }).then(r => { if (!r.ok) console.warn('[alimtalk:payment]', r) })
+      }
+
       if (isCert && intent.certAgreement?.signatureDataUrl) {
         const signatureUrl = await uploadSignatureImage(user.uid, intent.courseId, intent.certAgreement.signatureDataUrl)
         if (signatureUrl) {
@@ -155,19 +171,26 @@ export default function PaymentSuccessPage() {
         })
         if (progressPage) {
           const inst = getInstructor(intent.assignedInstructorId)
+          // 진도관리 안내 알림톡 (강사)
           if (inst?.phone) {
-            const days = intent.days ?? 365
-            const periodLabel = days === 90 ? '3개월' : days === 120 ? '4개월' : `${days}일`
-            sendInstructorAlimtalk({
+            sendInstructorProgress({
               phone: inst.phone,
               instructorName: inst.name,
               studentName: user.name,
               courseName: course.title,
-              coursePeriod: periodLabel,
+              period: periodLabel,
               token: progressPage.id,
-            }).then(r => {
-              if (!r.ok) console.warn('[alimtalk-fail]', r)
-            })
+            }).then(r => { if (!r.ok) console.warn('[alimtalk:progress]', r) })
+          }
+          // 수강시작 안내 알림톡 (수강생)
+          if (customerPhone && inst) {
+            sendCourseStart({
+              phone: customerPhone,
+              customerName: user.name,
+              courseName: course.title,
+              instructorName: inst.name,
+              period: periodLabel,
+            }).then(r => { if (!r.ok) console.warn('[alimtalk:course-start]', r) })
           }
         }
       }

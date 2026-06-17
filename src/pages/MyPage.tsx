@@ -11,6 +11,7 @@ import {
 } from '../utils/storage'
 import type { Inquiry, InstructorProgressPage } from '../data/types'
 import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
+import { sendInquiryReceived } from '../utils/alimtalk'
 
 const certKey = (courseId: string, instructorId?: string | null) =>
   `${courseId}:${instructorId || ''}`
@@ -178,6 +179,7 @@ export default function MyPage() {
     const unit = refundModal.isCert ? '회' : '강'
     const msg = `결제일: ${refundModal.orderDate}\n강의: ${refundModal.courseTitle}\n수강 진도: ${refundModal.completedCount}/${refundModal.totalLessons}${unit} (${refundModal.progress}%)\n환불 예상 금액: ${formatPrice(refundModal.refundAmount)}\n\n환불 사유: ${refundReason}`
     await addInquiry(user!.uid, user!.name, user!.email, '결제 환불 요청합니다.', msg, 'refund', { courseId: refundModal.courseId, orderDate: refundModal.orderDate })
+    if (user!.phone) sendInquiryReceived({ phone: user!.phone, customerName: user!.name, title: '결제 환불 요청합니다.' }).catch(() => {})
     toast('환불 요청이 접수되었습니다.', 'ok')
     setRefundModal(null)
     setTab('inquiries')
@@ -197,6 +199,7 @@ export default function MyPage() {
       toast('성공적으로 수정되었습니다.', 'ok')
     } else {
       await addInquiry(user!.uid, user!.name, user!.email, form.subject, form.message, form.type, form.metadata)
+      if (user!.phone) sendInquiryReceived({ phone: user!.phone, customerName: user!.name, title: form.subject }).catch(() => {})
       toast('문의가 등록되었습니다.', 'ok')
     }
     setModalOpen(false)

@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 import type { Enrollment } from '../data/types'
 import { useCourses } from './useCourses'
+import { sendWelcome } from '../utils/alimtalk'
 
 // ── 앱 내부에서 사용하는 User 타입 ──────────────────────────
 export interface AppUser {
   uid: string
   name: string
   email: string
+  phone: string
   avatar: string
   createdAt: string
   enrollments: Enrollment[]
@@ -128,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 프로필 조회
       const { data: profile } = await supabase
         .from('profiles')
-        .select('name, avatar')
+        .select('name, avatar, phone')
         .eq('id', uid)
         .single()
 
@@ -144,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         uid,
         name: profile?.name ?? sess.user.user_metadata?.name ?? '사용자',
         email: sess.user.email ?? '',
+        phone: profile?.phone ?? '',
         avatar: profile?.avatar ?? (profile?.name?.[0] ?? '?').toUpperCase(),
         createdAt: sess.user.created_at,
         enrollments,
@@ -193,6 +196,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       avatar: name[0].toUpperCase(),
       phone,
     })
+
+    // 회원가입 환영 알림톡 (실패해도 가입 플로우는 계속)
+    sendWelcome({ phone, customerName: name }).catch(() => {})
     return null
   }, [])
 

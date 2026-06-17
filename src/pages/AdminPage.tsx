@@ -6,13 +6,13 @@ import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
-  getInquiries, answerInquiry, markInquiryRefunded,
+  getInquiries, answerInquiry, markInquiryRefunded, getProfilePhone,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
   type CertificateAgreementRecord,
 } from '../utils/storage'
-import { sendInstructorAlimtalk } from '../utils/alimtalk'
+import { sendInstructorProgress, sendInquiryAnswered, sendRefundComplete } from '../utils/alimtalk'
 import { formatPrice, getLevelColor } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
@@ -311,7 +311,14 @@ export default function AdminPage() {
   async function handleAnswer(e: React.FormEvent) {
     e.preventDefault()
     if (!answerModal) return
-    await answerInquiry(answerModal.inq.id, answerModal.text)
+    const inq = answerModal.inq
+    await answerInquiry(inq.id, answerModal.text)
+    // 문의답변 알림톡 (고객) — 환불요청은 '환불 처리' 버튼에서 별도 발송하므로 제외
+    if (inq.type !== 'refund') {
+      getProfilePhone(inq.userId).then(phone => {
+        if (phone) sendInquiryAnswered({ phone, customerName: inq.userName, title: inq.subject }).catch(() => {})
+      })
+    }
     toast('답변이 등록되었습니다.', 'ok')
     setAnswerModal(null)
     refresh()
@@ -1437,6 +1444,16 @@ export default function AdminPage() {
                                 onClick={async () => {
                                   if (!confirm('환불 처리하시겠습니까?\n\n수강생의 해당 강의 수강이 즉시 종료되고, 결제 내역이 환불 내역으로 이동합니다.')) return
                                   const ok = await markInquiryRefunded(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
+                                  if (ok) {
+                                    // 환불완료 알림톡 (고객) — 금액은 환불 요청 메시지에서 추출
+                                    const amount = inq.message.match(/환불 예상 금액:\s*([^\n]+)/)?.[1]?.trim() || '-'
+                                    getProfilePhone(inq.userId).then(phone => {
+                                      if (phone) sendRefundComplete({
+                                        phone, customerName: inq.userName,
+                                        courseName: courseInfo?.title || '-', amount,
+                                      }).catch(() => {})
+                                    })
+                                  }
                                   toast(ok ? '환불 처리 완료' : '환불 처리 실패 — 콘솔을 확인해주세요.', ok ? 'ok' : 'err')
                                   refresh()
                                 }}>
@@ -2889,30 +2906,19 @@ export default function AdminPage() {
                                     const totalDays = Math.max(1, Math.round(daysLeftMs / 86400000))
                                     const periodLabel = totalDays === 90 ? '3개월' : totalDays === 120 ? '4개월' : `${totalDays}일`
                                     toast('알림톡 발송 요청 중…', 'info')
-                                    const r = await sendInstructorAlimtalk({
+                                    const r = await sendInstructorProgress({
                                       phone: inst.phone,
                                       instructorName: inst.name,
                                       studentName: em.user.name || '-',
                                       courseName: em.course?.title || '-',
-                                      coursePeriod: periodLabel,
+                                      period: periodLabel,
                                       token: pp.id,
                                     })
                                     if (r.ok) toast('알림톡이 발송되었습니다.', 'ok')
                                     else {
-                                      // 비즈엠 응답 상세를 JSON으로 변환해서 토스트에 노출
-                                      const stringify = (v: unknown): string => {
-                                        if (v == null) return ''
-                                        if (typeof v === 'string') return v
-                                        try { return JSON.stringify(v) } catch { return String(v) }
-                                      }
                                       const parts = [r.reason]
-                                      if (r.bizmCode) parts.push(`code=${r.bizmCode}`)
-                                      const msg = stringify(r.bizmMessage)
-                                      if (msg) parts.push(msg)
-                                      const raw = stringify(r.rawData)
-                                      if (raw && raw !== msg) parts.push(`raw=${raw}`)
                                       if (r.message) parts.push(r.message)
-                                      toast(`발송 실패: ${parts.join(' | ')}`, 'err')
+                                      toast(`발송 실패: ${parts.filter(Boolean).join(' | ')}`, 'err')
                                       console.error('[alimtalk-fail]', r)
                                     }
                                   }}

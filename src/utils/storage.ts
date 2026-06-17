@@ -45,6 +45,18 @@ function rowToInquiry(r: any): Inquiry {
   }
 }
 
+// 알림톡 발송용 — 회원의 휴대폰 번호 조회 (관리자가 고객에게 발송할 때)
+export async function getProfilePhone(userId: string): Promise<string> {
+  const { data } = await supabase.from('profiles').select('phone').eq('id', userId).single()
+  return (data?.phone ?? '') as string
+}
+
+// 알림톡 발송용 — 회원의 이름 + 휴대폰 번호 조회
+export async function getProfileContact(userId: string): Promise<{ name: string; phone: string }> {
+  const { data } = await supabase.from('profiles').select('name, phone').eq('id', userId).single()
+  return { name: (data?.name ?? '') as string, phone: (data?.phone ?? '') as string }
+}
+
 export async function getMyInquiries(userId: string): Promise<Inquiry[]> {
   const { data } = await supabase
     .from('inquiries').select('*')
