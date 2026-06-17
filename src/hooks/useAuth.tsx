@@ -162,18 +162,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (!error) return null
-    // 이메일 미인증 (유효기간 만료 포함) — 인증 메일 자동 재발송
-    if (error.message.includes('Email not confirmed')) {
-      const { error: resendErr } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-        options: { emailRedirectTo: window.location.origin },
-      })
-      if (resendErr) {
-        return '이메일 인증이 필요합니다. 인증 메일 재발송에 실패했어요: ' + resendErr.message
-      }
-      return '이메일 인증이 필요합니다. 새로운 인증 메일을 방금 다시 보냈어요. 받은편지함을 확인해주세요.'
-    }
+    // 휴대폰 인증 체제 — 이메일 인증은 사용하지 않음. (Confirm email OFF 전제)
+    // OFF 전에 가입된 미인증 계정만 이 분기에 걸림.
+    if (error.message.includes('Email not confirmed'))
+      return '계정 인증에 문제가 있습니다. 다시 가입하거나 관리자에게 문의해주세요.'
     if (error.message.includes('Invalid login credentials'))
       return '이메일 또는 비밀번호가 올바르지 않습니다.'
     return error.message

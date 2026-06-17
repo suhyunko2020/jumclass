@@ -80,9 +80,11 @@ function AuthModal({ tab, setTab, onClose }: Props) {
     if (!phoneVerified) { setErr('휴대폰 인증을 완료해주세요.'); return }
     setErr(''); setLoading(true)
     const error = await signup(signupForm.name, signupForm.email, signupForm.password, signupForm.phone)
+    if (error) { setLoading(false); setErr(error); return }
+    // 휴대폰 인증으로 본인확인 완료 → 가입 직후 자동 로그인
+    await login(signupForm.email, signupForm.password)
     setLoading(false)
-    if (error) { setErr(error); return }
-    onClose()  // 휴대폰 인증으로 본인확인 완료 → 가입 즉시 로그인 (이메일 인증 화면 없음)
+    onClose()
   }
 
   // 회원가입 휴대폰 인증번호 발송/검증 (기존 SMS OTP API 재사용)
