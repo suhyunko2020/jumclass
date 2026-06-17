@@ -18,7 +18,7 @@ interface AuthContextType {
   user: AppUser | null
   loading: boolean
   login: (email: string, password: string) => Promise<string | null>
-  signup: (name: string, email: string, password: string) => Promise<string | null>
+  signup: (name: string, email: string, password: string, phone: string) => Promise<string | null>
   loginWithGoogle: () => Promise<void>
   logout: () => Promise<void>
   enroll: (courseId: string, days?: number, policyAgreedKeys?: string[], assignedInstructorId?: string) => Promise<boolean>
@@ -181,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── 회원가입 ──────────────────────────────────────────────
   // null = 성공(인증메일 발송), string = 에러 메시지
-  const signup = useCallback(async (name: string, email: string, password: string): Promise<string | null> => {
+  const signup = useCallback(async (name: string, email: string, password: string, phone: string): Promise<string | null> => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -193,12 +193,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) return error.message
     if (!data.user) return '가입에 실패했습니다. 다시 시도해주세요.'
 
-    // 프로필 저장
+    // 프로필 저장 (휴대폰 번호 포함 — 알림톡 발송용)
     await supabase.from('profiles').upsert({
       id: data.user.id,
       name,
       email,
       avatar: name[0].toUpperCase(),
+      phone,
     })
     return null
   }, [])
@@ -417,6 +418,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be inside AuthProvider')

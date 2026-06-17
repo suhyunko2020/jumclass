@@ -47,11 +47,16 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   const { login, signup, loginWithGoogle } = useAuth()
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
-  const [verifyEmail, setVerifyEmail] = useState('')  // 인증 대기 화면용 이메일
   const [view, setView] = useState<'auth' | 'reset'>('auth')  // 비밀번호 재설정 화면 전환
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
-  const [signupForm, setSignupForm] = useState({ name: '', email: '', password: '' })
+  const [signupForm, setSignupForm] = useState({ name: '', email: '', password: '', phone: '' })
+  // 회원가입 휴대폰 인증 상태
+  const [signupOtp, setSignupOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [phoneVerified, setPhoneVerified] = useState(false)
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpErr, setOtpErr] = useState('')
 
   // 비밀번호 재설정 상태
   const [resetStep, setResetStep] = useState<'request' | 'confirm' | 'done'>('request')
@@ -72,12 +77,40 @@ function AuthModal({ tab, setTab, onClose }: Props) {
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
+    if (!phoneVerified) { setErr('휴대폰 인증을 완료해주세요.'); return }
     setErr(''); setLoading(true)
-    const error = await signup(signupForm.name, signupForm.email, signupForm.password)
+    const error = await signup(signupForm.name, signupForm.email, signupForm.password, signupForm.phone)
     setLoading(false)
     if (error) { setErr(error); return }
-    // 성공 → 이메일 인증 안내 화면으로 전환
-    setVerifyEmail(signupForm.email)
+    onClose()  // 휴대폰 인증으로 본인확인 완료 → 가입 즉시 로그인 (이메일 인증 화면 없음)
+  }
+
+  // 회원가입 휴대폰 인증번호 발송/검증 (기존 SMS OTP API 재사용)
+  async function sendSignupOtp() {
+    setOtpErr(''); setOtpLoading(true)
+    try {
+      const res = await fetch('/api/sms-otp-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: signupForm.phone }),
+      })
+      const data = await res.json().catch(() => ({}))
+      setOtpLoading(false)
+      if (!res.ok || !data.ok) { setOtpErr(data.message || '인증번호 발송에 실패했습니다.'); return }
+      setOtpSent(true)
+    } catch { setOtpLoading(false); setOtpErr('네트워크 오류가 발생했습니다.') }
+  }
+  async function verifySignupOtp() {
+    setOtpErr(''); setOtpLoading(true)
+    try {
+      const res = await fetch('/api/sms-otp-verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: signupForm.phone, code: signupOtp }),
+      })
+      const data = await res.json().catch(() => ({}))
+      setOtpLoading(false)
+      if (!res.ok || !data.ok) { setOtpErr(data.message || '인증번호가 일치하지 않습니다.'); return }
+      setPhoneVerified(true)
+    } catch { setOtpLoading(false); setOtpErr('네트워크 오류가 발생했습니다.') }
   }
 
   async function handleGoogle() {
@@ -127,60 +160,6 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   function backToLogin() {
     setView('auth'); setTab('login')
     setResetStep('request'); setResetCode(''); setResetPw(''); setResetPw2(''); setResetMsg(''); setErr('')
-  }
-
-  // ── 이메일 인증 안내 화면 ──────────────────────────────────
-  if (verifyEmail) {
-    return (
-      <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-        <div className="modal-box" style={{ position: 'relative' }}>
-          <button className="modal-close" onClick={onClose}>✕</button>
-
-          {/* 헤더 */}
-          <div className="modal-head" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '2.4rem', marginBottom: '12px' }}>📬</div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>인증 메일을 발송했습니다</h2>
-            <p style={{ marginTop: '8px', lineHeight: 1.7 }}>
-              <strong style={{ color: 'var(--purple-2)' }}>{verifyEmail}</strong><br />
-              위 주소로 인증 링크를 보냈습니다.
-            </p>
-          </div>
-
-          <div className="modal-body">
-            {/* 안내 단계 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-              {[
-                '받은편지함을 열어주세요',
-                'JUMCLASS 발신 메일을 확인해주세요',
-                '메일 내 인증 링크를 클릭해주세요',
-                '인증 완료 후 로그인해주세요',
-              ].map((text, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{
-                    width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
-                    background: 'linear-gradient(135deg, var(--purple), var(--purple-sat))',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '.75rem', fontWeight: 700,
-                  }}>
-                    {i + 1}
-                  </div>
-                  <span style={{ fontSize: '.875rem', color: 'var(--t2)' }}>{text}</span>
-                </div>
-              ))}
-            </div>
-
-            <p style={{ fontSize: '.8rem', color: 'var(--t3)', textAlign: 'center', marginBottom: '20px' }}>
-              메일이 보이지 않으면 스팸 폴더를 확인해주세요.
-            </p>
-
-            <button className="btn btn-primary w-full"
-              onClick={() => { setVerifyEmail(''); setTab('login') }}>
-              인증 완료 후 로그인하기 →
-            </button>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   // ── 비밀번호 재설정 화면 ──────────────────────────────────
@@ -332,7 +311,35 @@ function AuthModal({ tab, setTab, onClose }: Props) {
                   value={signupForm.password}
                   onChange={e => setSignupForm(p => ({ ...p, password: e.target.value }))} />
               </div>
-              <button className="btn btn-primary w-full" type="submit" disabled={loading}>
+
+              {/* 휴대폰 인증 */}
+              <div className="form-group">
+                <label className="form-label" htmlFor="signup-phone">휴대폰 번호</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input className="form-input" id="signup-phone" type="tel" placeholder="01000000000" required
+                    value={signupForm.phone} disabled={phoneVerified}
+                    onChange={e => setSignupForm(p => ({ ...p, phone: e.target.value.replace(/[^0-9]/g, '') }))} />
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                    disabled={otpLoading || phoneVerified || !signupForm.phone}
+                    onClick={sendSignupOtp}>
+                    {phoneVerified ? '인증완료' : otpSent ? '재발송' : '인증번호'}
+                  </button>
+                </div>
+              </div>
+              {otpSent && !phoneVerified && (
+                <div className="form-group">
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input className="form-input" inputMode="numeric" maxLength={6} placeholder="인증번호 6자리"
+                      value={signupOtp} onChange={e => setSignupOtp(e.target.value.replace(/\D/g, ''))} />
+                    <button type="button" className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                      disabled={otpLoading || signupOtp.length !== 6} onClick={verifySignupOtp}>확인</button>
+                  </div>
+                </div>
+              )}
+              {phoneVerified && <div style={{ fontSize: '.78rem', color: 'var(--ok)', marginBottom: '10px' }}>✓ 휴대폰 인증 완료</div>}
+              {otpErr && <div style={{ fontSize: '.78rem', color: 'var(--fail)', marginBottom: '10px' }}>{otpErr}</div>}
+
+              <button className="btn btn-primary w-full" type="submit" disabled={loading || !phoneVerified}>
                 {loading ? '처리 중…' : '무료 회원가입'}
               </button>
             </form>
