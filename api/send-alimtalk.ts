@@ -55,7 +55,7 @@ export default async function handler(request: Request): Promise<Response> {
   const BIZM_USERID = process.env.BIZM_USERID
   const BIZM_PROFILE = process.env.BIZM_PROFILE
   const BIZM_TEMPLATE_ID = process.env.BIZM_TEMPLATE_ID
-  const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://jumclass.vercel.app'
+  const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://jumclass.com'
 
   if (!BIZM_USERID || !BIZM_PROFILE || !BIZM_TEMPLATE_ID) {
     return new Response(JSON.stringify({

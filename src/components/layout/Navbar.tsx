@@ -77,18 +77,18 @@ export default function Navbar() {
               <button
                 onClick={() => setDropdownOpen(p => !p)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '6px 14px', borderRadius: '99px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '9px',
+                  padding: '4px 16px 4px 4px', borderRadius: '99px', cursor: 'pointer',
                   background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)',
                   fontSize: '.855rem', fontWeight: 600, color: 'var(--t1)',
                   transition: 'var(--t)',
                 }}
               >
                 <span style={{
-                  width: '24px', height: '24px', borderRadius: '50%',
+                  width: '28px', height: '28px', borderRadius: '50%',
                   background: 'linear-gradient(135deg, var(--purple), var(--purple-sat))',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '.75rem', fontWeight: 700, flexShrink: 0,
+                  fontSize: '.8rem', fontWeight: 700, flexShrink: 0,
                 }}>{user.avatar}</span>
                 {user.name}
               </button>

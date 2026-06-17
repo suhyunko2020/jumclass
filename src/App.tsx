@@ -75,6 +75,7 @@ export default function App() {
       <ScrollToTop />
       <div className="page-bg" />
       {!hideNavbar && <Navbar />}
+      <div className="app-main">
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/courses" element={<CoursesPage />} />
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="/i/:token" element={<InstructorProgressPageView />} />
         <Route path="/admin2026" element={<AdminPage />} />
       </Routes>
+      </div>
       {!hideFooter && <Footer />}
     </AuthModalProvider>
   )

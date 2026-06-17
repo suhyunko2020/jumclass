@@ -107,8 +107,8 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
   }
 
   async function handleSendOtp() {
-    if (!/^01[016789]-?\d{3,4}-?\d{4}$/.test(value.phone.replace(/\s/g, ''))) {
-      setOtpMessage('올바른 휴대폰 번호를 입력해주세요. (예: 010-1234-5678)')
+    if (!/^01[016789]\d{7,8}$/.test(value.phone)) {
+      setOtpMessage('올바른 휴대폰 번호를 입력해주세요. (예: 01012345678)')
       setOtpPhase('error')
       return
     }
@@ -130,10 +130,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       if (!res.ok || !data.ok) {
         console.warn('[otp-send-fail]', { status: res.status, data, raw: raw.slice(0, 200) })
         setOtpPhase('error')
-        const base = data.message || '인증번호 전송에 실패했습니다.'
-        const codeHint = data.code ? ` [${data.code}]` : ''
-        const statusHint = res.status !== 200 ? ` (HTTP ${res.status})` : ''
-        setOtpMessage(base + codeHint + statusHint)
+        setOtpMessage(data.message || '인증번호 전송에 실패했습니다.')
         return
       }
       setOtpPhase('sent')
@@ -142,9 +139,9 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       const devHint = data.devCode ? ` (테스트 모드: ${data.devCode})` : ''
       setOtpMessage(`인증번호를 발송했습니다.${devHint}`)
       setResendSec(RESEND_COOLDOWN_SEC)
-    } catch (err) {
+    } catch {
       setOtpPhase('error')
-      setOtpMessage(err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.')
+      setOtpMessage('네트워크 오류가 발생했습니다.')
     }
   }
 
@@ -174,9 +171,9 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
       setOtpMessage('✓ 본인 인증이 완료되었습니다.')
       setExpiresAtMs(null)
       onChange({ ...value, phoneVerified: true })
-    } catch (err) {
+    } catch {
       setOtpPhase('sent')
-      setOtpMessage(err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.')
+      setOtpMessage('네트워크 오류가 발생했습니다.')
     }
   }
 
@@ -351,8 +348,8 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
             {/* 만료 타이머 — 라벨 우측에 인라인으로 표시 (깔끔한 위치). 인증 완료 뱃지는 버튼에 "인증 완료"로 이미 표시되므로 중복 제거 */}
             {expiresAtMs !== null && !hasExpired && !isVerified && (
               <span style={{
-                marginLeft: 'auto', fontSize: '.72rem', fontFamily: 'monospace', fontWeight: 700,
-                color: secondsLeft <= 30 ? 'var(--warn, #e89c38)' : 'var(--purple-2)',
+                marginLeft: 'auto', fontSize: '.68rem', fontFamily: 'monospace', fontWeight: 600,
+                color: secondsLeft <= 30 ? 'var(--warn, #e89c38)' : 'var(--t3)',
               }}>
                 ⏱ {formatMmSs(secondsLeft)}
               </span>
@@ -362,8 +359,8 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
             <input
               type="tel"
               value={value.phone}
-              onChange={e => handlePhoneChange(e.target.value)}
-              placeholder="010-0000-0000"
+              onChange={e => handlePhoneChange(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="01000000000"
               disabled={inputLocked}
               style={{
                 flex: 1, padding: '10px 12px',

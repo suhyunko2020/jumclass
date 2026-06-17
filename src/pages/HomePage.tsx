@@ -168,7 +168,7 @@ export default function HomePage() {
                 ic: '📜',
                 headline: certCourses.length > 0 ? `자격증 과정 ${certCourses.length}개` : '자격증 과정',
                 sub: certCourses.length > 0 ? `${certLessons}강 심화 커리큘럼` : '곧 오픈 예정',
-                d: '수료 후 전문 리더로 활동할 수 있는 과정.',
+                d: '기초부터 실전까지 배우는 자격증 과정.',
               },
               {
                 ic: '🔮',

@@ -141,7 +141,7 @@ export default function ClassroomPage() {
       <section className="page-hero">
         <div className="container">
           <h1>안녕하세요, {user.name}님 ✦</h1>
-          <p>오늘도 타로 여정을 이어가세요.</p>
+          <p>오늘도 강의 이어서 들어보세요.</p>
         </div>
       </section>
 
