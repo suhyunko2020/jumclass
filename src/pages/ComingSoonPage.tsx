@@ -58,7 +58,7 @@ export default function ComingSoonPage({
         </h1>
         <p style={{ color: 'var(--t2)', lineHeight: 1.75, marginBottom: '40px', fontSize: '.95rem' }}>
           더 나은 모습으로 준비하고 있습니다.<br />
-          <strong style={{ color: 'var(--t1)' }}>2026년 6월 18일 오전 10시</strong>에 만나요.
+          <strong style={{ color: 'var(--t1)' }}>2026년 6월 19일 오후 2시</strong>에 만나요.
         </p>
 
         {/* 카운트다운 */}

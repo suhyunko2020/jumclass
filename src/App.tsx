@@ -23,7 +23,7 @@ import SeoHead from './components/ui/SeoHead'
 
 // 오픈 시각 — 이 시각 전까지는 비밀번호를 입력하지 않은 모든 방문자에게 공사중 페이지 노출
 // 비밀번호는 프론트에 두지 않고 /api/site-unlock(SITE_UNLOCK_PW 환경변수)에서 서버 검증한다.
-const OPEN_AT_MS = new Date('2026-06-18T10:00:00+09:00').getTime()
+const OPEN_AT_MS = new Date('2026-06-19T14:00:00+09:00').getTime()
 
 export default function App() {
   const location = useLocation()
