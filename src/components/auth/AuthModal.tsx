@@ -44,7 +44,7 @@ interface Props {
 }
 
 function AuthModal({ tab, setTab, onClose }: Props) {
-  const { login, signup, loginWithGoogle } = useAuth()
+  const { login, signup } = useAuth()
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const [view, setView] = useState<'auth' | 'reset'>('auth')  // 비밀번호 재설정 화면 전환
@@ -113,10 +113,6 @@ function AuthModal({ tab, setTab, onClose }: Props) {
     } catch { setOtpLoading(false); setOtpErr('네트워크 오류가 발생했습니다.') }
   }
 
-  async function handleGoogle() {
-    await loginWithGoogle()
-    onClose()
-  }
 
   // ── 비밀번호 재설정 핸들러 ────────────────────────────────
   async function handleResetRequest(e?: React.FormEvent) {
@@ -344,12 +340,6 @@ function AuthModal({ tab, setTab, onClose }: Props) {
               </button>
             </form>
           )}
-
-          <div className="modal-divider">또는</div>
-
-          <button className="btn btn-ghost w-full" onClick={handleGoogle}>
-            <span>G</span> Google로 계속하기
-          </button>
         </div>
       </div>
     </div>
