@@ -388,6 +388,15 @@ export default function ClassroomPage() {
                         onClick={e2 => e2.stopPropagation()}>
                         재수강 신청 →
                       </Link>
+                      {/* 수료한 인터넷강의는 만료 후에도 수료증 발급 가능 */}
+                      {c.level !== '자격증' && (e.progress || 0) >= 100 && (
+                        <button className="btn btn-ghost btn-sm"
+                          style={{ fontSize: '.75rem', color: 'var(--purple-2)' }}
+                          disabled={certLoading}
+                          onClick={e2 => { e2.stopPropagation(); issueCertificate(c.title) }}>
+                          🎓 수료증 발급
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
