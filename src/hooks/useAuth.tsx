@@ -390,7 +390,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const expiry = new Date()
     expiry.setDate(expiry.getDate() + days)
 
-    const { error } = await supabase.from('enrollments').upsert({
+    const row = {
       user_id: uid,
       course_id: courseId,
       expiry_date: expiry.toISOString(),
@@ -399,9 +399,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       type: 'manual',
       paused: false,
       pause_count: 0,
-    }, { onConflict: 'user_id,course_id' })
+    }
 
-    if (error) return false
+    // enrollments에 (user_id, course_id) unique 제약이 없어 upsert onConflict는 42P10으로 실패한다.
+    // 기존 수강 있으면 update, 없으면 insert (enroll과 동일 패턴).
+    const { data: existing } = await supabase
+      .from('enrollments').select('id')
+      .eq('user_id', uid).eq('course_id', courseId)
+      .maybeSingle()
+    const res = existing
+      ? await supabase.from('enrollments').update(row).eq('id', existing.id)
+      : await supabase.from('enrollments').insert(row)
+
+    if (res.error) {
+      console.error('[enrollManual] 등록 실패:', res.error.code, res.error.message, res.error.details, res.error.hint)
+      return false
+    }
     if (user?.uid === uid) await refreshUser()
     return true
   }, [user, refreshUser])
