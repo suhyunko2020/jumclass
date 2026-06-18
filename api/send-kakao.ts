@@ -80,12 +80,31 @@ function normalizeVariables(input?: Record<string, unknown>): Record<string, str
   return out
 }
 
+// userId로 profiles에서 이름+휴대폰 조회 (service_role — RLS 우회)
+async function resolveProfile(userId: string): Promise<{ name: string; phone: string }> {
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!SUPABASE_URL || !SERVICE_KEY) return { name: '', phone: '' }
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=name,phone&limit=1`,
+      { headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` } }
+    )
+    const rows = await res.json().catch(() => [])
+    const r = Array.isArray(rows) ? rows[0] : null
+    return { name: (r?.name ?? '') as string, phone: normalizePhone(String(r?.phone ?? '')) }
+  } catch {
+    return { name: '', phone: '' }
+  }
+}
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json(405, { ok: false, code: 'METHOD_NOT_ALLOWED' })
 
   let body: {
     type?: string
     to?: string
+    userId?: string
     variables?: Record<string, unknown>
     buttons?: Array<Record<string, unknown>>
     disableSms?: boolean
@@ -99,11 +118,19 @@ export default async function handler(req: Request): Promise<Response> {
     return json(400, { ok: false, code: 'UNKNOWN_TYPE', message: `알 수 없는 알림톡 유형: ${type}` })
   }
 
+  // 수신 번호 결정 — to가 유효하면 그대로, 아니면 userId로 profiles에서 서버 조회(service_role).
+  // 관리자가 타인에게 보내거나(RLS 우회), 비로그인 페이지에서 보낼 때 필요.
   const rawTo = (body.to || '').trim()
-  if (!rawTo || !isValidKrMobile(rawTo)) {
-    return json(400, { ok: false, code: 'INVALID_PHONE', message: '올바른 휴대폰 번호가 아닙니다.' })
+  let to = isValidKrMobile(rawTo) ? normalizePhone(rawTo) : ''
+  let resolvedName = ''
+  if (!to && body.userId) {
+    const prof = await resolveProfile(body.userId)
+    to = prof.phone
+    resolvedName = prof.name
   }
-  const to = normalizePhone(rawTo)
+  if (!to || !isValidKrMobile(to)) {
+    return json(400, { ok: false, code: 'INVALID_PHONE', message: '수신자 휴대폰 번호를 찾을 수 없습니다.' })
+  }
 
   const SOLAPI_API_KEY = process.env.SOLAPI_API_KEY
   const SOLAPI_API_SECRET = process.env.SOLAPI_API_SECRET
@@ -116,6 +143,8 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const variables = normalizeVariables(body.variables)
+  // 고객명이 비어있고 userId로 이름을 조회했으면 채워줌 (비로그인 페이지 발송 대응)
+  if (resolvedName && !variables['#{고객명}']) variables['#{고객명}'] = resolvedName
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const kakaoOptions: Record<string, any> = { pfId: PF_ID, templateId, variables }

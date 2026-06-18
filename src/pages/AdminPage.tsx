@@ -6,7 +6,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
-  getInquiries, answerInquiry, markInquiryRefunded, getProfilePhone,
+  getInquiries, answerInquiry, markInquiryRefunded,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
@@ -326,11 +326,10 @@ export default function AdminPage() {
     if (!answerModal) return
     const inq = answerModal.inq
     await answerInquiry(inq.id, answerModal.text)
-    // 문의답변 알림톡 (고객) — 환불요청은 '환불 처리' 버튼에서 별도 발송하므로 제외
+    // 문의답변 알림톡 (고객) — 환불요청은 '환불 처리' 버튼에서 별도 발송하므로 제외.
+    // 번호는 서버가 userId로 조회(관리자→타인 발송이라 클라이언트 RLS 우회).
     if (inq.type !== 'refund') {
-      getProfilePhone(inq.userId).then(phone => {
-        if (phone) sendInquiryAnswered({ phone, customerName: inq.userName, title: inq.subject }).catch(() => {})
-      })
+      sendInquiryAnswered({ userId: inq.userId, customerName: inq.userName, title: inq.subject }).catch(() => {})
     }
     toast('답변이 등록되었습니다.', 'ok')
     setAnswerModal(null)
@@ -1458,14 +1457,13 @@ export default function AdminPage() {
                                   if (!confirm('환불 처리하시겠습니까?\n\n수강생의 해당 강의 수강이 즉시 종료되고, 결제 내역이 환불 내역으로 이동합니다.')) return
                                   const ok = await markInquiryRefunded(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
                                   if (ok) {
-                                    // 환불완료 알림톡 (고객) — 금액은 환불 요청 메시지에서 추출
+                                    // 환불완료 알림톡 (고객) — 금액은 환불 요청 메시지에서 추출.
+                                    // 번호는 서버가 userId로 조회(관리자→타인 발송).
                                     const amount = inq.message.match(/환불 예상 금액:\s*([^\n]+)/)?.[1]?.trim() || '-'
-                                    getProfilePhone(inq.userId).then(phone => {
-                                      if (phone) sendRefundComplete({
-                                        phone, customerName: inq.userName,
-                                        courseName: courseInfo?.title || '-', amount,
-                                      }).catch(() => {})
-                                    })
+                                    sendRefundComplete({
+                                      userId: inq.userId, customerName: inq.userName,
+                                      courseName: courseInfo?.title || '-', amount,
+                                    }).catch(() => {})
                                   }
                                   toast(ok ? '환불 처리 완료' : '환불 처리 실패 — 콘솔을 확인해주세요.', ok ? 'ok' : 'err')
                                   refresh()

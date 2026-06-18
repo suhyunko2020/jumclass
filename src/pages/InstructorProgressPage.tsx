@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
-import { getProgressPage, updateProgressPage, getProfileContact } from '../utils/storage'
+import { getProgressPage, updateProgressPage } from '../utils/storage'
 import { sendCourseComplete } from '../utils/alimtalk'
 import type { InstructorProgressPage as ProgressPage } from '../data/types'
 
@@ -90,13 +90,9 @@ export default function InstructorProgressPageView() {
       updates.expiresAt = expiry.toISOString()
       next.completedAt = updates.completedAt as string
       next.expiresAt = updates.expiresAt as string
-      // 수료완료 알림톡 (고객) — 모든 진도 첫 완료 시 1회 발송
-      getProfileContact(next.userId).then(({ name, phone }) => {
-        if (phone) sendCourseComplete({
-          phone, customerName: name || '고객',
-          courseName: course?.title || '과정',
-        }).catch(() => {})
-      })
+      // 수료완료 알림톡 (고객) — 진도 첫 100% 달성 시 1회.
+      // 강사 진도페이지는 비로그인이라 번호/이름을 서버가 userId로 조회.
+      sendCourseComplete({ userId: next.userId, courseName: course?.title || '과정' }).catch(() => {})
     } else if (!nextAllChecked && prevAllChecked) {
       updates.completedAt = null
       updates.expiresAt = null

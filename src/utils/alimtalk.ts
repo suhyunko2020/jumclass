@@ -28,6 +28,7 @@ export interface KakaoResult {
 
 interface SendOpts {
   buttons?: Array<Record<string, unknown>>
+  userId?: string   // to가 없으면 서버가 이 userId로 profiles에서 번호 조회 (RLS 우회)
 }
 
 // 핵심 발송 함수 — 직접 호출보다 아래 트리거별 래퍼 사용 권장
@@ -37,12 +38,12 @@ export async function sendKakao(
   variables: Record<string, string | number>,
   opts?: SendOpts,
 ): Promise<KakaoResult> {
-  if (!to) return { ok: false, reason: 'missing-phone' }
+  if (!to && !opts?.userId) return { ok: false, reason: 'missing-phone' }
   try {
     const res = await fetch('/api/send-kakao', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, to, variables, buttons: opts?.buttons }),
+      body: JSON.stringify({ type, to, userId: opts?.userId, variables, buttons: opts?.buttons }),
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = await res.json().catch(() => null) as any
@@ -87,27 +88,27 @@ export function sendCourseStart(p: {
   })
 }
 
-// 문의접수 (고객)
+// 문의접수 (고객) — phone 없으면 userId로 서버 조회
 export function sendInquiryReceived(p: {
-  phone: string; customerName: string; title: string
+  phone?: string; userId?: string; customerName: string; title: string
 }): Promise<KakaoResult> {
-  return sendKakao('inquiry_received', p.phone, { 고객명: p.customerName, 문의제목: p.title })
+  return sendKakao('inquiry_received', p.phone || '', { 고객명: p.customerName, 문의제목: p.title }, { userId: p.userId })
 }
 
-// 문의답변 (고객)
+// 문의답변 (고객) — 관리자가 타인에게 발송 → userId로 서버 조회
 export function sendInquiryAnswered(p: {
-  phone: string; customerName: string; title: string
+  phone?: string; userId?: string; customerName: string; title: string
 }): Promise<KakaoResult> {
-  return sendKakao('inquiry_answered', p.phone, { 고객명: p.customerName, 문의제목: p.title })
+  return sendKakao('inquiry_answered', p.phone || '', { 고객명: p.customerName, 문의제목: p.title }, { userId: p.userId })
 }
 
-// 환불완료 (고객)
+// 환불완료 (고객) — 관리자가 타인에게 발송 → userId로 서버 조회
 export function sendRefundComplete(p: {
-  phone: string; customerName: string; courseName: string; amount: string
+  phone?: string; userId?: string; customerName: string; courseName: string; amount: string
 }): Promise<KakaoResult> {
-  return sendKakao('refund_complete', p.phone, {
+  return sendKakao('refund_complete', p.phone || '', {
     고객명: p.customerName, 강의명: p.courseName, 환불금액: p.amount,
-  })
+  }, { userId: p.userId })
 }
 
 // 회원가입 환영 (고객)
@@ -115,11 +116,12 @@ export function sendWelcome(p: { phone: string; customerName: string }): Promise
   return sendKakao('welcome', p.phone, { 고객명: p.customerName })
 }
 
-// 수료완료 (고객)
+// 수료완료 (고객) — 강사 진도페이지는 비로그인이라 userId로 서버가 이름+번호 조회
 export function sendCourseComplete(p: {
-  phone: string; customerName: string; courseName: string
+  phone?: string; userId?: string; customerName?: string; courseName: string
 }): Promise<KakaoResult> {
-  return sendKakao('course_complete', p.phone, { 고객명: p.customerName, 과정명: p.courseName })
+  return sendKakao('course_complete', p.phone || '',
+    { 고객명: p.customerName || '', 과정명: p.courseName }, { userId: p.userId })
 }
 
 // 수강 만료임박 (고객) — 주로 Cron에서 서버측 호출
