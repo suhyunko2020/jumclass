@@ -6,7 +6,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
-  getInquiries, answerInquiry, markInquiryRefunded,
+  getInquiries, answerInquiry, markInquiryRefunded, uploadCertificateTemplate,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
@@ -97,6 +97,20 @@ export default function AdminPage() {
   const [settingsTab, setSettingsTab] = useState<'basic' | 'seo' | 'payment' | 'policy'>('basic')
   const toast = useToast()
   const navigate = useNavigate()
+
+  // 수료증 템플릿 업로드 상태
+  const [certUploading, setCertUploading] = useState(false)
+  async function handleCertTemplateUpload(file: File) {
+    setCertUploading(true)
+    try {
+      const url = await uploadCertificateTemplate(file)
+      if (!url) { toast('템플릿 업로드에 실패했습니다.', 'err'); return }
+      setSiteSettingsForm(p => p ? { ...p, certificateTemplate: url } : null)
+      toast('수료증 템플릿이 업로드되었습니다. 하단 "설정 저장"을 눌러 반영하세요.', 'ok')
+    } finally {
+      setCertUploading(false)
+    }
+  }
 
   // 시크릿 키는 localStorage가 아닌 Supabase(payment_secret)에 보관 — 관리자만 조회 가능.
   // 마운트 시 한 번 불러와 설정 폼에 병합(마스킹 표시·재저장용).
@@ -1798,6 +1812,31 @@ export default function AdminPage() {
                     <label className="form-label">브랜드 소개 (푸터)</label>
                     <textarea className="form-input" rows={2} value={form.brandDescription}
                       onChange={e => setSiteSettingsForm(p => p ? { ...p, brandDescription: e.target.value } : null)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">수료증 템플릿 (인터넷강의 수료증용 · A4 세로 이미지)</label>
+                    <div style={{ fontSize: '.74rem', color: 'var(--t3)', marginBottom: '10px', lineHeight: 1.6 }}>
+                      이름·강의명·수료일이 자동으로 합성됩니다. 해당 위치(이름/강의명/날짜)는 비워둔 템플릿을 올려주세요.
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                      {form.certificateTemplate && (
+                        <img src={form.certificateTemplate} alt="수료증 템플릿"
+                          style={{ width: '120px', borderRadius: 'var(--r2)', border: '1px solid var(--line)' }} />
+                      )}
+                      <div>
+                        <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                          {certUploading ? '업로드 중…' : form.certificateTemplate ? '템플릿 교체' : '템플릿 업로드'}
+                          <input type="file" accept="image/png,image/jpeg" hidden disabled={certUploading}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleCertTemplateUpload(f); e.target.value = '' }} />
+                        </label>
+                        {form.certificateTemplate && (
+                          <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: '8px', color: 'var(--fail)' }}
+                            onClick={() => setSiteSettingsForm(p => p ? { ...p, certificateTemplate: '' } : null)}>
+                            제거
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 )}

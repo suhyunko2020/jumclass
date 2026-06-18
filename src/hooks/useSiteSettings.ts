@@ -23,6 +23,7 @@ export interface SiteSettings {
   seoDescription: string
   seoKeywords: string
   ogImage: string
+  certificateTemplate: string   // 수료증 A4 템플릿 이미지 URL (인터넷강의 수료증 발급용)
   payment: PaymentSettings
   policies: {
     privacy: string
@@ -40,6 +41,7 @@ const DEFAULTS: SiteSettings = {
   brandDescription: '타로를 제대로 배우고 싶은 분들을 위한 온라인 강의 플랫폼. 현직 강사와 체계적인 커리큘럼으로 실전 리딩을 익혀보세요.',
   seoTitle: 'JUMCLASS — 타로 온라인 강의 플랫폼',
   seoDescription: '현직 강사의 HD 영상 강의로 입문부터 자격증까지. 체계적인 커리큘럼으로 타로 실력을 키워보세요.',
+  certificateTemplate: '',
   seoKeywords: '타로, 타로 강의, 타로 배우기, 타로 자격증, 타로 리딩, 온라인 강의',
   ogImage: '',
   payment: {

@@ -15,6 +15,8 @@ import {
 import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
 import type { InstructorProgressPage, Inquiry } from '../data/types'
 import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
+import { useSiteSettings } from '../hooks/useSiteSettings'
+import { renderCertificate, downloadCertificatePdf, type RenderedCertificate } from '../utils/certificate'
 
 // 자격증 강사별 진도 맵 캐시 키 — courseId+instructorId 조합
 const certKey = (courseId: string, instructorId?: string | null) =>
@@ -43,6 +45,28 @@ export default function ClassroomPage() {
   const [agreementLoading, setAgreementLoading] = useState(false)
   // 환불 처리된 강의 숨김용 — 본인 환불 문의 조회
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
+
+  // 수료증 발급 (인터넷강의 수료 시)
+  const { get: getSiteSettings } = useSiteSettings()
+  const [certModal, setCertModal] = useState<{ courseTitle: string; cert: RenderedCertificate } | null>(null)
+  const [certLoading, setCertLoading] = useState(false)
+
+  async function issueCertificate(courseTitle: string) {
+    if (!user) return
+    // 관리자가 업로드한 템플릿 우선, 없으면 기본 번들 템플릿(public/)
+    const templateUrl = getSiteSettings().certificateTemplate || '/certificate-template.png'
+    setCertLoading(true)
+    try {
+      const today = new Date()
+      const date = `${today.getFullYear()}. ${String(today.getMonth() + 1).padStart(2, '0')}. ${String(today.getDate()).padStart(2, '0')}.`
+      const cert = await renderCertificate({ templateUrl, name: user.name, courseName: courseTitle, date })
+      setCertModal({ courseTitle, cert })
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '수료증 생성에 실패했습니다.', 'err')
+    } finally {
+      setCertLoading(false)
+    }
+  }
 
   // 로그아웃(또는 비로그인) 시 홈으로 리디렉트 — 보호 페이지 공통 동작
   useEffect(() => {
@@ -245,6 +269,15 @@ export default function ClassroomPage() {
                         <button className="btn btn-primary btn-sm"
                           onClick={e2 => { e2.stopPropagation(); navigate(`/lesson?course=${c.id}`) }}>
                           계속 수강하기 →
+                        </button>
+                      )}
+                      {/* 인터넷강의 수료 시 — 수료증 발급 */}
+                      {!isCert && isComplete && (
+                        <button className="btn btn-ghost btn-sm"
+                          style={{ fontSize: '.75rem', color: 'var(--purple-2)' }}
+                          disabled={certLoading}
+                          onClick={e2 => { e2.stopPropagation(); issueCertificate(c.title) }}>
+                          🎓 수료증 발급
                         </button>
                       )}
                       {user && (() => {
@@ -538,6 +571,30 @@ export default function ClassroomPage() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수료증 미리보기 + 다운로드 */}
+      {certModal && (
+        <div className="modal-overlay" onClick={e2 => { if (e2.target === e2.currentTarget) setCertModal(null) }}>
+          <div className="modal-box" style={{ maxWidth: '560px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <button className="modal-close" onClick={() => setCertModal(null)}>✕</button>
+            <div style={{ padding: '22px 24px 14px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, letterSpacing: '-.03em' }}>수료증</h3>
+              <p style={{ fontSize: '.82rem', color: 'var(--t2)', marginTop: '4px' }}>{certModal.courseTitle}</p>
+            </div>
+            <div className="modal-body" style={{ padding: '0 24px', overflow: 'auto' }}>
+              <img src={certModal.cert.dataUrl} alt="수료증 미리보기"
+                style={{ width: '100%', borderRadius: 'var(--r2)', border: '1px solid var(--line)', boxShadow: '0 6px 24px rgba(0,0,0,.18)' }} />
+            </div>
+            <div style={{ padding: '16px 24px 22px', display: 'flex', gap: '10px' }}>
+              <button className="btn btn-primary w-full"
+                onClick={() => downloadCertificatePdf(certModal.cert, `수료증_${certModal.courseTitle}.pdf`)}>
+                PDF 다운로드
+              </button>
+              <button className="btn btn-ghost" onClick={() => setCertModal(null)}>닫기</button>
             </div>
           </div>
         </div>

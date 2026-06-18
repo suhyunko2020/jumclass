@@ -351,6 +351,19 @@ export async function uploadSignatureImage(userId: string, courseId: string, dat
   return data.publicUrl
 }
 
+// 수료증 A4 템플릿 이미지 업로드 (관리자) → public URL 반환
+export async function uploadCertificateTemplate(file: File): Promise<string | null> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+  const path = `templates/certificate-${Date.now()}.${ext}`
+  const { error } = await supabase.storage.from('certificate-signatures').upload(path, file, {
+    contentType: file.type || 'image/png',
+    upsert: true,
+  })
+  if (error) { console.warn('certificate template upload failed:', error.message); return null }
+  const { data } = supabase.storage.from('certificate-signatures').getPublicUrl(path)
+  return data.publicUrl
+}
+
 export async function saveCertificateAgreement(params: {
   userId: string
   courseId: string
