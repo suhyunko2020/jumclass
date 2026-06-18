@@ -83,7 +83,7 @@ export default function HomePage() {
             <div className="hero-text">
               <div className="hero-kicker">타로 전문 교육 플랫폼</div>
               <h1>타로 리딩,<br /><em>제대로</em> 배워보세요</h1>
-              <p className="hero-desc">입문부터 자격증까지, 현직 리더의 영상 강의로 배우는 타로.<br />혼자 공부하다 막힐 때, 여기서 답을 찾으세요.</p>
+              <p className="hero-desc">입문부터 자격증까지, 현직 타로 상담사의 영상 강의로 배우는 타로.<br />혼자 공부하다 막힐 때, 여기서 답을 찾으세요.</p>
               <div className="hero-cta">
                 <Link to="/courses" className="btn btn-gold btn-xl">강의 둘러보기 →</Link>
                 <button className="btn btn-ghost btn-xl" onClick={() => openAuth('signup')}>무료로 시작하기</button>

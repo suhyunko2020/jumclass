@@ -112,7 +112,7 @@ export default function CoursesPage() {
             <h2 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '-.03em', margin: '12px 0 14px' }}>
               담당 강사와 함께<br />
               <span style={{ background: 'linear-gradient(135deg,var(--gold-2),var(--purple-2))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                전문 타로 리더
+                전문 타로 상담사
               </span>로 성장하세요
             </h2>
             <p style={{ color: 'var(--t2)', lineHeight: 1.8, margin: 0 }}>

@@ -2487,7 +2487,7 @@ export default function AdminPage() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">직함</label>
-                    <input className="form-input" placeholder="전문 타로 리더" value={instModal.title}
+                    <input className="form-input" placeholder="전문 타로 상담사" value={instModal.title}
                       onChange={e => setInstModal(p => p ? { ...p, title: e.target.value } : null)} />
                   </div>
                 </div>

@@ -11,7 +11,7 @@ export default function InstructorsPage() {
         <div className="container">
           <span className="section-kicker">Instructor</span>
           <h1 style={{ marginTop: '10px' }}>전문 강사진</h1>
-          <p>수천 건의 리딩 경험을 가진 현직 전문 타로 리더들을 소개합니다.</p>
+          <p>수천 건의 리딩 경험을 가진 현직 전문 타로 상담사들을 소개합니다.</p>
         </div>
       </section>
 

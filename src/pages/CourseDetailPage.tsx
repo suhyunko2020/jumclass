@@ -5,6 +5,9 @@ import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcTotalDuration, getLevelColor } from '../utils/format'
+import { getMyInquiries } from '../utils/storage'
+import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
+import type { Inquiry } from '../data/types'
 
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>()
@@ -13,7 +16,7 @@ export default function CourseDetailPage() {
   const { getCourse, getEnrolledCount, getReviewsByCourse, getReviewStats } = useCourses()
   useDataSyncTick()  // 동기화/리뷰 작성 시 재렌더 (캐시 최신 반영)
   const { getPublicInstructors } = useInstructors()
-  const { user, isEnrolled, getEnrollment } = useAuth()
+  const { user } = useAuth()
   const { openAuth } = useAuthModal()
 
   // 미리보기/무료 강의 클릭 공통 가드 — 비회원이면 페이지 이동 대신 로그인 모달 오픈
@@ -32,6 +35,13 @@ export default function CourseDetailPage() {
   const forcedInstructorId = searchParams.get('assignedInstructor') || ''
   const [selectedInstructorId, setSelectedInstructorId] = useState<string>(forcedInstructorId)
 
+  // 환불 처리된 결제건은 "수강 중"으로 보지 않음 → 재결제 가능하도록 본인 환불 문의 조회
+  const [inquiries, setInquiries] = useState<Inquiry[]>([])
+  useEffect(() => {
+    if (!user) { setInquiries([]); return }
+    getMyInquiries(user.uid).then(setInquiries)
+  }, [user?.uid])
+
   useEffect(() => {
     if (course) document.title = course.title + ' — JUMCLASS'
   }, [course])
@@ -47,14 +57,17 @@ export default function CourseDetailPage() {
   }
 
   const isCert = course.level === '자격증'
-  // 자격증은 (강의, 강사) 조합일 때만 "이미 수강 중"으로 판단 → 다른 강사로 재결제 가능
-  // 일반 강의는 기존처럼 강의 단위로 판단
-  const enrolled = isCert && selectedInstructorId
-    ? isEnrolled(course.id, selectedInstructorId)
-    : isEnrolled(course.id)
-  const myEnrollment = enrolled
-    ? (isCert && selectedInstructorId ? getEnrollment(course.id, selectedInstructorId) : getEnrollment(course.id))
-    : null
+  // 환불 처리된 결제건은 수강 중으로 보지 않음 → 환불 후 재결제 가능
+  const refundedSet = refundedKeySet(inquiries)
+  // 자격증은 (강의, 강사) 조합, 일반 강의는 강의 단위로 후보 enrollment를 추린 뒤
+  // 환불되지 않고 활성(미만료/휴강)인 건이 있으면 "수강 중"으로 판단
+  const candidateEnrollments = (user?.enrollments || []).filter(e =>
+    e.courseId === course.id &&
+    (isCert && selectedInstructorId ? e.assignedInstructorId === selectedInstructorId : true) &&
+    !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet),
+  )
+  const myEnrollment = candidateEnrollments.find(e => e.paused || new Date(e.expiryDate) > new Date()) ?? null
+  const enrolled = !!myEnrollment
   const lockedInstructorId = myEnrollment?.assignedInstructorId
   const totalLessons = course.curriculum.reduce((s, sec) => s + sec.items.length, 0)
   const totalDuration = calcTotalDuration(course.curriculum)
