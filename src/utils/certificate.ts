@@ -16,10 +16,10 @@ export interface CertificateParams {
 const POSITIONS = {
   // 큰 이름 — 가운데, 'PRESENTED TO' 아래 금색 줄 바로 위
   name:   { x: 0.5,   y: 0.487, size: 0.030, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
-  // 강의명 — 이름 아래
-  course: { x: 0.5,   y: 0.548, size: 0.026, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
-  // 수료일 — 오른쪽 DATE 라벨 위
-  date:   { x: 0.682, y: 0.745, size: 0.024, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
+  // 강의명 — 이름 아래 (작게, 영문 문단과 간격 확보)
+  course: { x: 0.5,   y: 0.533, size: 0.019, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
+  // 수료일 — 오른쪽 금색 줄 위 (서명과 같은 높이)
+  date:   { x: 0.682, y: 0.705, size: 0.022, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
