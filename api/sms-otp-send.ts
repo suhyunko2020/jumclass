@@ -22,6 +22,10 @@ const CODE_TTL_MS = 5 * 60 * 1000       // 5분
 const RESEND_COOLDOWN_MS = 60 * 1000    // 60초 재전송 쿨다운
 const SOLAPI_SEND_URL = 'https://api.solapi.com/messages/v4/send'
 
+// 인증번호 알림톡 (승인 템플릿) — 알림톡 우선 발송, 실패 시 SMS 자동 대체(비용 절감)
+const AUTH_PF_ID = 'KA01PF260616051226226tvtVw4A32cI'
+const AUTH_TEMPLATE_ID = 'KA01TP260617055554317yhFxi3oULou'
+
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
   if (digits.startsWith('82')) return '0' + digits.slice(2)
@@ -170,7 +174,7 @@ export default async function handler(req: Request): Promise<Response> {
     return json(500, { ok: false, code: 'INSERT_FAILED', message: `DB 저장 실패: ${msg}` })
   }
 
-  // 3) SOLAPI REST API로 SMS 발송
+  // 3) SOLAPI 발송 — 인증번호 알림톡(ATA) 우선, 실패 시 SMS 자동 대체
   const SOLAPI_API_KEY = process.env.SOLAPI_API_KEY
   const SOLAPI_API_SECRET = process.env.SOLAPI_API_SECRET
   const SOLAPI_SENDER = process.env.SOLAPI_SENDER
@@ -192,7 +196,8 @@ export default async function handler(req: Request): Promise<Response> {
     })
   }
 
-  const text = `[점클래스] 본인 확인 인증번호: ${code}\n5분 안에 입력해주세요.`
+  // 알림톡 실패 시 SMS로 대체발송될 본문 (템플릿 문구와 동일 톤)
+  const text = `[점클래스] 본인 인증을 위한 인증번호입니다.\n인증번호: ${code}\n5분 이내에 입력해주세요.`
 
   try {
     const authHeader = await buildSolapiAuthHeader(SOLAPI_API_KEY, SOLAPI_API_SECRET)
@@ -206,7 +211,14 @@ export default async function handler(req: Request): Promise<Response> {
         message: {
           to: phone,
           from: SOLAPI_SENDER,
-          text,
+          type: 'ATA',                          // 알림톡 우선
+          text,                                 // 알림톡 실패 시 SMS 대체발송 본문
+          kakaoOptions: {
+            pfId: AUTH_PF_ID,
+            templateId: AUTH_TEMPLATE_ID,
+            variables: { '#{인증번호}': code },
+            disableSms: false,                  // 카카오 미수신/실패 시 SMS 자동 대체
+          },
         },
       }),
     })
