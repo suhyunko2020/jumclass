@@ -14,8 +14,8 @@ export interface CertificateParams {
 // 이미지 너비/높이 대비 비율 좌표 + 폰트 크기(높이 대비 비율)
 // 템플릿의 빨간 표시 위치 기준 (PRESENTED TO 아래 이름줄 / 그 아래 강의명 / 오른쪽 DATE 위)
 const POSITIONS = {
-  // 큰 이름 — 가운데, 금색 줄 위 중앙 (선과 간격 확보)
-  name:   { x: 0.5,   y: 0.466, size: 0.030, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
+  // 큰 이름 — 가운데, 금색 줄 위 중앙 (위로 더, 크게)
+  name:   { x: 0.5,   y: 0.452, size: 0.036, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
   // 강의명 — 이름 아래 (작게)
   course: { x: 0.5,   y: 0.533, size: 0.016, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
   // 수료일 — 오른쪽 금색 줄 위, DATE 라벨과 같은 중심(x)에 정렬
