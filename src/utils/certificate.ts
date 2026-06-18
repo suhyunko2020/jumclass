@@ -14,12 +14,12 @@ export interface CertificateParams {
 // 이미지 너비/높이 대비 비율 좌표 + 폰트 크기(높이 대비 비율)
 // 템플릿의 빨간 표시 위치 기준 (PRESENTED TO 아래 이름줄 / 그 아래 강의명 / 오른쪽 DATE 위)
 const POSITIONS = {
-  // 큰 이름 — 가운데, 'PRESENTED TO' 아래 금색 줄 바로 위
-  name:   { x: 0.5,   y: 0.487, size: 0.030, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
-  // 강의명 — 이름 아래 (작게, 영문 문단과 간격 확보)
-  course: { x: 0.5,   y: 0.533, size: 0.019, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
-  // 수료일 — 오른쪽 금색 줄 위 (서명과 같은 높이)
-  date:   { x: 0.682, y: 0.705, size: 0.022, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
+  // 큰 이름 — 가운데, 금색 줄 위 중앙 (선과 간격 확보)
+  name:   { x: 0.5,   y: 0.466, size: 0.030, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
+  // 강의명 — 이름 아래 (작게)
+  course: { x: 0.5,   y: 0.533, size: 0.016, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
+  // 수료일 — 오른쪽 금색 줄 위 (서명 높이에 맞춰 위로, 작게)
+  date:   { x: 0.682, y: 0.686, size: 0.018, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
