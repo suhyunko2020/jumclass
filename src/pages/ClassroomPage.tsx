@@ -13,7 +13,7 @@ import {
   type CertificateAgreementRecord,
 } from '../utils/storage'
 import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
-import type { InstructorProgressPage, Inquiry } from '../data/types'
+import type { InstructorProgressPage, Inquiry, Enrollment } from '../data/types'
 import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { renderCertificate, downloadCertificatePdf, type RenderedCertificate } from '../utils/certificate'
@@ -28,7 +28,7 @@ export default function ClassroomPage() {
   const { getInstructor } = useInstructors()
   const navigate = useNavigate()
   const toast = useToast()
-  const [tab, setTab] = useState<'active' | 'expired'>('active')
+  const [tab, setTab] = useState<'active' | 'completed' | 'expired'>('active')
 
   const [reviewModal, setReviewModal] = useState<{ courseId: string; courseTitle: string } | null>(null)
   const [reviewRating, setReviewRating] = useState(5)
@@ -155,8 +155,25 @@ export default function ClassroomPage() {
   // 환불 처리된 결제건은 강의실 목록에서 제외
   const refundedSet = refundedKeySet(inquiries)
   const enrollments = (user.enrollments || []).filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet))
-  const active = enrollments.filter(e => e.paused || new Date(e.expiryDate) > new Date())
+
+  // 수강 완료 판정 — 자격증은 모든 회차 체크, 일반은 진도 100%
+  const isEnrollmentComplete = (e: Enrollment): boolean => {
+    const c = getCourse(e.courseId)
+    if (!c) return false
+    if (c.level === '자격증') {
+      const cp = certProgressMap[certKey(e.courseId, e.assignedInstructorId)]
+      const total = cp?.checklist.length ?? 0
+      const checked = cp?.checklist.filter(i => i.checked).length ?? 0
+      return total > 0 && checked === total
+    }
+    return (e.progress || 0) >= 100
+  }
+
+  const activeAll = enrollments.filter(e => e.paused || new Date(e.expiryDate) > new Date())
   const expired = enrollments.filter(e => !e.paused && new Date(e.expiryDate) <= new Date())
+  // 수강 중(미완료) / 수강 완료 분리 — 휴강 중은 항상 '수강 중'으로 취급
+  const inProgress = activeAll.filter(e => e.paused || !isEnrollmentComplete(e))
+  const completed = activeAll.filter(e => !e.paused && isEnrollmentComplete(e))
   const all = getPublicCourses()
   const notEnrolled = all.filter(c => !enrollments.some(e => e.courseId === c.id)).slice(0, 2)
 
@@ -189,8 +206,13 @@ export default function ClassroomPage() {
         {/* 탭 */}
         <div className="tabs" style={{ marginTop: '28px', marginBottom: '24px' }}>
           <button className={`tab ${tab === 'active' ? 'active' : ''}`} onClick={() => setTab('active')}>
-            수강 중 ({active.length})
+            수강 중 ({inProgress.length})
           </button>
+          {completed.length > 0 && (
+            <button className={`tab ${tab === 'completed' ? 'active' : ''}`} onClick={() => setTab('completed')}>
+              수강 완료 ({completed.length})
+            </button>
+          )}
           {expired.length > 0 && (
             <button className={`tab ${tab === 'expired' ? 'active' : ''}`} onClick={() => setTab('expired')}>
               수강 종료 ({expired.length})
@@ -198,10 +220,12 @@ export default function ClassroomPage() {
           )}
         </div>
 
-        {/* 수강 중 */}
-        {tab === 'active' && (
+        {/* 수강 중 / 수강 완료 — 같은 카드 레이아웃, 탭에 따라 목록만 다름 */}
+        {(tab === 'active' || tab === 'completed') && (() => {
+          const list = tab === 'completed' ? completed : inProgress
+          return (
           <div className="my-list">
-            {active.length > 0 ? active.map(e => {
+            {list.length > 0 ? list.map(e => {
               const c = getCourse(e.courseId)
               if (!c) return null
               const isCert = c.level === '자격증'
@@ -323,7 +347,13 @@ export default function ClassroomPage() {
                   </div>
                 </div>
               )
-            }) : (
+            }) : tab === 'completed' ? (
+              <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '14px' }}>🎓</div>
+                <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '8px' }}>수강 완료한 강의가 없습니다</div>
+                <div style={{ fontSize: '.875rem', color: 'var(--t2)' }}>강의를 끝까지 수강하면 여기에 모입니다.</div>
+              </div>
+            ) : (
               <div style={{ textAlign: 'center', padding: '80px 20px' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '14px' }}>📚</div>
                 <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '8px' }}>수강 중인 강의가 없습니다</div>
@@ -332,7 +362,8 @@ export default function ClassroomPage() {
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {/* 수강 종료 */}
         {tab === 'expired' && (
@@ -366,7 +397,7 @@ export default function ClassroomPage() {
         )}
 
         {/* 추천 강의 */}
-        {active.length > 0 && notEnrolled.length > 0 && (
+        {activeAll.length > 0 && notEnrolled.length > 0 && (
           <div style={{ marginTop: '64px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
               <div style={{ flex: 1, height: '1px', background: 'var(--line)' }} />
