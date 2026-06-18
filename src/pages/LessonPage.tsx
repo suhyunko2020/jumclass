@@ -47,6 +47,11 @@ export default function LessonPage() {
     return () => { document.title = 'JUMCLASS' }
   }, [course])
 
+  // 자격증 과정은 강의 시청 페이지가 없음 — 직접 URL 접근 시 강의실로 리디렉트
+  useEffect(() => {
+    if (course && course.level === '자격증') navigate('/classroom', { replace: true })
+  }, [course, navigate])
+
   if (authLoading) {
     return (
       <div className="loading" style={{ paddingTop: '140px' }}>

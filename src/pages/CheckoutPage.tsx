@@ -9,13 +9,16 @@ import { useSiteSettings } from '../hooks/useSiteSettings'
 import { formatPrice, discountRate } from '../utils/format'
 import CertificateAgreementForm, { type AgreementFormValue } from '../components/course/CertificateAgreementForm'
 import { generateOrderId, saveIntent, requestTossPayment, type TossPaymentIntent, type TossMethod } from '../lib/toss'
+import { getMyInquiries } from '../utils/storage'
+import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
+import type { Inquiry } from '../data/types'
 
 export default function CheckoutPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { getCourse } = useCourses()
   const { getInstructor } = useInstructors()
-  const { user, loading: authLoading, isEnrolled } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { openAuth } = useAuthModal()
   const { get: getSiteSettings } = useSiteSettings()
   const toast = useToast()
@@ -47,6 +50,12 @@ export default function CheckoutPage() {
   const isServiceCheckout = !!instructor && !!service
 
   const [paying, setPaying] = useState(false)
+  // 환불 처리된 결제건은 "수강 중"으로 보지 않음 → 환불 후 재결제 허용
+  const [inquiries, setInquiries] = useState<Inquiry[]>([])
+  useEffect(() => {
+    if (!user) { setInquiries([]); return }
+    getMyInquiries(user.uid).then(setInquiries)
+  }, [user?.uid])
   const [certAgreement, setCertAgreement] = useState<AgreementFormValue>({
     name: '', birthdate: '', phone: '', phoneVerified: false, signatureDataUrl: null,
   })
@@ -106,11 +115,17 @@ export default function CheckoutPage() {
     )
   }
 
-  // paying 중엔 enroll로 인해 isEnrolled가 true가 되어도 이 가드를 건너뛴다
-  // 자격증 과정은 (강의, 강사) 조합으로 체크 — 다른 강사로 재결제 허용
-  const alreadyEnrolled = isCertCheckout
-    ? isEnrolled(courseId, assignedInstructorId || undefined)
-    : isEnrolled(courseId)
+  // paying 중엔 enroll로 인해 활성 enrollment가 생겨도 이 가드를 건너뛴다.
+  // 자격증 과정은 (강의, 강사) 조합으로 체크 — 다른 강사로 재결제 허용.
+  // 환불 처리된 결제건은 제외하여, 환불 후 곧바로 재결제가 가능하도록 한다.
+  const refundedSet = refundedKeySet(inquiries)
+  const activeEnrollment = (user?.enrollments || []).find(e =>
+    e.courseId === courseId &&
+    (isCertCheckout && assignedInstructorId ? e.assignedInstructorId === assignedInstructorId : true) &&
+    !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet) &&
+    (e.paused || new Date(e.expiryDate) > new Date()),
+  ) ?? null
+  const alreadyEnrolled = !!activeEnrollment
   if (course && user && alreadyEnrolled && !paying) {
     return (
       <div className="checkout-wrap">
@@ -118,7 +133,10 @@ export default function CheckoutPage() {
           <div className="auth-gate">
             <h2>이미 수강 중인 강의입니다</h2>
             <p>{course.title}은 이미 수강 가능합니다.</p>
-            <Link to={`/lesson?course=${courseId}`} className="btn btn-primary mt-16">강의 바로 보기 →</Link>
+            {/* 자격증은 강의 시청 페이지가 없으므로 강의실로 이동 */}
+            {isCertCheckout
+              ? <Link to="/classroom" className="btn btn-primary mt-16">강의실로 이동 →</Link>
+              : <Link to={`/lesson?course=${courseId}`} className="btn btn-primary mt-16">강의 바로 보기 →</Link>}
           </div>
         </div>
       </div>
