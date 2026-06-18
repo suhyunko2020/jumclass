@@ -130,11 +130,18 @@ export default function MyPage() {
   const enrollments = [...(user.enrollments || [])].sort(
     (a, b) => new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()
   )
-  // 환불 처리된 결제건 분리 — 환불 완료된 문의의 결제건은 환불 내역으로 이동
+  // 결제내역(수강중) — 환불 처리된 결제건은 제외 (환불 후 재결제분은 enrolled_at이 갱신돼 다시 노출됨)
   const refunds = refundRecords(inquiries)
   const activeEnrollments = enrollments.filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
-  const refundedEnrollments = enrollments.filter(e => isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
-  const paymentList = paymentSubTab === 'active' ? activeEnrollments : refundedEnrollments
+  // 환불내역 — 환불 문의(영구 보존) 기반. 재결제로 enrollment가 갱신/재사용돼도 환불 기록은 그대로 유지된다.
+  const refundHistory = inquiries
+    .filter(q => q.type === 'refund' && q.refundedAt && q.metadata?.courseId)
+    .map(q => {
+      const c = getCourse(q.metadata!.courseId!)
+      const m = q.message?.match(/환불[^:]*금액:\s*([^\n]+)/)
+      return { id: q.id, course: c, orderDate: q.metadata!.orderDate ?? '', refundedAt: q.refundedAt!, amount: m ? m[1].trim() : '' }
+    })
+    .sort((a, b) => new Date(b.refundedAt).getTime() - new Date(a.refundedAt).getTime())
 
   function openNewInquiry() {
     setForm(emptyForm)
@@ -283,7 +290,7 @@ export default function MyPage() {
 
                 {/* 결제내역 | 환불내역 서브탭 — 언더라인 스타일 */}
                 <div style={{ display: 'flex', gap: '26px', borderBottom: '1px solid var(--line)', marginBottom: '24px' }}>
-                  {([['active', '결제내역', activeEnrollments.length], ['refunded', '환불내역', refundedEnrollments.length]] as const).map(([key, label, count]) => {
+                  {([['active', '결제내역', activeEnrollments.length], ['refunded', '환불내역', refundHistory.length]] as const).map(([key, label, count]) => {
                     const on = paymentSubTab === key
                     return (
                       <button key={key} type="button" onClick={() => setPaymentSubTab(key)}
@@ -295,17 +302,45 @@ export default function MyPage() {
                   })}
                 </div>
 
-                {paymentList.length === 0 ? (
+                {paymentSubTab === 'refunded' ? (
+                  // ─── 환불내역 — 환불 문의(영구 보존) 기반. 재결제와 무관하게 환불 기록 표시 ───
+                  refundHistory.length === 0 ? (
+                    <div className="mypage-empty">
+                      <div className="mypage-empty-text">환불 내역이 없습니다.</div>
+                    </div>
+                  ) : (
+                    <div className="payment-list">
+                      {refundHistory.map(r => (
+                        <div key={r.id} className="payment-item" style={{ opacity: .6, filter: 'grayscale(.4)' }}>
+                          <div className="payment-item-thumb">{r.course?.emoji ?? '📘'}</div>
+                          <div className="payment-item-body">
+                            <div className="payment-item-top">
+                              <div className="payment-item-title">{r.course?.title ?? '삭제된 강의'}</div>
+                              <span style={{ fontSize: '.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.12)', color: 'var(--fail)', flexShrink: 0 }}>환불 완료</span>
+                            </div>
+                            <div className="payment-item-meta">
+                              결제일 {r.orderDate} &nbsp;·&nbsp; 환불 처리 {new Date(r.refundedAt).toLocaleDateString('ko-KR')}
+                            </div>
+                            {r.amount && (
+                              <div className="payment-item-bottom">
+                                <span className="payment-item-price">{r.amount}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : activeEnrollments.length === 0 ? (
                   <div className="mypage-empty">
-                    <div className="mypage-empty-text">{paymentSubTab === 'refunded' ? '환불 내역이 없습니다.' : '결제 내역이 없습니다.'}</div>
-                    {paymentSubTab === 'active' && <button className="btn btn-primary btn-sm" onClick={() => navigate('/courses')}>강의 둘러보기</button>}
+                    <div className="mypage-empty-text">결제 내역이 없습니다.</div>
+                    <button className="btn btn-primary btn-sm" onClick={() => navigate('/courses')}>강의 둘러보기</button>
                   </div>
                 ) : (
                   <div className="payment-list">
-                    {paymentList.map(e => {
+                    {activeEnrollments.map(e => {
                       const c = getCourse(e.courseId)
                       if (!c) return null
-                      const isRefunded = paymentSubTab === 'refunded'
                       const date = new Date(e.enrolledAt).toLocaleDateString('ko-KR')
                       const expiry = new Date(e.expiryDate)
                       const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / 86400000)
@@ -326,7 +361,7 @@ export default function MyPage() {
                       const itemKey = `${e.courseId}:${e.assignedInstructorId || 'none'}:${e.enrolledAt}`
 
                       return (
-                        <div key={itemKey} className="payment-item" style={isRefunded ? { opacity: .6, filter: 'grayscale(.4)' } : undefined}>
+                        <div key={itemKey} className="payment-item">
                           <div className="payment-item-thumb">{c.emoji}</div>
                           <div className="payment-item-body">
                             <div className="payment-item-top">
@@ -338,9 +373,7 @@ export default function MyPage() {
                                   </span>
                                 )}
                               </div>
-                              {isRefunded
-                                ? <span style={{ fontSize: '.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.12)', color: 'var(--fail)', flexShrink: 0 }}>환불 완료</span>
-                                : e.type === 'manual'
+                              {e.type === 'manual'
                                 ? <span className="badge-manual">수동 등록</span>
                                 : isExpired
                                 ? <span className="badge-expired">만료</span>
@@ -350,17 +383,17 @@ export default function MyPage() {
                             </div>
                             <div className="payment-item-meta">
                               결제일 {date} &nbsp;·&nbsp; {c.level} &nbsp;·&nbsp;
-                              {isRefunded ? ' 환불됨' : isUnlimited ? ' 무제한 시청' : isExpired ? ' 만료됨' : ` 잔여 ${daysLeft}일`}
+                              {isUnlimited ? ' 무제한 시청' : isExpired ? ' 만료됨' : ` 잔여 ${daysLeft}일`}
                             </div>
                             <div className="payment-item-bottom">
                               <span className="payment-item-price">{formatPrice(c.price)}</span>
-                              {!isRefunded && e.type !== 'manual' && !isExpired && (
+                              {e.type !== 'manual' && !isExpired && (
                                 <button className="btn btn-ghost btn-sm"
                                   onClick={() => openRefundRequest(c.id, date, e.assignedInstructorId)}>
                                   환불 요청
                                 </button>
                               )}
-                              {!isRefunded && isExpired && (
+                              {isExpired && (
                                 <button className="btn btn-ghost btn-sm"
                                   onClick={() => navigate(`/checkout?course=${c.id}`)}>
                                   재수강 신청
