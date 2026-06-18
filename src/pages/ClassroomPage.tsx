@@ -91,10 +91,13 @@ export default function ClassroomPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, (user?.enrollments || []).length])
 
-  // 본인 환불 문의 조회 — 환불 처리된 결제건은 강의실에서 숨김
+  // 본인 환불 문의 조회 — 환불 처리된 결제건은 강의실에서 숨김.
+  // 로드 완료 전까지는 목록을 렌더하지 않아 환불 강의가 깜빡이는 현상 방지.
+  const [inquiriesLoaded, setInquiriesLoaded] = useState(false)
   useEffect(() => {
-    if (!user) { setInquiries([]); return }
-    getMyInquiries(user.uid).then(setInquiries)
+    if (!user) { setInquiries([]); setInquiriesLoaded(false); return }
+    setInquiriesLoaded(false)
+    getMyInquiries(user.uid).then(setInquiries).finally(() => setInquiriesLoaded(true))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid])
 
@@ -139,6 +142,15 @@ export default function ClassroomPage() {
 
   // 리디렉트 대기 — useEffect가 navigate('/') 실행하는 짧은 순간 빈 화면으로 대기
   if (!user) return null
+
+  // 환불 내역 로드 전엔 목록을 그리지 않음 — 환불 강의가 잠깐 보였다 사라지는 깜빡임 방지
+  if (!inquiriesLoaded) {
+    return (
+      <div className="loading" style={{ paddingTop: '140px' }}>
+        <div className="spinner" />
+      </div>
+    )
+  }
 
   // 환불 처리된 결제건은 강의실 목록에서 제외
   const refundedSet = refundedKeySet(inquiries)

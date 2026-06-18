@@ -81,10 +81,16 @@ export default function MyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, (user?.enrollments || []).length])
 
+  // 환불 내역 로드 완료 여부 — 로드 전엔 결제/환불 목록을 그리지 않아 깜빡임 방지
+  const [inquiriesLoaded, setInquiriesLoaded] = useState(false)
   async function loadInquiries() {
     if (!user) return
-    const data = await getMyInquiries(user.uid)
-    setInquiries(data)
+    try {
+      const data = await getMyInquiries(user.uid)
+      setInquiries(data)
+    } finally {
+      setInquiriesLoaded(true)
+    }
   }
 
   // 환불 요청 모달 상태 — early return(authLoading/!user)보다 위에 둬야 Hook 순서 안정 (rules-of-hooks)
@@ -111,6 +117,15 @@ export default function MyPage() {
 
   // 리디렉트 대기 — useEffect가 navigate('/') 실행하는 짧은 순간 빈 화면
   if (!user) return null
+
+  // 환불 내역 로드 전엔 결제 목록을 그리지 않음 — 환불 강의 깜빡임 방지
+  if (!inquiriesLoaded) {
+    return (
+      <div className="loading" style={{ paddingTop: '140px' }}>
+        <div className="spinner" />
+      </div>
+    )
+  }
 
   const enrollments = [...(user.enrollments || [])].sort(
     (a, b) => new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()
