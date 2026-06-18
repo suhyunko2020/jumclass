@@ -18,8 +18,8 @@ const POSITIONS = {
   name:   { x: 0.5,   y: 0.466, size: 0.030, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
   // 강의명 — 이름 아래 (작게)
   course: { x: 0.5,   y: 0.533, size: 0.016, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
-  // 수료일 — 오른쪽 금색 줄 위 (서명 높이에 맞춰 위로, 작게)
-  date:   { x: 0.682, y: 0.686, size: 0.018, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
+  // 수료일 — 오른쪽 금색 줄 위, DATE 라벨과 같은 중심(x)에 정렬
+  date:   { x: 0.700, y: 0.694, size: 0.018, color: '#1e3a4c', weight: '700', family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
