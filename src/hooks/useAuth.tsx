@@ -245,18 +245,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // enrollments에 (user_id, course_id) unique 제약이 없어 upsert onConflict는 42P10으로 실패함.
-    // 자격증은 강사별 별도 수강이라 항상 insert, 일반 강의는 기존 수강 있으면 update / 없으면 insert.
-    const res = assignedInstructorId
-      ? await supabase.from('enrollments').insert(row)
-      : await (async () => {
-          const { data: existing } = await supabase
-            .from('enrollments').select('id')
-            .eq('user_id', user.uid).eq('course_id', courseId)
-            .maybeSingle()
-          return existing
-            ? await supabase.from('enrollments').update(row).eq('id', existing.id)
-            : await supabase.from('enrollments').insert(row)
-        })()
+    // 자격증은 (강의+강사) 조합, 일반 강의는 강의 단위로 기존 수강이 있으면 update / 없으면 insert.
+    // 환불 후 같은 강의(+강사)를 재결제하면 기존(환불된) 행을 갱신해 enrolled_at이 현재로
+    // 바뀌므로, 환불 판정(refundedAt 이후 결제는 환불 아님)을 통과해 정상 노출된다.
+    const res = await (async () => {
+      let q = supabase.from('enrollments').select('id')
+        .eq('user_id', user.uid).eq('course_id', courseId)
+      q = assignedInstructorId
+        ? q.eq('assigned_instructor_id', assignedInstructorId)
+        : q.is('assigned_instructor_id', null)
+      // legacy 중복 행 대비 — 최신 1건만 집어 update (없으면 insert)
+      const { data: existing } = await q.order('enrolled_at', { ascending: false }).limit(1).maybeSingle()
+      return existing
+        ? await supabase.from('enrollments').update(row).eq('id', existing.id)
+        : await supabase.from('enrollments').insert(row)
+    })()
 
     if (res.error) {
       console.error('[enroll] enrollments 등록 실패:', res.error.code, res.error.message, res.error.details, res.error.hint)
