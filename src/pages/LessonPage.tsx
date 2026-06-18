@@ -167,9 +167,11 @@ export default function LessonPage() {
 
         <p className="lesson-sub">강의를 충분히 살펴보며 학습하세요. 첨부된 학습 자료를 활용하면 이해를 더 깊게 할 수 있습니다.</p>
 
-        {/* 강의별 첨부 파일 */}
+        {/* 강의별 첨부 파일 — 커리큘럼에 박힌 첨부 우선(Supabase 동기화), 없으면 레거시 캐시 폴백 */}
         {(() => {
-          const lessonAtts = getLessonAttachments(cur.id)
+          const lessonAtts: LessonAtt[] = (cur.attachments && cur.attachments.length > 0)
+            ? cur.attachments
+            : getLessonAttachments(cur.id)
           const downloadHistory = enrollment?.attachmentDownloads ?? []
           const hasDownloaded = (filename: string) =>
             downloadHistory.some(d => d.lessonId === cur!.id && d.attachmentName === filename)

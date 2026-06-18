@@ -13,7 +13,8 @@ export interface PauseConfig {
 export interface LessonAttachment {
   name: string;
   ext: string;
-  url: string;
+  url?: string;   // 레거시 public URL (하위호환)
+  path?: string;  // Supabase Storage 경로 (신규, signed URL용)
 }
 
 export interface LessonItem {

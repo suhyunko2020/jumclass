@@ -514,7 +514,11 @@ export default function AdminPage() {
       sections: (c.curriculum || []).map(s => ({
         _key: Math.random().toString(36).slice(2),
         section: s.section,
-        items: s.items.map(i => ({ ...i, attachments: getLessonAttachments(i.id) })),
+        // 커리큘럼에 박힌 첨부파일 우선, 없으면 레거시 localStorage 캐시 폴백
+        items: s.items.map(i => ({
+          ...i,
+          attachments: (i.attachments && i.attachments.length > 0) ? i.attachments : getLessonAttachments(i.id),
+        })),
       })),
     })
   }
@@ -637,10 +641,12 @@ export default function AdminPage() {
           duration: i.duration || '00:00',
           vimeo: i.vimeo || '',
           status: i.status as LessonItem['status'],
+          // 첨부파일을 커리큘럼 데이터에 직접 포함 → Supabase 동기화되어 모든 사용자에게 노출
+          ...(i.attachments && i.attachments.length > 0 ? { attachments: i.attachments } : {}),
         })),
       }))
 
-    // 첨부파일은 별도 저장소에 일괄 저장 — 유효한 강의 항목만
+    // 하위호환: 기존 localStorage 캐시에도 일괄 저장 (폴백용)
     const validItems = curriculumModal.sections.flatMap(s =>
       s.items.filter(i => i.title.trim()).map(i => ({ id: i.id, attachments: i.attachments }))
     )
