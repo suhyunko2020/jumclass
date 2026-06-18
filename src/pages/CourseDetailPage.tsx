@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useCourses } from '../hooks/useCourses'
+import { useCourses, useDataSyncTick } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
@@ -11,6 +11,7 @@ export default function CourseDetailPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { getCourse, getEnrolledCount, getReviewsByCourse, getReviewStats } = useCourses()
+  useDataSyncTick()  // 동기화/리뷰 작성 시 재렌더 (캐시 최신 반영)
   const { getPublicInstructors } = useInstructors()
   const { user, isEnrolled, getEnrollment } = useAuth()
   const { openAuth } = useAuthModal()

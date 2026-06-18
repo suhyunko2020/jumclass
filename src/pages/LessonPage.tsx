@@ -125,14 +125,17 @@ export default function LessonPage() {
     e.preventDefault()
     if (!user) return
     setReviewSubmitting(true)
+    const already = hasReviewed(courseId, user.uid)
     const result = await addReview(courseId, user.uid, user.name, user.avatar, reviewRating, reviewText, 'user')
     setReviewSubmitting(false)
     if (result) {
       toast('리뷰가 등록되었습니다! 감사합니다 ✦', 'ok')
       setReviewModal(false)
-    } else {
+    } else if (already) {
       toast('이미 리뷰를 작성했습니다.', 'info')
       setReviewModal(false)
+    } else {
+      toast('리뷰 등록에 실패했습니다. 잠시 후 다시 시도해주세요.', 'err')
     }
   }
 

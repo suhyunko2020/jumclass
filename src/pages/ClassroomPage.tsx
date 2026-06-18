@@ -112,6 +112,7 @@ export default function ClassroomPage() {
     e.preventDefault()
     if (!user || !reviewModal) return
     setReviewSubmitting(true)
+    const already = hasReviewed(reviewModal.courseId, user.uid)
     const result = await addReview(reviewModal.courseId, user.uid, user.name, user.avatar, reviewRating, reviewText, 'user')
     setReviewSubmitting(false)
     if (result) {
@@ -119,9 +120,12 @@ export default function ClassroomPage() {
       setReviewModal(null)
       setReviewRating(5)
       setReviewText('')
-    } else {
+    } else if (already) {
       toast('이미 리뷰를 작성했습니다.', 'info')
       setReviewModal(null)
+    } else {
+      // 중복이 아닌데 실패 — 저장 오류 (네트워크/권한 등)
+      toast('리뷰 등록에 실패했습니다. 잠시 후 다시 시도해주세요.', 'err')
     }
   }
 

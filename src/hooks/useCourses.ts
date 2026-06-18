@@ -1,7 +1,24 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { COURSES } from '../data/courses'
 import type { Course, Review } from '../data/types'
 import { supabase } from '../lib/supabase'
+
+// 캐시(강의/리뷰) 갱신 알림 — 동기화/작성 후 캐시 기반 컴포넌트를 재렌더시킨다.
+// (localStorage 캐시는 동기 읽기라 React가 변경을 감지 못 하므로 이벤트로 트리거)
+const DATA_SYNC_EVENT = 'jum:data-synced'
+export function notifyDataSynced() {
+  try { window.dispatchEvent(new Event(DATA_SYNC_EVENT)) } catch { /* SSR/비브라우저 무시 */ }
+}
+// 이 훅을 쓰는 컴포넌트는 데이터 동기화/작성 시 자동으로 다시 렌더된다.
+export function useDataSyncTick(): number {
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const h = () => setTick(t => t + 1)
+    window.addEventListener(DATA_SYNC_EVENT, h)
+    return () => window.removeEventListener(DATA_SYNC_EVENT, h)
+  }, [])
+  return tick
+}
 
 // ── localStorage 캐시 키 ──────────────────────────────────
 const OVERRIDE_KEY = 'arcana_course_overrides'
@@ -196,6 +213,8 @@ export function useCourses() {
       const instructors = instructorsRes.data.map((r: any) => r.data)
       localStorage.setItem('arcana_instructors', JSON.stringify(instructors))
     }
+    // 캐시 갱신 완료 — 캐시 기반 컴포넌트(강의/리뷰 표시) 재렌더 트리거
+    notifyDataSynced()
   }, [])
 
   // ── 수강생 수 ─────────────────────────────────────────────
@@ -279,9 +298,10 @@ export function useCourses() {
       source: data.source ?? 'user',
     }
 
-    // 로컬 캐시 업데이트
+    // 로컬 캐시 업데이트 + 표시 컴포넌트 재렌더 알림
     all.push(review)
     localStorage.setItem(REVIEWS_KEY, JSON.stringify(all))
+    notifyDataSynced()
     return review
   }, [])
 

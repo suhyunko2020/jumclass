@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useCourses } from '../hooks/useCourses'
+import { useCourses, useDataSyncTick } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
@@ -12,6 +12,7 @@ import { maskName } from '../utils/format'
 
 export default function HomePage() {
   const { getPublicCourses, getEnrolledCount, getAllReviews, getCourse } = useCourses()
+  useDataSyncTick()  // 동기화 완료 시 재렌더 (강의/리뷰 최신 반영)
   const { getPublicInstructors } = useInstructors()
   const { openAuth } = useAuthModal()
   const { user } = useAuth()
