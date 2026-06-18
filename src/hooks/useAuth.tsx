@@ -231,6 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const row = {
       user_id: user.uid,
       course_id: courseId,
+      // 재결제(환불 후 재신청 포함) 시에도 결제일을 현재로 갱신 — 환불 판정과 충돌 방지
+      enrolled_at: new Date().toISOString(),
       expiry_date: expiry.toISOString(),
       progress: 0,
       completed_lessons: [],

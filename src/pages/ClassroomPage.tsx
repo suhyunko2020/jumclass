@@ -14,7 +14,7 @@ import {
 } from '../utils/storage'
 import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
 import type { InstructorProgressPage, Inquiry, Enrollment } from '../data/types'
-import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
+import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { renderCertificate, downloadCertificatePdf, type RenderedCertificate } from '../utils/certificate'
 
@@ -153,8 +153,8 @@ export default function ClassroomPage() {
   }
 
   // 환불 처리된 결제건은 강의실 목록에서 제외
-  const refundedSet = refundedKeySet(inquiries)
-  const enrollments = (user.enrollments || []).filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet))
+  const refunds = refundRecords(inquiries)
+  const enrollments = (user.enrollments || []).filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
 
   // 수강 완료 판정 — 자격증은 모든 회차 체크, 일반은 진도 100%
   const isEnrollmentComplete = (e: Enrollment): boolean => {

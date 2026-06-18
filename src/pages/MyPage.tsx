@@ -10,7 +10,7 @@ import {
   getProgressPageByEnrollment,
 } from '../utils/storage'
 import type { Inquiry, InstructorProgressPage } from '../data/types'
-import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
+import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
 import { sendInquiryReceived } from '../utils/alimtalk'
 
 const certKey = (courseId: string, instructorId?: string | null) =>
@@ -131,9 +131,9 @@ export default function MyPage() {
     (a, b) => new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()
   )
   // 환불 처리된 결제건 분리 — 환불 완료된 문의의 결제건은 환불 내역으로 이동
-  const refundedSet = refundedKeySet(inquiries)
-  const activeEnrollments = enrollments.filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet))
-  const refundedEnrollments = enrollments.filter(e => isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet))
+  const refunds = refundRecords(inquiries)
+  const activeEnrollments = enrollments.filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
+  const refundedEnrollments = enrollments.filter(e => isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
   const paymentList = paymentSubTab === 'active' ? activeEnrollments : refundedEnrollments
 
   function openNewInquiry() {

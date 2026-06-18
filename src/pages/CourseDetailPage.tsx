@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcTotalDuration, getLevelColor } from '../utils/format'
 import { getMyInquiries } from '../utils/storage'
-import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
+import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
 import type { Inquiry } from '../data/types'
 
 export default function CourseDetailPage() {
@@ -58,13 +58,13 @@ export default function CourseDetailPage() {
 
   const isCert = course.level === '자격증'
   // 환불 처리된 결제건은 수강 중으로 보지 않음 → 환불 후 재결제 가능
-  const refundedSet = refundedKeySet(inquiries)
+  const refunds = refundRecords(inquiries)
   // 자격증은 (강의, 강사) 조합, 일반 강의는 강의 단위로 후보 enrollment를 추린 뒤
   // 환불되지 않고 활성(미만료/휴강)인 건이 있으면 "수강 중"으로 판단
   const candidateEnrollments = (user?.enrollments || []).filter(e =>
     e.courseId === course.id &&
     (isCert && selectedInstructorId ? e.assignedInstructorId === selectedInstructorId : true) &&
-    !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet),
+    !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds),
   )
   const myEnrollment = candidateEnrollments.find(e => e.paused || new Date(e.expiryDate) > new Date()) ?? null
   const enrolled = !!myEnrollment

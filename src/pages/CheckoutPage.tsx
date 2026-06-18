@@ -10,7 +10,7 @@ import { formatPrice, discountRate } from '../utils/format'
 import CertificateAgreementForm, { type AgreementFormValue } from '../components/course/CertificateAgreementForm'
 import { generateOrderId, saveIntent, requestTossPayment, type TossPaymentIntent, type TossMethod } from '../lib/toss'
 import { getMyInquiries } from '../utils/storage'
-import { refundedKeySet, isEnrollmentRefunded } from '../lib/refundStatus'
+import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
 import type { Inquiry } from '../data/types'
 
 export default function CheckoutPage() {
@@ -118,11 +118,11 @@ export default function CheckoutPage() {
   // paying 중엔 enroll로 인해 활성 enrollment가 생겨도 이 가드를 건너뛴다.
   // 자격증 과정은 (강의, 강사) 조합으로 체크 — 다른 강사로 재결제 허용.
   // 환불 처리된 결제건은 제외하여, 환불 후 곧바로 재결제가 가능하도록 한다.
-  const refundedSet = refundedKeySet(inquiries)
+  const refunds = refundRecords(inquiries)
   const activeEnrollment = (user?.enrollments || []).find(e =>
     e.courseId === courseId &&
     (isCertCheckout && assignedInstructorId ? e.assignedInstructorId === assignedInstructorId : true) &&
-    !isEnrollmentRefunded(e.courseId, e.enrolledAt, refundedSet) &&
+    !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds) &&
     (e.paused || new Date(e.expiryDate) > new Date()),
   ) ?? null
   const alreadyEnrolled = !!activeEnrollment
