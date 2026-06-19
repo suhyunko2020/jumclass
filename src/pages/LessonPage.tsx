@@ -50,13 +50,19 @@ export default function LessonPage() {
     return () => { document.title = 'JUMCLASS' }
   }, [course])
 
-  // 접속 로그 — 강의 진입 (IP/기기는 서버에서 수집)
-  // 결제자(수강신청 완료)는 'lesson_view'(강의 수강), 비결제자(무료 미리보기)는 'lesson_preview'로 구분 기록
+  // 접속 로그 — 강의 진입 (lesson 단위, IP/기기는 서버에서 수집)
+  // 결제자='lesson_view'(강의 수강), 비결제자 무료 미리보기='lesson_preview'.
+  // (비결제자가 잠긴 강의를 실제 재생하는 비정상 접근은 handleWatchProgress에서 'lesson_breach'로 별도 기록)
   useEffect(() => {
     if (!course) return
-    const event = isEnrolled(course.id) ? 'lesson_view' : 'lesson_preview'
-    logAccess({ event, courseId: course.id, courseTitle: course.title, userId: user?.uid, userName: user?.name, userEmail: user?.email })
-  }, [course?.id, user?.uid])
+    const all = course.curriculum.flatMap(s => s.items)
+    const free = all.find(l => l.status === 'free')
+    let lesson = lessonId ? all.find(l => l.id === lessonId) : free || all[0]
+    const enr = isEnrolled(course.id)
+    if (!enr && lesson?.status === 'locked') lesson = free   // 비결제자는 무료 강의로 게이팅됨 → 실제 보게 될 강의 기준
+    const event = enr ? 'lesson_view' : 'lesson_preview'
+    logAccess({ event, courseId: course.id, courseTitle: course.title, lessonId: lesson?.id, lessonTitle: lesson?.title, userId: user?.uid, userName: user?.name, userEmail: user?.email })
+  }, [course?.id, user?.uid, lessonId])
 
   // 자격증 과정은 강의 시청 페이지가 없음 — 직접 URL 접근 시 강의실로 리디렉트
   useEffect(() => {
@@ -150,6 +156,13 @@ export default function LessonPage() {
 
   // 영상 시청률 반영 — 시청 시간에 비례해 진도 게이지가 참. (수강생만)
   async function handleWatchProgress(id: string, pct: number) {
+    // 보안 — 비결제자가 잠긴(유료) 강의를 실제 재생 중이면 비정상 접근으로 기록.
+    // 정상 게이팅이면 비결제자는 무료 강의만 재생되므로 0건이어야 함. (이 이벤트 발생 = 구조적 결함/우회)
+    const lesson = allLessons.find(l => l.id === id)
+    if (!enrolled && lesson && lesson.status !== 'free') {
+      logAccess({ event: 'lesson_breach', courseId, courseTitle: course?.title, lessonId: id, lessonTitle: lesson.title, userId: user?.uid, userName: user?.name, userEmail: user?.email })
+      return
+    }
     if (!enrolled) return
     const res = await updateLessonWatch(courseId, id, pct)
     if (!res.ok && res.error && !watchSaveWarnedRef.current) {

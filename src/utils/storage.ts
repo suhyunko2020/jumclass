@@ -125,6 +125,8 @@ export interface AccessLog {
   event: string
   courseId: string | null
   courseTitle: string | null
+  lessonId: string | null
+  lessonTitle: string | null
   path: string | null
   ip: string | null
   country: string | null
@@ -138,7 +140,7 @@ export interface AccessLog {
 export async function getAccessLogs(limit = 300): Promise<{ logs: AccessLog[]; error: string | null }> {
   const { data, error } = await supabase
     .from('access_logs')
-    .select('id, created_at, user_id, user_name, user_email, event, course_id, course_title, path, ip, country, city, device, os, browser')
+    .select('id, created_at, user_id, user_name, user_email, event, course_id, course_title, lesson_id, lesson_title, path, ip, country, city, device, os, browser')
     .order('created_at', { ascending: false })
     .limit(limit)
   if (error) { console.warn('access_logs 조회 실패(테이블/권한 확인):', error.message); return { logs: [], error: error.message } }
@@ -146,7 +148,8 @@ export async function getAccessLogs(limit = 300): Promise<{ logs: AccessLog[]; e
   const logs = (data ?? []).map((r: any) => ({
     id: r.id, createdAt: r.created_at,
     userId: r.user_id, userName: r.user_name, userEmail: r.user_email,
-    event: r.event, courseId: r.course_id, courseTitle: r.course_title, path: r.path,
+    event: r.event, courseId: r.course_id, courseTitle: r.course_title,
+    lessonId: r.lesson_id, lessonTitle: r.lesson_title, path: r.path,
     ip: r.ip, country: r.country, city: r.city,
     device: r.device, os: r.os, browser: r.browser,
   }))

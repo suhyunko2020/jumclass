@@ -152,7 +152,7 @@ export default function AdminPage() {
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [logsError, setLogsError] = useState<string | null>(null)
-  const [logEventFilter, setLogEventFilter] = useState<'all' | 'login' | 'signup' | 'course_view' | 'lesson_view' | 'lesson_preview'>('all')
+  const [logEventFilter, setLogEventFilter] = useState<'all' | 'login' | 'signup' | 'course_view' | 'lesson_view' | 'lesson_preview' | 'lesson_breach'>('all')
   const [logSearch, setLogSearch] = useState('')
   const [selectedLogKey, setSelectedLogKey] = useState<string | null>(null)  // 선택한 회원(상세 보기)
   const loadAccessLogs = useCallback(() => {
@@ -1840,10 +1840,10 @@ export default function AdminPage() {
           {/* ═══ 접속 로그 (회원별) ═══ */}
           {sec === 'logs' && (() => {
             const EVENT_LABEL: Record<string, string> = {
-              login: '로그인', signup: '회원가입', course_view: '강의 조회', lesson_view: '강의 수강', lesson_preview: '미리보기',
+              login: '로그인', signup: '회원가입', course_view: '강의 조회', lesson_view: '강의 수강', lesson_preview: '미리보기', lesson_breach: '⚠ 비인가 시청',
             }
             const EVENT_COLOR: Record<string, string> = {
-              login: 'var(--purple-2)', signup: 'var(--ok)', course_view: 'var(--gold-2)', lesson_view: 'var(--warn)', lesson_preview: 'var(--t3)',
+              login: 'var(--purple-2)', signup: 'var(--ok)', course_view: 'var(--gold-2)', lesson_view: 'var(--warn)', lesson_preview: 'var(--t3)', lesson_breach: 'var(--fail)',
             }
             const fmt = (iso: string) => {
               const d = new Date(iso)
@@ -1915,7 +1915,7 @@ export default function AdminPage() {
 
                     {/* 이벤트 필터 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                      {([['all', '전체'], ['login', '로그인'], ['signup', '회원가입'], ['course_view', '강의 조회'], ['lesson_view', '강의 수강'], ['lesson_preview', '미리보기']] as const).map(([k, label]) => (
+                      {([['all', '전체'], ['login', '로그인'], ['signup', '회원가입'], ['course_view', '강의 조회'], ['lesson_view', '강의 수강'], ['lesson_preview', '미리보기'], ['lesson_breach', '⚠ 비인가 시청']] as const).map(([k, label]) => (
                         <button key={k} className={`tab ${logEventFilter === k ? 'active' : ''}`} onClick={() => setLogEventFilter(k)}>{label}</button>
                       ))}
                     </div>
@@ -1936,7 +1936,10 @@ export default function AdminPage() {
                             <tr key={l.id}>
                               <td style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--t2)' }}>{fmt(l.createdAt)}</td>
                               <td><span style={{ fontSize: '.74rem', fontWeight: 700, color: EVENT_COLOR[l.event] || 'var(--t2)' }}>{EVENT_LABEL[l.event] || l.event}</span></td>
-                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t2)' }}>{l.courseTitle || '-'}</td>
+                              <td style={{ maxWidth: '220px', color: 'var(--t2)' }}>
+                                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.courseTitle || '-'}</div>
+                                {l.lessonTitle && <div style={{ fontSize: '.72rem', color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {l.lessonTitle}</div>}
+                              </td>
                               <td style={{ fontSize: '.78rem', color: 'var(--t2)', whiteSpace: 'nowrap' }}>{[l.device, l.os, l.browser].filter(Boolean).join(' · ') || '-'}</td>
                               <td style={{ fontSize: '.78rem', whiteSpace: 'nowrap' }}>
                                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{l.ip || '-'}</span>
