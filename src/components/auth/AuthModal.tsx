@@ -62,6 +62,7 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   // request: 번호 입력 → verify: 인증번호 확인 → confirm: 새 비밀번호 입력 → done
   const [resetStep, setResetStep] = useState<'request' | 'verify' | 'confirm' | 'done'>('request')
   const [resetPhone, setResetPhone] = useState('')
+  const [resetEmail, setResetEmail] = useState('')  // 인증된 번호로 가입된 이메일 (안내 표시용)
   const [resetCode, setResetCode] = useState('')
   const [resetPw, setResetPw] = useState('')
   const [resetPw2, setResetPw2] = useState('')
@@ -149,6 +150,7 @@ function AuthModal({ tab, setTab, onClose }: Props) {
       const data = await res.json().catch(() => ({}))
       setLoading(false)
       if (!res.ok || !data.ok) { setErr(data.message || '인증번호가 일치하지 않습니다.'); return }
+      setResetEmail(data.email || '')
       setResetStep('confirm'); setResetMsg('')
     } catch {
       setLoading(false); setErr('네트워크 오류가 발생했습니다.')
@@ -178,7 +180,7 @@ function AuthModal({ tab, setTab, onClose }: Props) {
 
   function backToLogin() {
     setView('auth'); setTab('login')
-    setResetStep('request'); setResetCode(''); setResetPw(''); setResetPw2(''); setResetMsg(''); setErr('')
+    setResetStep('request'); setResetCode(''); setResetPw(''); setResetPw2(''); setResetMsg(''); setErr(''); setResetEmail('')
   }
 
   // ── 비밀번호 재설정 화면 ──────────────────────────────────
@@ -210,7 +212,7 @@ function AuthModal({ tab, setTab, onClose }: Props) {
                   <div style={{ fontSize: '2.2rem', marginBottom: '10px' }}>✅</div>
                   <p style={{ color: 'var(--t2)', lineHeight: 1.6 }}>새 비밀번호로 로그인해주세요.</p>
                 </div>
-                <button className="btn btn-primary w-full" onClick={() => { setLoginForm({ email: '', password: '' }); backToLogin() }}>
+                <button className="btn btn-primary w-full" onClick={() => { setLoginForm({ email: resetEmail, password: '' }); backToLogin() }}>
                   로그인하러 가기 →
                 </button>
               </>
@@ -245,6 +247,12 @@ function AuthModal({ tab, setTab, onClose }: Props) {
             ) : (
               // 3단계 — 새 비밀번호 입력
               <form onSubmit={handleResetConfirm}>
+                {resetEmail && (
+                  <div style={{ fontSize: '.82rem', color: 'var(--t2)', background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r2)', padding: '11px 13px', marginBottom: '14px', lineHeight: 1.5 }}>
+                    이 번호로 가입된 계정<br />
+                    <strong style={{ color: 'var(--t1)', fontSize: '.9rem', wordBreak: 'break-all' }}>{resetEmail}</strong>
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label" htmlFor="reset-pw">새 비밀번호</label>
                   <input className="form-input" id="reset-pw" type="password" placeholder="새 비밀번호 (6자 이상)" required minLength={6} autoFocus

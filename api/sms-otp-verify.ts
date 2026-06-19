@@ -82,7 +82,21 @@ export default async function handler(req: Request): Promise<Response> {
   })
   if (!updateRes.ok) return json(500, { ok: false, code: 'DB_UPDATE_FAILED' })
 
-  return json(200, { ok: true, verified: true, verifiedAt })
+  // 인증된 번호로 가입된 계정의 이메일 조회 (비밀번호 찾기 화면에서 안내용으로 노출).
+  // 본인 휴대폰으로 인증을 통과한 경우에만 반환되므로 노출 위험이 낮음. (가입 전이면 null)
+  let email: string | null = null
+  try {
+    const profRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?phone=eq.${phone}&select=email&limit=1`,
+      { headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` } }
+    )
+    if (profRes.ok) {
+      const rows = await profRes.json().catch(() => [])
+      if (Array.isArray(rows) && rows.length > 0) email = rows[0].email ?? null
+    }
+  } catch { /* 이메일 조회 실패는 인증 결과에 영향 없음 */ }
+
+  return json(200, { ok: true, verified: true, verifiedAt, email })
 }
 
 function json(status: number, data: unknown): Response {

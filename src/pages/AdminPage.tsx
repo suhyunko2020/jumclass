@@ -17,7 +17,7 @@ import { formatPrice, getLevelColor } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
-import { useSiteSettings, getPaymentSecret, type SiteSettings } from '../hooks/useSiteSettings'
+import { useSiteSettings, getPaymentSecret, DEFAULT_POLICIES, type SiteSettings } from '../hooks/useSiteSettings'
 import { invalidateStatsCache } from '../lib/homeStats'
 import {
   makeSampleName, makeSampleRating, makeRandomDate,
@@ -2014,7 +2014,17 @@ export default function AdminPage() {
                 {/* 정책 관리 */}
                 {settingsTab === 'policy' && (
                 <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
-                  <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '16px' }}>정책 관리</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '.85rem', fontWeight: 700 }}>정책 관리</div>
+                    <button type="button" className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        if (!window.confirm('4가지 정책을 최신 표준 문안으로 불러옵니다.\n(아래 입력칸에 채워지며, "설정 저장"을 눌러야 실제 반영됩니다.)\n현재 입력 중인 정책 내용은 덮어써집니다. 진행할까요?')) return
+                        setSiteSettingsForm(p => p ? { ...p, policies: { ...DEFAULT_POLICIES } } : null)
+                        toast('최신 표준 정책을 불러왔습니다. 내용 확인 후 "설정 저장"을 눌러주세요.', 'info')
+                      }}>
+                      📋 최신 표준 정책 불러오기
+                    </button>
+                  </div>
                   {(['privacy', 'terms', 'refund', 'copyright'] as const).map(key => (
                     <div className="form-group" key={key}>
                       <label className="form-label">
