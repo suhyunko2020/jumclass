@@ -150,9 +150,11 @@ export default function AdminPage() {
   const [logsError, setLogsError] = useState<string | null>(null)
   const [logEventFilter, setLogEventFilter] = useState<'all' | 'login' | 'signup' | 'course_view' | 'lesson_view'>('all')
   const [logSearch, setLogSearch] = useState('')
+  const [selectedLogKey, setSelectedLogKey] = useState<string | null>(null)  // 선택한 회원(상세 보기)
   const loadAccessLogs = useCallback(() => {
     setLogsLoading(true)
-    getAccessLogs(300).then(res => { setAccessLogs(res.logs); setLogsError(res.error); setLogsLoading(false) })
+    setSelectedLogKey(null)
+    getAccessLogs(500).then(res => { setAccessLogs(res.logs); setLogsError(res.error); setLogsLoading(false) })
   }, [])
   useEffect(() => {
     if (sec === 'logs' && isAdminLoggedIn) loadAccessLogs()
@@ -1805,7 +1807,7 @@ export default function AdminPage() {
             )
           })()}
 
-          {/* ═══ 접속 로그 ═══ */}
+          {/* ═══ 접속 로그 (회원별) ═══ */}
           {sec === 'logs' && (() => {
             const EVENT_LABEL: Record<string, string> = {
               login: '로그인', signup: '회원가입', course_view: '강의 조회', lesson_view: '강의 수강',
@@ -1813,18 +1815,36 @@ export default function AdminPage() {
             const EVENT_COLOR: Record<string, string> = {
               login: 'var(--purple-2)', signup: 'var(--ok)', course_view: 'var(--gold-2)', lesson_view: 'var(--warn)',
             }
-            const q = logSearch.trim().toLowerCase()
-            const filtered = accessLogs.filter(l => {
-              if (logEventFilter !== 'all' && l.event !== logEventFilter) return false
-              if (!q) return true
-              return [l.userName, l.userEmail, l.ip, l.courseTitle, l.city, l.country]
-                .some(v => (v || '').toLowerCase().includes(q))
-            })
             const fmt = (iso: string) => {
               const d = new Date(iso)
               const p = (n: number) => String(n).padStart(2, '0')
               return `${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
             }
+            // 로그를 회원(또는 비회원=IP)별로 묶는 키
+            const logKey = (l: AccessLog) => l.userId || ('ip:' + (l.ip || 'unknown'))
+
+            // 회원별 집계
+            interface Grp { key: string; isAnon: boolean; name: string; email: string; ip: string; count: number; last: string }
+            const groupMap = new Map<string, Grp>()
+            for (const l of accessLogs) {
+              const key = logKey(l)
+              let g = groupMap.get(key)
+              if (!g) { g = { key, isAnon: !l.userId, name: l.userName || '', email: l.userEmail || '', ip: l.ip || '', count: 0, last: l.createdAt }; groupMap.set(key, g) }
+              g.count++
+              if (new Date(l.createdAt).getTime() > new Date(g.last).getTime()) g.last = l.createdAt
+              if (!g.name && l.userName) g.name = l.userName
+              if (!g.email && l.userEmail) g.email = l.userEmail
+              if (!g.ip && l.ip) g.ip = l.ip
+            }
+            const q = logSearch.trim().toLowerCase()
+            let groups = [...groupMap.values()].sort((a, b) => new Date(b.last).getTime() - new Date(a.last).getTime())
+            if (q) groups = groups.filter(g => [g.name, g.email, g.ip].some(v => (v || '').toLowerCase().includes(q)))
+
+            const selected = selectedLogKey ? groupMap.get(selectedLogKey) : null
+            const detailLogs = selected
+              ? accessLogs.filter(l => logKey(l) === selectedLogKey && (logEventFilter === 'all' || l.event === logEventFilter))
+              : []
+
             return (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '8px' }}>
@@ -1834,18 +1854,8 @@ export default function AdminPage() {
                   </button>
                 </div>
                 <p style={{ fontSize: '.8rem', color: 'var(--t3)', margin: '0 0 18px' }}>
-                  최근 300건. 로그인·회원가입·강의 접속 시각/IP/위치/기기를 기록합니다. (개인정보처리방침 고지 항목)
+                  최근 500건. 회원을 클릭하면 해당 회원의 접속 기록만 모아 볼 수 있습니다. (개인정보처리방침 고지 항목)
                 </p>
-
-                {/* 필터 + 검색 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                  {([['all', '전체'], ['login', '로그인'], ['signup', '회원가입'], ['course_view', '강의 조회'], ['lesson_view', '강의 수강']] as const).map(([k, label]) => (
-                    <button key={k} className={`tab ${logEventFilter === k ? 'active' : ''}`} onClick={() => setLogEventFilter(k)}>{label}</button>
-                  ))}
-                  <input className="form-input" placeholder="이름·이메일·IP·강의·지역 검색" value={logSearch}
-                    onChange={e => setLogSearch(e.target.value)}
-                    style={{ marginLeft: 'auto', maxWidth: '260px', margin: 0 }} />
-                </div>
 
                 {logsLoading ? (
                   <div style={{ textAlign: 'center', padding: '60px', color: 'var(--t3)' }}>불러오는 중…</div>
@@ -1859,57 +1869,100 @@ export default function AdminPage() {
                     아직 기록된 접속 로그가 없습니다.<br />
                     <span style={{ fontSize: '.8rem' }}>실제 배포 사이트에서 로그인·강의 접속이 발생하면 이곳에 쌓입니다. (로컬 개발은 기록 안 함)</span>
                   </div>
-                ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="admin-table" style={{ minWidth: '760px' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ whiteSpace: 'nowrap' }}>시각</th>
-                          <th>이벤트</th>
-                          <th>사용자</th>
-                          <th>강의</th>
-                          <th>기기</th>
-                          <th>IP · 위치</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map(l => (
-                          <tr key={l.id}>
-                            <td style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--t2)' }}>{fmt(l.createdAt)}</td>
-                            <td>
-                              <span style={{ fontSize: '.74rem', fontWeight: 700, color: EVENT_COLOR[l.event] || 'var(--t2)' }}>
-                                {EVENT_LABEL[l.event] || l.event}
-                              </span>
-                            </td>
-                            <td>
-                              {l.userName || l.userEmail ? (
-                                <div style={{ lineHeight: 1.35 }}>
-                                  <div style={{ fontWeight: 600 }}>{l.userName || '-'}</div>
-                                  <div style={{ fontSize: '.72rem', color: 'var(--t3)' }}>{l.userEmail || ''}</div>
-                                </div>
-                              ) : <span style={{ color: 'var(--t3)' }}>비회원</span>}
-                            </td>
-                            <td style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t2)' }}>
-                              {l.courseTitle || '-'}
-                            </td>
-                            <td style={{ fontSize: '.78rem', color: 'var(--t2)', whiteSpace: 'nowrap' }}>
-                              {[l.device, l.os, l.browser].filter(Boolean).join(' · ') || '-'}
-                            </td>
-                            <td style={{ fontSize: '.78rem', whiteSpace: 'nowrap' }}>
-                              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{l.ip || '-'}</span>
-                              {(l.city || l.country) && (
-                                <span style={{ color: 'var(--t3)', marginLeft: '6px' }}>
-                                  {[l.city, l.country].filter(Boolean).join(', ')}
-                                </span>
-                              )}
-                            </td>
+                ) : selected ? (
+                  // ── 회원 상세: 선택한 회원의 로그만 ──
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedLogKey(null); setLogEventFilter('all') }}>← 회원 목록</button>
+                      <div style={{ lineHeight: 1.3 }}>
+                        <div style={{ fontWeight: 800, fontSize: '1rem' }}>{selected.isAnon ? '비회원' : (selected.name || '이름없음')}</div>
+                        <div style={{ fontSize: '.76rem', color: 'var(--t3)' }}>
+                          {selected.isAnon ? `IP ${selected.ip || '-'}` : selected.email}
+                          <span style={{ marginLeft: '8px' }}>· 총 {accessLogs.filter(l => logKey(l) === selectedLogKey).length}건</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 이벤트 필터 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                      {([['all', '전체'], ['login', '로그인'], ['signup', '회원가입'], ['course_view', '강의 조회'], ['lesson_view', '강의 수강']] as const).map(([k, label]) => (
+                        <button key={k} className={`tab ${logEventFilter === k ? 'active' : ''}`} onClick={() => setLogEventFilter(k)}>{label}</button>
+                      ))}
+                    </div>
+
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="admin-table" style={{ minWidth: '680px' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ whiteSpace: 'nowrap' }}>시각</th>
+                            <th>이벤트</th>
+                            <th>강의</th>
+                            <th>기기</th>
+                            <th>IP · 위치</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {filtered.length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '30px', color: 'var(--t3)', fontSize: '.85rem' }}>검색 결과가 없습니다.</div>
-                    )}
+                        </thead>
+                        <tbody>
+                          {detailLogs.map(l => (
+                            <tr key={l.id}>
+                              <td style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--t2)' }}>{fmt(l.createdAt)}</td>
+                              <td><span style={{ fontSize: '.74rem', fontWeight: 700, color: EVENT_COLOR[l.event] || 'var(--t2)' }}>{EVENT_LABEL[l.event] || l.event}</span></td>
+                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t2)' }}>{l.courseTitle || '-'}</td>
+                              <td style={{ fontSize: '.78rem', color: 'var(--t2)', whiteSpace: 'nowrap' }}>{[l.device, l.os, l.browser].filter(Boolean).join(' · ') || '-'}</td>
+                              <td style={{ fontSize: '.78rem', whiteSpace: 'nowrap' }}>
+                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{l.ip || '-'}</span>
+                                {(l.city || l.country) && <span style={{ color: 'var(--t3)', marginLeft: '6px' }}>{[l.city, l.country].filter(Boolean).join(', ')}</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {detailLogs.length === 0 && <div style={{ textAlign: 'center', padding: '30px', color: 'var(--t3)', fontSize: '.85rem' }}>해당 이벤트 기록이 없습니다.</div>}
+                    </div>
+                  </div>
+                ) : (
+                  // ── 회원 목록: 클릭하면 상세로 ──
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                      <span style={{ fontSize: '.82rem', color: 'var(--t3)' }}>접속한 회원 {groups.length}명</span>
+                      <input className="form-input" placeholder="이름·이메일·IP 검색" value={logSearch}
+                        onChange={e => setLogSearch(e.target.value)}
+                        style={{ marginLeft: 'auto', maxWidth: '260px', margin: 0 }} />
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="admin-table" style={{ minWidth: '600px' }}>
+                        <thead>
+                          <tr>
+                            <th>회원</th>
+                            <th style={{ textAlign: 'right' }}>접속 횟수</th>
+                            <th style={{ whiteSpace: 'nowrap' }}>최근 접속</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {groups.map(g => (
+                            <tr key={g.key} style={{ cursor: 'pointer' }} onClick={() => { setSelectedLogKey(g.key); setLogEventFilter('all') }}>
+                              <td>
+                                {g.isAnon ? (
+                                  <div style={{ lineHeight: 1.35 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--t2)' }}>비회원</div>
+                                    <div style={{ fontSize: '.72rem', color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>IP {g.ip || '-'}</div>
+                                  </div>
+                                ) : (
+                                  <div style={{ lineHeight: 1.35 }}>
+                                    <div style={{ fontWeight: 700 }}>{g.name || '이름없음'}</div>
+                                    <div style={{ fontSize: '.72rem', color: 'var(--t3)' }}>{g.email}</div>
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{g.count}</td>
+                              <td style={{ whiteSpace: 'nowrap', color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmt(g.last)}</td>
+                              <td style={{ textAlign: 'right', color: 'var(--t3)' }}>→</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {groups.length === 0 && <div style={{ textAlign: 'center', padding: '30px', color: 'var(--t3)', fontSize: '.85rem' }}>검색 결과가 없습니다.</div>}
+                    </div>
                   </div>
                 )}
               </div>
