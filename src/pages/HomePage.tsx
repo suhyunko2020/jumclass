@@ -59,7 +59,9 @@ export default function HomePage() {
     return out
   }
 
-  function handleContact(e: React.FormEvent) {
+  const [contactSending, setContactSending] = useState(false)
+
+  async function handleContact(e: React.FormEvent) {
     e.preventDefault()
     if (captchaInput.trim().toUpperCase() !== captchaCode) {
       toast('보안 코드가 일치하지 않습니다. 다시 확인해주세요.', 'err')
@@ -67,10 +69,26 @@ export default function HomePage() {
       setCaptchaCode(genCaptcha())
       return
     }
-    toast('문의가 접수됐습니다. 24시간 내로 답변드릴게요 ✦', 'ok')
-    setContactForm({ name: '', email: '', message: '' })
-    setCaptchaInput('')
-    setCaptchaCode(genCaptcha())
+    setContactSending(true)
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contactForm),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        toast(data.message || '문의 접수에 실패했습니다. 잠시 후 다시 시도해주세요.', 'err')
+        return
+      }
+      toast('문의가 접수됐습니다. 입력하신 이메일로 답변드릴게요 ✦', 'ok')
+      setContactForm({ name: '', email: '', message: '' })
+      setCaptchaInput('')
+      setCaptchaCode(genCaptcha())
+    } catch {
+      toast('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', 'err')
+    } finally {
+      setContactSending(false)
+    }
   }
 
   return (
@@ -395,7 +413,9 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary w-full">문의 보내기</button>
+              <button type="submit" className="btn btn-primary w-full" disabled={contactSending}>
+                {contactSending ? '접수 중…' : '문의 보내기'}
+              </button>
             </form>
           </div>
         </div>

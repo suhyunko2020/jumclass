@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { Instructor } from '../data/types'
-import { saveInstructorRemote, deleteInstructorRemote } from '../utils/storage'
+import { saveInstructorRemote, deleteInstructorRemote, saveInstructorOrderRemote } from '../utils/storage'
 
 const STORAGE_KEY = 'arcana_instructors'
 const ORDER_KEY = 'arcana_instructor_order'
@@ -52,6 +52,8 @@ export function useInstructors() {
 
   const saveInstructorOrder = useCallback((ids: string[]) => {
     localStorage.setItem(ORDER_KEY, JSON.stringify(ids))
+    // 백그라운드 Supabase 저장 — 전 사용자/기기에 동일 순서 반영
+    saveInstructorOrderRemote(ids)
   }, [])
 
   return { getAll, getPublicInstructors, getInstructor, saveInstructor, deleteInstructor, saveInstructorOrder }

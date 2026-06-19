@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { COURSES } from '../data/courses'
 import type { Course, Review } from '../data/types'
 import { supabase } from '../lib/supabase'
+import { INSTRUCTOR_ORDER_ID } from '../utils/storage'
 
 // 캐시(강의/리뷰) 갱신 알림 — 동기화/작성 후 캐시 기반 컴포넌트를 재렌더시킨다.
 // (localStorage 캐시는 동기 읽기라 React가 변경을 감지 못 하므로 이벤트로 트리거)
@@ -230,8 +231,13 @@ export function useCourses() {
       localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews))
     }
     if (instructorsRes.data) {
+      // 강사 정렬 순서 특수 행(__order__)은 목록에서 분리해 ORDER_KEY로 저장 (전 사용자 동기화)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const instructors = instructorsRes.data.map((r: any) => r.data)
+      const orderRow = instructorsRes.data.find((r: any) => r.id === INSTRUCTOR_ORDER_ID)
+      const orderIds = (orderRow?.data as { ids?: string[] } | undefined)?.ids
+      if (Array.isArray(orderIds)) localStorage.setItem('arcana_instructor_order', JSON.stringify(orderIds))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const instructors = instructorsRes.data.filter((r: any) => r.id !== INSTRUCTOR_ORDER_ID).map((r: any) => r.data)
       localStorage.setItem('arcana_instructors', JSON.stringify(instructors))
     }
     // 캐시 갱신 완료 — 캐시 기반 컴포넌트(강의/리뷰 표시) 재렌더 트리거

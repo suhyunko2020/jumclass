@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useInstructors } from '../hooks/useInstructors'
+import { useDataSyncTick } from '../hooks/useCourses'
 
 export default function InstructorsPage() {
+  useDataSyncTick()  // Supabase 동기화(강사/순서) 완료 시 재렌더 → 최신 순서 반영
   const { getPublicInstructors } = useInstructors()
   const instructors = getPublicInstructors()
 

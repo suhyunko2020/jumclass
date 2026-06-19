@@ -208,11 +208,22 @@ export async function updateEnrollmentAdmin(
 // 강사 — Supabase 비동기 (custom_courses와 동일 패턴)
 // ════════════════════════════════════════════════════════════
 
+// 강사 정렬 순서는 instructors 테이블의 특수 행(id='__order__')에 보관 — 전 사용자 동기화용.
+export const INSTRUCTOR_ORDER_ID = '__order__'
+
 export async function getInstructorsRemote(): Promise<Instructor[]> {
   const { data, error } = await supabase.from('instructors').select('id, data')
   if (error) { console.warn('fetch instructors failed:', error.message); return [] }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => r.data as Instructor)
+  return (data ?? []).filter((r: any) => r.id !== INSTRUCTOR_ORDER_ID).map((r: any) => r.data as Instructor)
+}
+
+// 강사 드래그앤드롭 순서를 Supabase에 저장 (course order와 동일 패턴)
+export function saveInstructorOrderRemote(ids: string[]) {
+  supabase.from('instructors').upsert(
+    { id: INSTRUCTOR_ORDER_ID, data: { ids } as unknown as Record<string, unknown>, updated_at: new Date().toISOString() },
+    { onConflict: 'id' },
+  ).then(({ error }) => { if (error) console.warn('instructor order sync failed:', error.message) })
 }
 
 export function saveInstructorRemote(inst: Instructor) {

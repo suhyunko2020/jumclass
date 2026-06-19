@@ -356,8 +356,9 @@ export default function AdminPage() {
     const inq = answerModal.inq
     await answerInquiry(inq.id, answerModal.text)
     // 문의답변 알림톡 (고객) — 환불요청은 '환불 처리' 버튼에서 별도 발송하므로 제외.
+    // 홈 문의(type='contact')는 비회원이라 userId가 없음 → 알림톡 생략(메일로 답변).
     // 번호는 서버가 userId로 조회(관리자→타인 발송이라 클라이언트 RLS 우회).
-    if (inq.type !== 'refund') {
+    if (inq.type !== 'refund' && inq.type !== 'contact' && inq.userId) {
       sendInquiryAnswered({ userId: inq.userId, customerName: inq.userName, title: inq.subject }).catch(() => {})
     }
     toast('답변이 등록되었습니다.', 'ok')
@@ -1420,6 +1421,9 @@ export default function AdminPage() {
                             {inq.type === 'refund' && (
                               <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(224,82,82,.12)', color: 'var(--fail)', flexShrink: 0 }}>환불 요청</span>
                             )}
+                            {inq.type === 'contact' && (
+                              <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.14)', color: 'var(--purple-2)', flexShrink: 0 }}>홈 문의</span>
+                            )}
                             <span style={{ fontWeight: 700, fontSize: '.92rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inq.subject}</span>
                           </div>
                           <div style={{ fontSize: '.74rem', color: 'var(--t3)', marginTop: '3px' }}>
@@ -1485,10 +1489,19 @@ export default function AdminPage() {
                               <div style={{ fontSize: '.855rem', color: 'var(--t1)', whiteSpace: 'pre-wrap' }}>{inq.answer}</div>
                             </div>
                           )}
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {inq.type === 'contact' && (
+                              // 홈 문의는 비회원이 남길 수 있어 앱 내 답변이 닿지 않으므로 메일로 답변
+                              <a className="btn btn-primary btn-sm"
+                                href={`mailto:${inq.userEmail}?subject=${encodeURIComponent('[점클래스] 문의 주신 내용에 답변드립니다')}&body=${encodeURIComponent(`안녕하세요 ${inq.userName}님, 점클래스입니다.\n\n남겨주신 문의에 답변드립니다.\n\n──────────\n[문의하신 내용]\n${inq.message}\n──────────\n\n`)}`}>
+                                ✉ 메일로 답변
+                              </a>
+                            )}
                             <button className={`btn btn-sm ${inq.status !== 'answered' ? 'btn-primary' : 'btn-ghost'}`}
                               onClick={() => setAnswerModal({ inq, text: inq.answer || '' })}>
-                              {inq.status !== 'answered' ? '답변 작성' : '답변 수정'}
+                              {inq.type === 'contact'
+                                ? (inq.status !== 'answered' ? '답변 완료로 표시' : '답변 메모 수정')
+                                : (inq.status !== 'answered' ? '답변 작성' : '답변 수정')}
                             </button>
                             {inq.type === 'refund' && !inq.refundedAt && (
                               <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
