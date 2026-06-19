@@ -120,13 +120,16 @@ export default function CourseDetailPage() {
                 <div className="detail-stat-item">🎬 총 {totalLessons}강</div>
                 <div className="detail-stat-item">⏱ {totalDuration}</div>
               </div>
-              <div className="detail-instructor-row" style={{ marginBottom: 0 }}>
-                {courseInstructors[0]?.photo
-                  ? <img src={courseInstructors[0].photo} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                  : <div className="instructor-avatar">{course.instructorAvatar}</div>}
-                <span style={{ color: 'var(--t2)', fontSize: '.875rem' }}>강사 &nbsp;</span>
-                <strong style={{ fontSize: '.9rem' }}>{courseInstructors[0]?.name || course.instructor}</strong>
-              </div>
+              {/* 자격증은 담당 강사가 여러 명이라 상단 단일 강사 표기를 숨김 (강사진은 아래 그리드로 표시) */}
+              {!isCert && (
+                <div className="detail-instructor-row" style={{ marginBottom: 0 }}>
+                  {courseInstructors[0]?.photo
+                    ? <img src={courseInstructors[0].photo} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                    : <div className="instructor-avatar">{course.instructorAvatar}</div>}
+                  <span style={{ color: 'var(--t2)', fontSize: '.875rem' }}>강사 &nbsp;</span>
+                  <strong style={{ fontSize: '.9rem' }}>{courseInstructors[0]?.name || course.instructor}</strong>
+                </div>
+              )}
 
               <div className="detail-divider" />
 
