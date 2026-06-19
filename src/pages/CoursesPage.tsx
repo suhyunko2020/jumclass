@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useCourses } from '../hooks/useCourses'
+import { useCourses, useDataSyncTick } from '../hooks/useCourses'
 import CourseCard from '../components/course/CourseCard'
 import { formatPrice } from '../utils/format'
 
@@ -27,6 +27,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export default function CoursesPage() {
   const { getPublicCourses, getEnrolledCount } = useCourses()
+  useDataSyncTick()  // Supabase 동기화(순서/강의) 완료 시 재렌더 → 최신 순서 반영
   const [searchParams] = useSearchParams()
   // URL 쿼리 ?filter=자격증 등으로 진입 시 해당 필터로 시작
   const initialFilter = searchParams.get('filter') || '전체'
