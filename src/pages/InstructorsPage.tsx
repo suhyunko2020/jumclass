@@ -1,8 +1,13 @@
 import { Link } from 'react-router-dom'
 import { useInstructors } from '../hooks/useInstructors'
 import { useDataSyncTick } from '../hooks/useCourses'
+import { usePageSeo } from '../components/ui/SeoHead'
 
 export default function InstructorsPage() {
+  usePageSeo({
+    title: '전문 강사진 | 점클래스',
+    description: '수천 건의 리딩 경험을 가진 현직 전문 타로 상담사들을 소개합니다. 점클래스 강사진의 이력과 담당 강의를 확인하세요.',
+  })
   useDataSyncTick()  // Supabase 동기화(강사/순서) 완료 시 재렌더 → 최신 순서 반영
   const { getPublicInstructors } = useInstructors()
   const instructors = getPublicInstructors()

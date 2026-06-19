@@ -8,6 +8,7 @@ import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcT
 import { getMyInquiries } from '../utils/storage'
 import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
 import { logAccess } from '../utils/accessLog'
+import { usePageSeo, SEO_SITE_URL, SEO_SITE_NAME } from '../components/ui/SeoHead'
 import type { Inquiry } from '../data/types'
 
 export default function CourseDetailPage() {
@@ -36,6 +37,27 @@ export default function CourseDetailPage() {
     if (!course) return
     logAccess({ event: 'course_view', courseId: course.id, courseTitle: course.title, userId: user?.uid, userName: user?.name, userEmail: user?.email })
   }, [course?.id, user?.uid])
+
+  // 페이지별 SEO — 강의마다 고유 제목·설명·썸네일 + Course 구조화 데이터(구글 리치 결과)
+  const seoDesc = (course?.subtitle || course?.description || '').replace(/[#*_>`~\-\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 150)
+  usePageSeo(course ? {
+    title: `${course.title} | ${SEO_SITE_NAME}`,
+    description: seoDesc || `${course.title} — 점클래스 타로 온라인 강의`,
+    image: course.thumbnail || undefined,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'Course',
+      name: course.title,
+      description: seoDesc || course.title,
+      provider: { '@type': 'Organization', name: SEO_SITE_NAME, sameAs: SEO_SITE_URL },
+      ...(course.thumbnail ? { image: course.thumbnail } : {}),
+      offers: {
+        '@type': 'Offer', priceCurrency: 'KRW', price: course.price,
+        availability: 'https://schema.org/InStock',
+        url: `${SEO_SITE_URL}/course/${course.id}`,
+      },
+    },
+  } : null)
 
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({ 0: true })
   const [tierIdx, setTierIdx] = useState(0)

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { renderMarkdown } from '../utils/markdown'
+import { usePageSeo } from '../components/ui/SeoHead'
 
 function formatDate(iso: string): string {
   try {
@@ -25,9 +26,21 @@ export default function NoticePage() {
   const announcements = get().announcements ?? []
   const notices = sortNotices(announcements)
 
+  // 페이지별 SEO — 상세는 공지 제목, 목록은 공지사항
+  const detailNotice = id ? announcements.find(n => n.id === id) : null
+  usePageSeo(
+    id
+      ? (detailNotice
+          ? {
+              title: `${detailNotice.title} | 점클래스 공지사항`,
+              description: detailNotice.body.replace(/[#*_>`~\-\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 150),
+            }
+          : { title: '공지사항 | 점클래스' })
+      : { title: '공지사항 | 점클래스', description: '점클래스의 리뉴얼 오픈 안내 등 새 소식과 공지사항을 확인하세요.' }
+  )
+
   useEffect(() => {
     window.scrollTo(0, 0)
-    document.title = '공지사항 — JUMCLASS'
   }, [id])
 
   // ── 상세 보기 ──

@@ -8,3 +8,5 @@ Disallow: /payment-success
 Disallow: /payment-fail
 Disallow: /my
 Disallow: /i/
+
+Sitemap: https://jumclass.com/sitemap.xml

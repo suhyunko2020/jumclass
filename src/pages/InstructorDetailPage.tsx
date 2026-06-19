@@ -4,6 +4,7 @@ import { useCourses } from '../hooks/useCourses'
 import { formatPrice, discountRate, calcTotalDuration } from '../utils/format'
 import { useAuthModal } from '../components/auth/AuthModal'
 import { useAuth } from '../hooks/useAuth'
+import { usePageSeo, SEO_SITE_URL } from '../components/ui/SeoHead'
 
 export default function InstructorDetailPage() {
   const { instructorId } = useParams<{ instructorId: string }>()
@@ -14,6 +15,25 @@ export default function InstructorDetailPage() {
   const navigate = useNavigate()
 
   const inst = getInstructor(instructorId || '')
+
+  // 페이지별 SEO — 강사 이름 기반 제목 + Person 구조화 데이터
+  const instSeoDesc = (inst?.bio || inst?.title || '').replace(/[#*_>`~\-\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 150)
+  usePageSeo(inst ? {
+    title: `${inst.name} 강사 | 점클래스`,
+    description: instSeoDesc || `${inst.name} 타로 강사 — 점클래스`,
+    image: inst.photo || undefined,
+    type: 'profile',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'Person',
+      name: inst.name,
+      jobTitle: inst.title || '타로 강사',
+      ...(inst.photo ? { image: inst.photo } : {}),
+      ...(instSeoDesc ? { description: instSeoDesc } : {}),
+      worksFor: { '@type': 'Organization', name: '점클래스', url: SEO_SITE_URL },
+      url: `${SEO_SITE_URL}/instructor/${inst.id}`,
+    },
+  } : null)
 
   if (!inst) {
     return (

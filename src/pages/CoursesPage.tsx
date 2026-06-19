@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useCourses, useDataSyncTick } from '../hooks/useCourses'
 import CourseCard from '../components/course/CourseCard'
 import { formatPrice } from '../utils/format'
+import { usePageSeo } from '../components/ui/SeoHead'
 
 // 자격증은 별도 섹션으로 분리하므로 필터에서 제외 (인터넷 강의만 노출)
 const FILTERS = ['전체', '입문', '중급', '고급']
@@ -26,6 +27,10 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default function CoursesPage() {
+  usePageSeo({
+    title: '타로 강의 전체보기 | 점클래스',
+    description: '입문부터 자격증까지, 점클래스의 모든 타로·오라클카드 온라인 강의를 한눈에. 레벨별 커리큘럼으로 원하는 강의를 골라 시작하세요.',
+  })
   const { getPublicCourses, getEnrolledCount } = useCourses()
   useDataSyncTick()  // Supabase 동기화(순서/강의) 완료 시 재렌더 → 최신 순서 반영
   const [searchParams] = useSearchParams()
