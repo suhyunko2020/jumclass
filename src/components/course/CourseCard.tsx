@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Course } from '../../data/types'
 import { formatPrice, discountRate, calcTotalDuration, getLevelColor } from '../../utils/format'
@@ -8,26 +8,48 @@ interface Props {
   enrolledCount?: string
 }
 
+// Vimeo 썸네일 캐시 (vimeoId → URL, '' = 썸네일 없음). 카드 간 재요청 방지
+const thumbCache = new Map<string, string>()
+
 export default function CourseCard({ course, enrolledCount }: Props) {
   const navigate = useNavigate()
   const dr = discountRate(course.originalPrice, course.price)
   const lc = getLevelColor(course.level)
-  const [thumbError, setThumbError] = useState(false)
 
-  // 썸네일: 직접 지정값 우선 → 없으면 첫 강의 Vimeo 영상의 썸네일(첫 화면) 자동 사용
+  // 썸네일: 직접 지정값 우선 → 없으면 첫 강의 Vimeo 영상의 공식 썸네일(첫 화면) 자동 사용
   const firstVimeo = course.curriculum?.flatMap(s => s.items).find(i => i.vimeo)?.vimeo
-  const thumbUrl = course.thumbnail || (firstVimeo ? `https://vumbnail.com/${firstVimeo}.jpg` : '')
+  const [thumb, setThumb] = useState<string>(
+    course.thumbnail || (firstVimeo ? thumbCache.get(firstVimeo) ?? '' : ''),
+  )
+
+  useEffect(() => {
+    if (course.thumbnail || !firstVimeo) return
+    if (thumbCache.has(firstVimeo)) { setThumb(thumbCache.get(firstVimeo) || ''); return }
+    let alive = true
+    // Vimeo oEmbed — 공개 영상은 썸네일 URL, 비공개/제한 영상은 null → 이모지 폴백
+    fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${firstVimeo}&width=720`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        const url = (d && d.thumbnail_url) || ''
+        thumbCache.set(firstVimeo, url)
+        if (alive) setThumb(url)
+      })
+      .catch(() => { thumbCache.set(firstVimeo, ''); if (alive) setThumb('') })
+    return () => { alive = false }
+  }, [firstVimeo, course.thumbnail])
+
+  const finalThumb = course.thumbnail || thumb
 
   return (
     <div className="course-card" onClick={() => navigate(`/course/${course.id}`)}>
       <div className="card-thumb">
-        {thumbUrl && !thumbError ? (
+        {finalThumb ? (
           <img
-            src={thumbUrl}
+            src={finalThumb}
             alt={course.title}
             className="card-thumb-img"
             loading="lazy"
-            onError={() => setThumbError(true)}
+            onError={() => setThumb('')}
           />
         ) : (
           <span style={{ fontSize: '3.5rem' }}>{course.emoji}</span>
