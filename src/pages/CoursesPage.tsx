@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useCourses } from '../hooks/useCourses'
 import CourseCard from '../components/course/CourseCard'
@@ -31,11 +31,25 @@ export default function CoursesPage() {
   // URL 쿼리 ?filter=자격증 등으로 진입 시 해당 필터로 시작
   const initialFilter = searchParams.get('filter') || '전체'
   const [filter, setFilter] = useState(FILTERS.includes(initialFilter) ? initialFilter : '전체')
+  const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  function toggleSearch() {
+    setSearchOpen(open => {
+      const next = !open
+      if (next) setTimeout(() => searchRef.current?.focus(), 60)
+      else setSearch('')  // 닫으면 검색어 초기화 → 필터 해제
+      return next
+    })
+  }
 
   const all = getPublicCourses()
   // 메인 그리드는 인터넷 강의만 (자격증은 하단 별도 섹션에서 카드로 안내)
   const internetCourses = all.filter(c => c.level !== '자격증')
-  const filtered = filter === '전체' ? internetCourses : internetCourses.filter(c => c.level === filter)
+  const byLevel = filter === '전체' ? internetCourses : internetCourses.filter(c => c.level === filter)
+  const q = search.trim().toLowerCase()
+  const filtered = q ? byLevel.filter(c => c.title.toLowerCase().includes(q)) : byLevel
 
   // 자격증 섹션 — 각 자격증을 개별 카드로 보여주고, 데이터 없는 항목은 표시 자체를 생략
   const certs = all.filter(c => c.level === '자격증')
@@ -80,12 +94,37 @@ export default function CoursesPage() {
 
       {/* 필터 */}
       <div className="container" style={{ marginBottom: '32px', marginTop: '28px' }}>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           {FILTERS.map(f => (
             <button key={f} className={`tab ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
               {f}
             </button>
           ))}
+          {/* 검색 — 아이콘 클릭 시 입력바가 펼쳐짐, 제목으로 필터 */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div className={`course-search ${searchOpen ? 'open' : ''}`}>
+              <input
+                ref={searchRef}
+                className="course-search-input"
+                placeholder="강의 제목 검색"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') toggleSearch() }}
+              />
+            </div>
+            <button
+              type="button"
+              className="course-search-btn"
+              onClick={toggleSearch}
+              aria-label={searchOpen ? '검색 닫기' : '강의 검색'}
+            >
+              {searchOpen ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -98,7 +137,7 @@ export default function CoursesPage() {
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--t2)' }}>
-            해당 레벨의 강의가 없습니다.
+            {q ? `'${search.trim()}' 검색 결과가 없습니다.` : '해당 레벨의 강의가 없습니다.'}
           </div>
         )}
       </div>
