@@ -85,7 +85,7 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/access_logs`, {
+    const insRes = await fetch(`${SUPABASE_URL}/rest/v1/access_logs`, {
       method: 'POST',
       headers: {
         'apikey': SERVICE_KEY,
@@ -95,9 +95,15 @@ export default async function handler(req: Request): Promise<Response> {
       },
       body: JSON.stringify(row),
     })
-  } catch { /* 기록 실패는 무시 */ }
-
-  return json(200, { ok: true })
+    // 진단용 — 저장 성공/실패와 사유를 응답에 노출 (민감정보 없음)
+    if (!insRes.ok) {
+      const errText = await insRes.text().catch(() => '')
+      return json(200, { ok: true, stored: false, status: insRes.status, error: errText })
+    }
+    return json(200, { ok: true, stored: true })
+  } catch (e) {
+    return json(200, { ok: true, stored: false, error: e instanceof Error ? e.message : String(e) })
+  }
 }
 
 function json(status: number, data: unknown): Response {

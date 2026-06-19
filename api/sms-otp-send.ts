@@ -19,8 +19,14 @@
 export const config = { runtime: 'edge' }
 
 const CODE_TTL_MS = 5 * 60 * 1000       // 5분
-const RESEND_COOLDOWN_MS = 60 * 1000    // 60초 재전송 쿨다운
 const SOLAPI_SEND_URL = 'https://api.solapi.com/messages/v4/send'
+
+// 단계적 발송 제한 (휴대폰 1개 기준, 자정 KST 리셋)
+//  1~3회: 즉시 / 4~5회: 5분 간격 / 6회: 1시간 간격 / 7회 이상: 당일 차단
+const RL_FREE_COUNT = 3                  // 텀 없이 허용하는 횟수
+const RL_5MIN_MS = 5 * 60 * 1000
+const RL_1HOUR_MS = 60 * 60 * 1000
+const RL_DAILY_MAX = 6                   // 하루 최대 발송 횟수(이후 자정까지 차단)
 
 // 인증번호 알림톡 (승인 템플릿) — 알림톡 우선 발송, 실패 시 SMS 자동 대체(비용 절감)
 const AUTH_PF_ID = 'KA01PF260616051226226tvtVw4A32cI'
@@ -133,25 +139,58 @@ export default async function handler(req: Request): Promise<Response> {
     }
   }
 
-  // 1) Rate limit — 같은 번호로 60초 내 재요청 차단
+  // 1) 단계적 발송 제한 — 오늘(자정 KST 이후) 발송 횟수 기준으로 텀을 점증
   try {
+    const KST = 9 * 60 * 60 * 1000
+    const now = Date.now()
+    // 자정(KST) 시각을 UTC ms로 환산 → 오늘 발송분만 카운트
+    const kstMidnightUtc = Math.floor((now + KST) / 86400000) * 86400000 - KST
+    const since = new Date(kstMidnightUtc).toISOString()
+
     const recentRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/phone_verifications?phone=eq.${phone}&order=created_at.desc&limit=1&select=created_at`,
+      `${SUPABASE_URL}/rest/v1/phone_verifications?phone=eq.${phone}&created_at=gte.${since}&order=created_at.desc&select=created_at`,
       { headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` } }
     )
     if (recentRes.ok) {
       const rows = await recentRes.json().catch(() => [])
-      if (Array.isArray(rows) && rows.length > 0) {
-        const last = new Date(rows[0].created_at).getTime()
-        const delta = Date.now() - last
-        if (delta < RESEND_COOLDOWN_MS) {
-          const wait = Math.ceil((RESEND_COOLDOWN_MS - delta) / 1000)
-          return json(429, { ok: false, code: 'TOO_SOON', message: `${wait}초 후 다시 시도해주세요.` })
+      const sentToday = Array.isArray(rows) ? rows.length : 0           // 오늘 이미 발송한 횟수
+      const lastTs = sentToday > 0 ? new Date(rows[0].created_at).getTime() : 0
+      const sinceLast = now - lastTs
+
+      const fmtWait = (ms: number) => {
+        const sec = Math.ceil(ms / 1000)
+        const m = Math.floor(sec / 60), s = sec % 60
+        return m > 0 ? `${m}분 ${s}초` : `${s}초`
+      }
+
+      if (sentToday >= RL_DAILY_MAX) {
+        // 7회째 이상 — 당일 차단 (자정 지나면 리셋)
+        return json(429, {
+          ok: false, code: 'DAILY_LIMIT',
+          message: '오늘 인증 요청 가능 횟수를 초과했습니다. 보안을 위해 내일 다시 시도해주세요.',
+        })
+      }
+      if (sentToday === RL_DAILY_MAX - 1) {
+        // 6회째 — 1시간 간격
+        if (sinceLast < RL_1HOUR_MS) {
+          return json(429, {
+            ok: false, code: 'RATE_LIMITED',
+            message: `인증 요청이 너무 많습니다. 보안을 위해 ${fmtWait(RL_1HOUR_MS - sinceLast)} 후 다시 시도해주세요.`,
+          })
+        }
+      } else if (sentToday >= RL_FREE_COUNT) {
+        // 4~5회째 — 5분 간격 + 경고
+        if (sinceLast < RL_5MIN_MS) {
+          return json(429, {
+            ok: false, code: 'RATE_LIMITED',
+            message: `짧은 시간에 인증을 너무 많이 요청했습니다. ${fmtWait(RL_5MIN_MS - sinceLast)} 후 다시 시도해주세요.`,
+          })
         }
       }
+      // 1~3회째 — 텀 없이 허용
     }
   } catch {
-    // Rate limit 조회 실패는 치명적이지 않음 — 다음 단계 진행
+    // 제한 조회 실패는 치명적이지 않음 — 다음 단계 진행
   }
 
   // 2) 코드 생성 및 해시 저장
