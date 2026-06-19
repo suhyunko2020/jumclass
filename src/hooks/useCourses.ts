@@ -26,6 +26,8 @@ const CUSTOM_KEY   = 'arcana_custom_courses'
 const REVIEWS_KEY  = 'arcana_reviews'
 const ATTACH_KEY   = 'arcana_lesson_attachments'
 const ORDER_KEY    = 'arcana_course_order'
+// 강의 순서를 course_overrides 테이블의 특수 행으로 저장 → 모든 사용자/기기에 동기화
+const COURSE_ORDER_ID = '__course_order__'
 
 function getJSON<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback }
@@ -145,6 +147,11 @@ export function useCourses() {
 
   const saveCourseOrder = useCallback((ids: string[]) => {
     localStorage.setItem(ORDER_KEY, JSON.stringify(ids))
+    // 백그라운드 Supabase 저장 — course_overrides 특수 행에 순서 보관 (전 사용자 동기화)
+    supabase.from('course_overrides').upsert(
+      { course_id: COURSE_ORDER_ID, data: { ids } as Record<string, unknown>, updated_at: new Date().toISOString() },
+      { onConflict: 'course_id' },
+    ).then(({ error }) => { if (error) console.warn('course order sync failed:', error.message) })
   }, [])
 
   // ── override 저장 (로컬 즉시 + Supabase 백그라운드) ────────
@@ -192,9 +199,20 @@ export function useCourses() {
 
     if (overridesRes.data) {
       const map: Record<string, Partial<Course>> = {}
+      let orderIds: string[] | null = null
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      overridesRes.data.forEach((r: any) => { map[r.course_id] = r.data as Partial<Course> })
+      overridesRes.data.forEach((r: any) => {
+        // 강의 순서 특수 행은 오버라이드 맵에 넣지 않고 ORDER_KEY로 분리 저장
+        if (r.course_id === COURSE_ORDER_ID) {
+          const ids = r.data?.ids
+          if (Array.isArray(ids)) orderIds = ids
+          return
+        }
+        map[r.course_id] = r.data as Partial<Course>
+      })
       localStorage.setItem(OVERRIDE_KEY, JSON.stringify(map))
+      // 관리자가 지정한 순서를 모든 사용자에게 반영
+      if (orderIds) localStorage.setItem(ORDER_KEY, JSON.stringify(orderIds))
     }
     if (customRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
