@@ -34,7 +34,7 @@ interface AuthContextType {
   logAttachmentDownload: (courseId: string, lessonId: string, attachmentName: string) => Promise<void>
   pauseCourse: (courseId: string) => Promise<boolean>
   resumeCourse: (courseId: string) => Promise<boolean>
-  enrollManual: (uid: string, courseId: string, days: number) => Promise<boolean>
+  enrollManual: (uid: string, courseId: string, days: number, assignedInstructorId?: string) => Promise<boolean>
   // 관리자 권한 — admin_users 테이블 조회 결과 (user가 있을 때만 true 가능)
   isAdminLoggedIn: boolean
   adminCheckLoading: boolean   // admin_users 조회 중 여부 (초기 가드용)
@@ -398,7 +398,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, refreshUser])
 
   // ── 수동 등록 (관리자) ────────────────────────────────────
-  const enrollManual = useCallback(async (uid: string, courseId: string, days: number) => {
+  // assignedInstructorId: 자격증 과정 수동 등록 시 담당 강사 지정 (진도 관리 페이지 연결용)
+  const enrollManual = useCallback(async (uid: string, courseId: string, days: number, assignedInstructorId?: string) => {
     const expiry = new Date()
     expiry.setDate(expiry.getDate() + days)
 
@@ -411,14 +412,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       type: 'manual',
       paused: false,
       pause_count: 0,
+      ...(assignedInstructorId ? { assigned_instructor_id: assignedInstructorId } : {}),
     }
 
     // enrollments에 (user_id, course_id) unique 제약이 없어 upsert onConflict는 42P10으로 실패한다.
     // 기존 수강 있으면 update, 없으면 insert (enroll과 동일 패턴).
-    const { data: existing } = await supabase
+    // 자격증(강사 지정)은 (user, course, instructor) 조합으로 구분.
+    let existQuery = supabase
       .from('enrollments').select('id')
       .eq('user_id', uid).eq('course_id', courseId)
-      .maybeSingle()
+    if (assignedInstructorId) existQuery = existQuery.eq('assigned_instructor_id', assignedInstructorId)
+    const { data: existing } = await existQuery.maybeSingle()
     const res = existing
       ? await supabase.from('enrollments').update(row).eq('id', existing.id)
       : await supabase.from('enrollments').insert(row)

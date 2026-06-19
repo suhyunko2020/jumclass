@@ -11,12 +11,13 @@ import {
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
   getAccessLogs,
+  createProgressPage,
   type CertificateAgreementRecord,
   type AccessLog,
 } from '../utils/storage'
 import { sendInstructorProgress, sendInquiryAnswered, sendRefundComplete } from '../utils/alimtalk'
 import { formatPrice, getLevelColor } from '../utils/format'
-import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
+import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService, ProgressChecklistItem } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
 import { useSiteSettings, getPaymentSecret, getAdminNotifyPhone, saveAdminNotifyPhone, DEFAULT_POLICIES, type SiteSettings, type Announcement } from '../hooks/useSiteSettings'
@@ -175,7 +176,7 @@ export default function AdminPage() {
   // 모달 상태
   const [answerModal, setAnswerModal] = useState<{ inq: Inquiry; text: string } | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [enrollModal, setEnrollModal] = useState<{ user: any; courseId: string; days: number } | null>(null)
+  const [enrollModal, setEnrollModal] = useState<{ user: any; courseId: string; days: number; instructorId: string } | null>(null)
   const [courseEditModal, setCourseEditModal] = useState<CourseEditForm | null>(null)
   const [courseDetailModal, setCourseDetailModal] = useState<Course | null>(null)
   const [curriculumModal, setCurriculumModal] = useState<CurriculumModalState | null>(null)
@@ -401,9 +402,27 @@ export default function AdminPage() {
   async function handleEnroll(e: React.FormEvent) {
     e.preventDefault()
     if (!enrollModal) return
-    const ok = await enrollManual(enrollModal.user.uid, enrollModal.courseId, enrollModal.days)
-    if (ok) toast(`${enrollModal.user.name}님 수동 등록 완료`, 'ok')
-    else toast('등록 실패', 'err')
+    const course = courses.find(c => c.id === enrollModal.courseId)
+    const isCert = course?.level === '자격증'
+    // 자격증은 담당 강사 필수 (진도 관리 페이지 연결)
+    if (isCert && !enrollModal.instructorId) { toast('자격증 과정은 담당 강사를 선택해주세요.', 'err'); return }
+
+    const instructorId = isCert ? enrollModal.instructorId : undefined
+    const ok = await enrollManual(enrollModal.user.uid, enrollModal.courseId, enrollModal.days, instructorId)
+    if (!ok) { toast('등록 실패', 'err'); return }
+
+    // 자격증: 강사 진도 관리 페이지 생성 (수강동의서/서명은 생략 — 옛 결제자 이관용 수동 등록)
+    if (isCert && course && instructorId) {
+      const checklist: ProgressChecklistItem[] = course.curriculum.flatMap(sec =>
+        sec.items.map(item => ({ id: item.id, title: item.title, description: sec.section, checked: false }))
+      )
+      const pp = await createProgressPage({ userId: enrollModal.user.uid, courseId: course.id, instructorId, checklist })
+      toast(pp
+        ? `${enrollModal.user.name}님 자격증 등록 + 진도 관리 페이지 생성 완료`
+        : `${enrollModal.user.name}님 등록됐으나 진도 페이지 생성 실패 — 다시 시도해주세요.`, pp ? 'ok' : 'err')
+    } else {
+      toast(`${enrollModal.user.name}님 수동 등록 완료`, 'ok')
+    }
     setEnrollModal(null)
     refresh()
   }
@@ -1257,7 +1276,7 @@ export default function AdminPage() {
                           <td style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{new Date(u.createdAt).toLocaleDateString()}</td>
                           <td>
                             <button className="btn btn-primary btn-sm"
-                              onClick={() => setEnrollModal({ user: u, courseId: courses[0]?.id || '', days: 365 })}>
+                              onClick={() => setEnrollModal({ user: u, courseId: courses[0]?.id || '', days: 365, instructorId: '' })}>
                               + 수강 등록
                             </button>
                           </td>
@@ -2847,10 +2866,31 @@ export default function AdminPage() {
                   <label className="form-label">강의 선택</label>
                   <select className="form-input"
                     value={enrollModal.courseId}
-                    onChange={e => setEnrollModal(p => p ? { ...p, courseId: e.target.value } : null)}>
+                    onChange={e => setEnrollModal(p => p ? { ...p, courseId: e.target.value, instructorId: '' } : null)}>
                     {courses.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.title}</option>)}
                   </select>
                 </div>
+                {/* 자격증 과정 — 담당 강사 선택 (진도 관리 페이지 자동 생성) */}
+                {(() => {
+                  const course = courses.find(c => c.id === enrollModal.courseId)
+                  if (course?.level !== '자격증') return null
+                  const courseInsts = allInstructors.filter(i => i.courseIds?.includes(course.id))
+                  const instList = courseInsts.length > 0 ? courseInsts : allInstructors
+                  return (
+                    <div className="form-group">
+                      <label className="form-label">담당 강사 *</label>
+                      <select className="form-input"
+                        value={enrollModal.instructorId}
+                        onChange={e => setEnrollModal(p => p ? { ...p, instructorId: e.target.value } : null)}>
+                        <option value="">강사를 선택하세요</option>
+                        {instList.map(i => <option key={i.id} value={i.id}>{i.name}{i.title ? ` · ${i.title}` : ''}</option>)}
+                      </select>
+                      <div style={{ fontSize: '.75rem', color: 'var(--t3)', marginTop: '4px', lineHeight: 1.6 }}>
+                        자격증은 등록 시 담당 강사의 진도 관리 페이지가 자동 생성됩니다. (수강동의서·서명은 생성하지 않음)
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div className="form-group">
                   <label className="form-label">수강 기간</label>
                   <select className="form-input"
