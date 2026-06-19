@@ -121,11 +121,9 @@ export default function CourseDetailPage() {
                 <div className="detail-stat-item">⏱ {totalDuration}</div>
               </div>
               <div className="detail-instructor-row" style={{ marginBottom: 0 }}>
-                <div className="instructor-avatar" style={courseInstructors[0]?.photo ? { overflow: 'hidden', padding: 0 } : undefined}>
-                  {courseInstructors[0]?.photo
-                    ? <img src={courseInstructors[0].photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : course.instructorAvatar}
-                </div>
+                {courseInstructors[0]?.photo
+                  ? <img src={courseInstructors[0].photo} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                  : <div className="instructor-avatar">{course.instructorAvatar}</div>}
                 <span style={{ color: 'var(--t2)', fontSize: '.875rem' }}>강사 &nbsp;</span>
                 <strong style={{ fontSize: '.9rem' }}>{courseInstructors[0]?.name || course.instructor}</strong>
               </div>
