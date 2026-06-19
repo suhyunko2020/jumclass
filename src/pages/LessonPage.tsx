@@ -50,10 +50,12 @@ export default function LessonPage() {
     return () => { document.title = 'JUMCLASS' }
   }, [course])
 
-  // 접속 로그 — 강의 수강(시청) 진입 (IP/기기는 서버에서 수집)
+  // 접속 로그 — 강의 진입 (IP/기기는 서버에서 수집)
+  // 결제자(수강신청 완료)는 'lesson_view'(강의 수강), 비결제자(무료 미리보기)는 'lesson_preview'로 구분 기록
   useEffect(() => {
     if (!course) return
-    logAccess({ event: 'lesson_view', courseId: course.id, courseTitle: course.title, userId: user?.uid, userName: user?.name, userEmail: user?.email })
+    const event = isEnrolled(course.id) ? 'lesson_view' : 'lesson_preview'
+    logAccess({ event, courseId: course.id, courseTitle: course.title, userId: user?.uid, userName: user?.name, userEmail: user?.email })
   }, [course?.id, user?.uid])
 
   // 자격증 과정은 강의 시청 페이지가 없음 — 직접 URL 접근 시 강의실로 리디렉트

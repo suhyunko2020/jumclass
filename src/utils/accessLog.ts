@@ -2,7 +2,7 @@
 // IP/위치/기기는 서버(Edge)에서 헤더로 수집하므로 여기선 식별/맥락 정보만 전달한다.
 // 로깅 실패는 절대 사용자 흐름을 막지 않는다(전부 무시).
 
-type LogEvent = 'login' | 'signup' | 'course_view' | 'lesson_view'
+type LogEvent = 'login' | 'signup' | 'course_view' | 'lesson_view' | 'lesson_preview'
 
 interface LogPayload {
   event: LogEvent

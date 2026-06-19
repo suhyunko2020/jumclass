@@ -152,7 +152,7 @@ export default function AdminPage() {
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [logsError, setLogsError] = useState<string | null>(null)
-  const [logEventFilter, setLogEventFilter] = useState<'all' | 'login' | 'signup' | 'course_view' | 'lesson_view'>('all')
+  const [logEventFilter, setLogEventFilter] = useState<'all' | 'login' | 'signup' | 'course_view' | 'lesson_view' | 'lesson_preview'>('all')
   const [logSearch, setLogSearch] = useState('')
   const [selectedLogKey, setSelectedLogKey] = useState<string | null>(null)  // 선택한 회원(상세 보기)
   const loadAccessLogs = useCallback(() => {
@@ -1840,10 +1840,10 @@ export default function AdminPage() {
           {/* ═══ 접속 로그 (회원별) ═══ */}
           {sec === 'logs' && (() => {
             const EVENT_LABEL: Record<string, string> = {
-              login: '로그인', signup: '회원가입', course_view: '강의 조회', lesson_view: '강의 수강',
+              login: '로그인', signup: '회원가입', course_view: '강의 조회', lesson_view: '강의 수강', lesson_preview: '미리보기',
             }
             const EVENT_COLOR: Record<string, string> = {
-              login: 'var(--purple-2)', signup: 'var(--ok)', course_view: 'var(--gold-2)', lesson_view: 'var(--warn)',
+              login: 'var(--purple-2)', signup: 'var(--ok)', course_view: 'var(--gold-2)', lesson_view: 'var(--warn)', lesson_preview: 'var(--t3)',
             }
             const fmt = (iso: string) => {
               const d = new Date(iso)
@@ -1915,7 +1915,7 @@ export default function AdminPage() {
 
                     {/* 이벤트 필터 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                      {([['all', '전체'], ['login', '로그인'], ['signup', '회원가입'], ['course_view', '강의 조회'], ['lesson_view', '강의 수강']] as const).map(([k, label]) => (
+                      {([['all', '전체'], ['login', '로그인'], ['signup', '회원가입'], ['course_view', '강의 조회'], ['lesson_view', '강의 수강'], ['lesson_preview', '미리보기']] as const).map(([k, label]) => (
                         <button key={k} className={`tab ${logEventFilter === k ? 'active' : ''}`} onClick={() => setLogEventFilter(k)}>{label}</button>
                       ))}
                     </div>
