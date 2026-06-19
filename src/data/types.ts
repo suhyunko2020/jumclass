@@ -90,6 +90,7 @@ export interface Enrollment {
   expiryDate: string;
   progress: number;
   completedLessons: string[];
+  lessonWatch?: Record<string, number>;  // 강의별 최대 시청률(0~100) — 시청 비례 진도
   type?: 'manual' | 'payment';
   paused?: boolean;
   pausedAt?: string;

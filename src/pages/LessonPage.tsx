@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import Player from '@vimeo/player'
 import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/ui/Toast'
@@ -12,7 +13,7 @@ export default function LessonPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { getCourse, addReview, hasReviewed } = useCourses()
-  const { user, loading: authLoading, isEnrolled, getEnrollment, completeLesson, logAttachmentDownload, refreshUser } = useAuth()
+  const { user, loading: authLoading, isEnrolled, getEnrollment, completeLesson, updateLessonWatch, logAttachmentDownload, refreshUser } = useAuth()
   const toast = useToast()
 
   // 로그아웃/비로그인 시 홈으로 리디렉트 — 강의 시청 페이지는 공유 차단 필수
@@ -38,6 +39,7 @@ export default function LessonPage() {
   } | null>(null)
   const [downloadAgreed, setDownloadAgreed] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const watchSaveWarnedRef = useRef(false)  // 진도 저장 실패 경고 1회만
 
   const courseId = params.get('course') || ''
   const lessonId = params.get('lesson') || ''
@@ -118,7 +120,18 @@ export default function LessonPage() {
   const next = idx < allLessons.length - 1 ? allLessons[idx + 1] : null
   const isDone = done.includes(cur.id)
 
+  // 순차 학습 — 현재 강의 완료(90% 시청 or 완료표시) 전에는 다음 강의로 못 넘어감.
+  // frontierIdx = 첫 미완료 강의 위치(=지금 풀린 마지막 지점). 이전 완료 강의는 자유 이동.
+  const firstIncomplete = allLessons.findIndex(l => !done.includes(l.id))
+  const frontierIdx = firstIncomplete === -1 ? allLessons.length - 1 : firstIncomplete
+  const isSeqLocked = (targetIdx: number) => enrolled && targetIdx > frontierIdx
+
   function goTo(id: string) {
+    const ti = allLessons.findIndex(l => l.id === id)
+    if (isSeqLocked(ti)) {
+      toast('현재 강의를 완료(90% 이상 시청)해야 다음 강의로 넘어갈 수 있어요.', 'info')
+      return
+    }
     navigate(`/lesson?course=${courseId}&lesson=${id}`)
   }
 
@@ -130,6 +143,23 @@ export default function LessonPage() {
     const allComplete = allLessons.every(l => updatedDone.has(l.id))
     if (allComplete && user && !hasReviewed(courseId, user.uid)) {
       setTimeout(() => setReviewModal(true), 600)
+    }
+  }
+
+  // 영상 시청률 반영 — 시청 시간에 비례해 진도 게이지가 참. (수강생만)
+  async function handleWatchProgress(id: string, pct: number) {
+    if (!enrolled) return
+    const res = await updateLessonWatch(courseId, id, pct)
+    if (!res.ok && res.error && !watchSaveWarnedRef.current) {
+      watchSaveWarnedRef.current = true
+      toast(`진도 저장 실패: ${res.error}`, 'err')
+    }
+    // 90% 이상 시청으로 전체 강의가 완료되면 리뷰 모달
+    if (pct >= 90) {
+      const updatedDone = new Set([...done, id])
+      if (allLessons.every(l => updatedDone.has(l.id)) && user && !hasReviewed(courseId, user.uid)) {
+        setTimeout(() => setReviewModal(true), 600)
+      }
     }
   }
 
@@ -155,13 +185,7 @@ export default function LessonPage() {
     <div className="lesson-wrap" style={{ marginTop: 'var(--nav-h)' }}>
       {/* 메인 콘텐츠 */}
       <div className="lesson-main">
-        <div className="video-box">
-          <iframe
-            src={`https://player.vimeo.com/video/${cur.vimeo}?title=0&byline=0&portrait=0&color=7C6FCD`}
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
+        <LessonVideo vimeo={cur.vimeo} onProgress={pct => handleWatchProgress(cur!.id, pct)} />
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: '10px' }}>
           <div>
@@ -171,9 +195,16 @@ export default function LessonPage() {
             <h2 className="lesson-title">{cur.title}</h2>
           </div>
           {enrolled && (
-            <button className={`btn btn-sm ${isDone ? 'btn-ghost' : 'btn-primary'}`} onClick={() => markDone(cur!.id)}>
-              {isDone ? '✓ 완료됨' : '완료로 표시'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '.74rem', color: 'var(--t3)', whiteSpace: 'nowrap' }}>
+                이 영상 <strong style={{ color: 'var(--purple-2)' }}>{enrollment?.lessonWatch?.[cur.id] ?? 0}%</strong> 시청
+                <span style={{ margin: '0 6px', opacity: .4 }}>·</span>
+                전체 진도 <strong style={{ color: 'var(--gold-2)' }}>{enrollment?.progress ?? 0}%</strong>
+              </span>
+              <button className={`btn btn-sm ${isDone ? 'btn-ghost' : 'btn-primary'}`} onClick={() => markDone(cur!.id)}>
+                {isDone ? '✓ 완료됨' : '완료로 표시'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -273,7 +304,14 @@ export default function LessonPage() {
             <button className="btn btn-ghost" onClick={() => goTo(prev.id)}>← 이전 강의</button>
           ) : <div />}
           {next ? (
-            <button className="btn btn-primary" onClick={() => goTo(next.id)}>다음 강의 →</button>
+            isSeqLocked(idx + 1) ? (
+              <button className="btn btn-ghost" style={{ opacity: .6 }}
+                onClick={() => toast('현재 강의를 완료(90% 이상 시청)해야 다음으로 넘어갈 수 있어요.', 'info')}>
+                🔒 다음 강의 (완료 필요)
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => goTo(next.id)}>다음 강의 →</button>
+            )
           ) : (
             <button className="btn btn-gold" onClick={() => navigate('/classroom')}>✓ 강의 완료!</button>
           )}
@@ -302,7 +340,10 @@ export default function LessonPage() {
             {sec.items.map(item => {
               const isActive = item.id === cur!.id
               const itemDone = done.includes(item.id)
-              const isLocked = !enrolled && item.status === 'locked'
+              const tIdx = allLessons.findIndex(l => l.id === item.id)
+              const isPreviewLock = !enrolled && item.status === 'locked'  // 비결제자 미리보기 잠금
+              const isSeqLock = isSeqLocked(tIdx)                          // 순차 완료 잠금
+              const isLocked = isPreviewLock || isSeqLock
               let iconClass = 'ic-idle', iconChar = '○'
               if (itemDone) { iconClass = 'ic-done'; iconChar = '✓' }
               else if (isActive) { iconClass = 'ic-play'; iconChar = '▶' }
@@ -311,8 +352,8 @@ export default function LessonPage() {
               return (
                 <div key={item.id}
                   className={`curr-sidebar-item ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
-                  style={{ cursor: isLocked ? 'default' : 'pointer' }}
-                  onClick={() => { if (!isLocked) goTo(item.id) }}
+                  style={{ cursor: isPreviewLock ? 'default' : 'pointer' }}
+                  onClick={() => { if (isPreviewLock) return; goTo(item.id) }}
                 >
                   <div className={`s-icon ${iconClass}`}>{iconChar}</div>
                   <span className="s-title">{item.title}</span>
@@ -457,6 +498,51 @@ export default function LessonPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// 영상 플레이어 — Vimeo SDK로 시청률을 추적해 onProgress(0~100)로 보고.
+// 5% 단위로만 보고(과도한 갱신 방지) + 일시정지/종료 시 현재 시청률 플러시.
+function LessonVideo({ vimeo, onProgress }: { vimeo: string; onProgress: (percent: number) => void }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const cbRef = useRef(onProgress)
+  cbRef.current = onProgress
+
+  useEffect(() => {
+    const el = iframeRef.current
+    if (!el) return
+    let player: Player | null = null
+    let maxPct = 0
+    let lastBucket = -1
+    const report = (pct: number) => {
+      if (pct > maxPct) maxPct = pct
+      const bucket = Math.floor(maxPct / 5)
+      if (bucket > lastBucket) { lastBucket = bucket; cbRef.current(maxPct) }
+    }
+    try {
+      player = new Player(el)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pctOf = (d: any) => Math.round((d?.percent ?? 0) * 100)
+      player.on('timeupdate', d => report(pctOf(d)))
+      // seeked: 막대를 인위적으로 끌어 이동했을 때도 그 지점까지 진도 반영
+      player.on('seeked', d => report(pctOf(d)))
+      player.on('ended', () => cbRef.current(100))
+      player.on('pause', () => { if (maxPct > 0) cbRef.current(maxPct) })
+    } catch { /* SDK 초기화 실패는 무시 (시청은 정상) */ }
+    return () => {
+      if (player) { player.off('timeupdate'); player.off('ended'); player.off('pause') }
+    }
+  }, [vimeo])
+
+  return (
+    <div className="video-box">
+      <iframe
+        ref={iframeRef}
+        src={`https://player.vimeo.com/video/${vimeo}?title=0&byline=0&portrait=0&color=7C6FCD`}
+        allow="autoplay; fullscreen; picture-in-picture"
+        allowFullScreen
+      />
     </div>
   )
 }

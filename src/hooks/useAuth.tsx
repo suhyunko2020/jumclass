@@ -31,6 +31,7 @@ interface AuthContextType {
   isPaused: (courseId: string) => boolean
   getEnrollment: (courseId: string, assignedInstructorId?: string) => Enrollment | null
   completeLesson: (courseId: string, lessonId: string) => Promise<void>
+  updateLessonWatch: (courseId: string, lessonId: string, percent: number) => Promise<{ ok: boolean; error?: string }>
   logAttachmentDownload: (courseId: string, lessonId: string, attachmentName: string) => Promise<void>
   pauseCourse: (courseId: string) => Promise<boolean>
   resumeCourse: (courseId: string) => Promise<boolean>
@@ -51,6 +52,7 @@ function rowToEnrollment(row: Record<string, unknown>): Enrollment {
     expiryDate: row.expiry_date as string,
     progress: (row.progress as number) ?? 0,
     completedLessons: (row.completed_lessons as string[]) ?? [],
+    lessonWatch: (row.lesson_watch as Record<string, number> | undefined) ?? {},
     type: (row.type as Enrollment['type']) ?? 'payment',
     paused: (row.paused as boolean) ?? false,
     pausedAt: row.paused_at as string | undefined,
@@ -61,6 +63,21 @@ function rowToEnrollment(row: Record<string, unknown>): Enrollment {
     attachmentDownloads: (row.attachment_downloads as Enrollment['attachmentDownloads']) ?? [],
     assignedInstructorId: (row.assigned_instructor_id as string | undefined) ?? undefined,
   }
+}
+
+// 진도(%) = (강의별 시청률 합) / 강의수.  완료된 강의는 100%, 그 외는 시청률(0~100).
+// → "완료" 버튼 없이도 시청한 시간만큼 게이지가 비례해서 찬다.
+function computeProgress(
+  completed: string[],
+  watch: Record<string, number>,
+  lessonIds: string[],
+): number {
+  if (lessonIds.length === 0) return 0
+  let sum = 0
+  for (const id of lessonIds) {
+    sum += completed.includes(id) ? 100 : Math.min(100, Math.max(0, watch[id] || 0))
+  }
+  return Math.round(sum / lessonIds.length)
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -306,18 +323,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const completed = [...(enrollment.completedLessons ?? [])]
     if (!completed.includes(lessonId)) completed.push(lessonId)
+    // 수동 완료 = 해당 강의 100% 시청으로도 기록
+    const watch = { ...(enrollment.lessonWatch ?? {}), [lessonId]: 100 }
 
     const course = getCourse(courseId)
-    const total = course?.curriculum.reduce((s, sec) => s + sec.items.length, 0) ?? 1
-    const progress = Math.round((completed.length / total) * 100)
+    const ids = course?.curriculum.flatMap(s => s.items.map(i => i.id)) ?? []
+    const progress = computeProgress(completed, watch, ids)
 
     await supabase.from('enrollments')
-      .update({ completed_lessons: completed, progress })
+      .update({ completed_lessons: completed, lesson_watch: watch, progress })
       .eq('user_id', user.uid)
       .eq('course_id', courseId)
 
     await refreshUser()
   }, [user, getCourse, refreshUser])
+
+  // ── 시청 진도 갱신 ────────────────────────────────────────
+  // 영상 시청률(percent 0~100)을 강의별 최대값으로 누적 → 진도 게이지가 시청 시간에 비례해 참.
+  // 90% 이상 시청 시 완료(completedLessons)로도 기록(환불/수료/리뷰 트리거 일관성).
+  // 게이지 즉시 반영을 위해 로컬 상태를 낙관적으로 갱신하고, 저장은 백그라운드(fire-and-forget).
+  const updateLessonWatch = useCallback(async (courseId: string, lessonId: string, percent: number): Promise<{ ok: boolean; error?: string }> => {
+    if (!user) return { ok: false, error: 'no-user' }
+    const enrollment = user.enrollments.find(e => e.courseId === courseId)
+    if (!enrollment) return { ok: false, error: 'no-enrollment' }
+
+    const pct = Math.min(100, Math.max(0, Math.round(percent)))
+    const prevWatch = enrollment.lessonWatch ?? {}
+    if ((prevWatch[lessonId] ?? 0) >= pct) return { ok: true }  // 이미 더 많이 봄 — 진도 감소 방지
+
+    const watch = { ...prevWatch, [lessonId]: pct }
+    const completed = [...(enrollment.completedLessons ?? [])]
+    if (pct >= 90 && !completed.includes(lessonId)) completed.push(lessonId)
+
+    const course = getCourse(courseId)
+    const ids = course?.curriculum.flatMap(s => s.items.map(i => i.id)) ?? []
+    const progress = computeProgress(completed, watch, ids)
+
+    // 낙관적 로컬 반영 (게이지 실시간) — 재조회 없이
+    setUser(u => u ? {
+      ...u,
+      enrollments: u.enrollments.map(e =>
+        e.courseId === courseId ? { ...e, lessonWatch: watch, completedLessons: completed, progress } : e),
+    } : u)
+
+    // 저장
+    const { error } = await supabase.from('enrollments')
+      .update({ lesson_watch: watch, completed_lessons: completed, progress })
+      .eq('user_id', user.uid).eq('course_id', courseId)
+    if (error) { console.warn('[updateLessonWatch] 저장 실패:', error.message); return { ok: false, error: error.message } }
+    return { ok: true }
+  }, [user, getCourse])
 
   // ── 첨부파일(교재) 다운로드 로그 + 자동 강의 완료 처리 ──────
   // 교재만 받고 환불받는 손실을 막기 위해 다운로드 즉시 해당 강의를 수강 완료로 간주
@@ -333,15 +388,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const completed = [...(enrollment.completedLessons ?? [])]
     if (!completed.includes(lessonId)) completed.push(lessonId)
+    const watch = { ...(enrollment.lessonWatch ?? {}), [lessonId]: 100 }
 
     const course = getCourse(courseId)
-    const total = course?.curriculum.reduce((s, sec) => s + sec.items.length, 0) ?? 1
-    const progress = Math.round((completed.length / total) * 100)
+    const ids = course?.curriculum.flatMap(s => s.items.map(i => i.id)) ?? []
+    const progress = computeProgress(completed, watch, ids)
 
     await supabase.from('enrollments')
       .update({
         attachment_downloads: downloads,
         completed_lessons: completed,
+        lesson_watch: watch,
         progress,
       })
       .eq('user_id', user.uid)
@@ -440,7 +497,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, loading,
       login, signup, loginWithGoogle, logout,
       enroll, isEnrolled, isPaused, getEnrollment,
-      completeLesson, logAttachmentDownload, pauseCourse, resumeCourse, enrollManual,
+      completeLesson, updateLessonWatch, logAttachmentDownload, pauseCourse, resumeCourse, enrollManual,
       isAdminLoggedIn, adminCheckLoading, refreshUser,
     }}>
       {children}
