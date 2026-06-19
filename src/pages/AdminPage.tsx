@@ -6,7 +6,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
-  getInquiries, answerInquiry, markInquiryRefunded, uploadCertificateTemplate,
+  getInquiries, answerInquiry, markInquiryRefunded, uploadCertificateTemplate, uploadPublicImage,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
@@ -17,7 +17,7 @@ import { formatPrice, getLevelColor } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
-import { useSiteSettings, getPaymentSecret, DEFAULT_POLICIES, type SiteSettings } from '../hooks/useSiteSettings'
+import { useSiteSettings, getPaymentSecret, DEFAULT_POLICIES, type SiteSettings, type Announcement } from '../hooks/useSiteSettings'
 import { invalidateStatsCache } from '../lib/homeStats'
 import {
   makeSampleName, makeSampleRating, makeRandomDate,
@@ -95,9 +95,23 @@ export default function AdminPage() {
   const [siteSettingsForm, setSiteSettingsForm] = useState<SiteSettings | null>(null)
   // 토스 Secret Key 편집 모드 토글 (기본: 마스킹 표시, 클릭 시 입력창 노출)
   const [editingSecretKey, setEditingSecretKey] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<'basic' | 'seo' | 'payment' | 'policy'>('basic')
+  const [settingsTab, setSettingsTab] = useState<'basic' | 'seo' | 'payment' | 'policy' | 'notice'>('basic')
   const toast = useToast()
   const navigate = useNavigate()
+
+  // 팝업 이미지 업로드 상태
+  const [popupUploading, setPopupUploading] = useState(false)
+  async function handlePopupImageUpload(file: File) {
+    setPopupUploading(true)
+    try {
+      const url = await uploadPublicImage(file, 'popup')
+      if (!url) { toast('이미지 업로드에 실패했습니다.', 'err'); return }
+      setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, imageUrl: url } } : null)
+      toast('팝업 이미지를 업로드했습니다. 하단 "설정 저장"을 눌러 반영하세요.', 'ok')
+    } finally {
+      setPopupUploading(false)
+    }
+  }
 
   // 수료증 템플릿 업로드 상태
   const [certUploading, setCertUploading] = useState(false)
@@ -1769,6 +1783,7 @@ export default function AdminPage() {
               { key: 'seo',     label: 'SEO 설정' },
               { key: 'payment', label: '결제 설정' },
               { key: 'policy',  label: '정책 관리' },
+              { key: 'notice',  label: '공지/팝업' },
             ]
             return (
               <div>
@@ -2044,6 +2059,158 @@ export default function AdminPage() {
                     마크다운 형식을 지원합니다. # 제목, ## 소제목, - 목록, | 표 |
                   </div>
                 </div>
+                )}
+
+                {/* 공지/팝업 관리 */}
+                {settingsTab === 'notice' && (
+                <>
+                  {/* ── 공지사항 게시판 ── */}
+                  <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: '.85rem', fontWeight: 700 }}>공지사항 게시판</div>
+                        <div style={{ fontSize: '.74rem', color: 'var(--t3)', marginTop: '4px' }}>
+                          <a href="/notice" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple-2)' }}>/notice 페이지 미리보기 →</a>
+                        </div>
+                      </div>
+                      <button type="button" className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          const now = new Date().toISOString()
+                          const blank: Announcement = { id: 'notice-' + Date.now(), title: '', body: '', pinned: false, createdAt: now }
+                          setSiteSettingsForm(p => p ? { ...p, announcements: [blank, ...(p.announcements ?? [])] } : null)
+                        }}>
+                        ➕ 새 공지 추가
+                      </button>
+                    </div>
+
+                    {(form.announcements ?? []).length === 0 ? (
+                      <div style={{ fontSize: '.82rem', color: 'var(--t3)', padding: '20px 0', textAlign: 'center' }}>
+                        등록된 공지가 없습니다. "새 공지 추가"로 작성해주세요.
+                      </div>
+                    ) : (
+                      (form.announcements ?? []).map((a, idx) => (
+                        <div key={a.id} style={{ border: '1px solid var(--line)', borderRadius: 'var(--r2)', padding: '14px', marginBottom: '12px', background: 'rgba(255,255,255,.02)' }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
+                            <input className="form-input" placeholder="공지 제목" style={{ flex: '1 1 220px', margin: 0 }}
+                              value={a.title}
+                              onChange={e => setSiteSettingsForm(p => {
+                                if (!p) return null
+                                const arr = [...(p.announcements ?? [])]; arr[idx] = { ...arr[idx], title: e.target.value, updatedAt: new Date().toISOString() }
+                                return { ...p, announcements: arr }
+                              })} />
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '.8rem', color: 'var(--t2)', whiteSpace: 'nowrap' }}>
+                              <input type="checkbox" checked={!!a.pinned}
+                                onChange={e => setSiteSettingsForm(p => {
+                                  if (!p) return null
+                                  const arr = [...(p.announcements ?? [])]; arr[idx] = { ...arr[idx], pinned: e.target.checked }
+                                  return { ...p, announcements: arr }
+                                })} />
+                              상단 고정
+                            </label>
+                            <a href={`/notice/${a.id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '.72rem', color: 'var(--purple-2)', whiteSpace: 'nowrap' }}>미리보기 →</a>
+                            <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)', whiteSpace: 'nowrap' }}
+                              onClick={() => {
+                                if (!window.confirm('이 공지를 삭제할까요?')) return
+                                setSiteSettingsForm(p => p ? { ...p, announcements: (p.announcements ?? []).filter((_, i) => i !== idx) } : null)
+                              }}>삭제</button>
+                          </div>
+                          <textarea className="form-input" rows={6} style={{ fontFamily: 'monospace', fontSize: '.78rem', margin: 0 }}
+                            placeholder="공지 본문 (마크다운: # 제목, ## 소제목, - 목록)"
+                            value={a.body}
+                            onChange={e => setSiteSettingsForm(p => {
+                              if (!p) return null
+                              const arr = [...(p.announcements ?? [])]; arr[idx] = { ...arr[idx], body: e.target.value, updatedAt: new Date().toISOString() }
+                              return { ...p, announcements: arr }
+                            })} />
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* ── 진입 팝업 설정 ── */}
+                  <div style={{ background: 'var(--glass-1)', border: '1px solid var(--line)', borderRadius: 'var(--r3)', padding: '24px', marginBottom: '20px' }}>
+                    <div style={{ fontSize: '.85rem', fontWeight: 700, marginBottom: '4px' }}>진입 팝업</div>
+                    <div style={{ fontSize: '.74rem', color: 'var(--t3)', marginBottom: '16px' }}>
+                      사이트 방문 시 1회 노출됩니다. 방문자가 "오늘 하루 보지 않기"를 누르면 당일 다시 표시되지 않습니다.
+                    </div>
+
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '.85rem', fontWeight: 600, marginBottom: '16px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={form.popup.enabled}
+                        onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, enabled: e.target.checked } } : null)} />
+                      팝업 사용 (켜짐)
+                    </label>
+
+                    <div className="form-group">
+                      <label className="form-label">팝업 제목</label>
+                      <input className="form-input" placeholder="예) 리뉴얼 오픈 안내" value={form.popup.title}
+                        onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, title: e.target.value } } : null)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">팝업 본문</label>
+                      <textarea className="form-input" rows={3} placeholder="줄바꿈으로 여러 줄 입력 가능" value={form.popup.body}
+                        onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, body: e.target.value } } : null)} />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">팝업 이미지 (선택)</label>
+                      {form.popup.imageUrl && (
+                        <div style={{ marginBottom: '10px' }}>
+                          <img src={form.popup.imageUrl} alt="팝업 이미지" style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: 'var(--r2)', border: '1px solid var(--line)' }} />
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <label className="btn btn-ghost btn-sm" style={{ cursor: popupUploading ? 'wait' : 'pointer' }}>
+                          {popupUploading ? '업로드 중…' : form.popup.imageUrl ? '이미지 교체' : '이미지 업로드'}
+                          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden disabled={popupUploading}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handlePopupImageUpload(f); e.target.value = '' }} />
+                        </label>
+                        {form.popup.imageUrl && (
+                          <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
+                            onClick={() => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, imageUrl: '' } } : null)}>이미지 제거</button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">버튼 연결</label>
+                      <select className="form-input"
+                        value={form.popup.linkType}
+                        onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, linkType: e.target.value as SiteSettings['popup']['linkType'] } } : null)}>
+                        <option value="none">연결 없음 (닫기 버튼만)</option>
+                        <option value="announcement">공지사항으로 이동</option>
+                        <option value="url">외부 링크로 이동</option>
+                      </select>
+                    </div>
+
+                    {form.popup.linkType === 'announcement' && (
+                      <div className="form-group">
+                        <label className="form-label">연결할 공지</label>
+                        <select className="form-input"
+                          value={form.popup.linkAnnouncementId}
+                          onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, linkAnnouncementId: e.target.value } } : null)}>
+                          <option value="">선택하세요</option>
+                          {(form.announcements ?? []).map(a => (
+                            <option key={a.id} value={a.id}>{a.title || '(제목 없음)'}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {form.popup.linkType === 'url' && (
+                      <div className="form-group">
+                        <label className="form-label">외부 링크 URL</label>
+                        <input className="form-input" placeholder="https://" value={form.popup.linkUrl}
+                          onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, linkUrl: e.target.value } } : null)} />
+                      </div>
+                    )}
+                    {form.popup.linkType !== 'none' && (
+                      <div className="form-group">
+                        <label className="form-label">버튼 문구</label>
+                        <input className="form-input" placeholder="예) 안내 자세히 보기" value={form.popup.buttonText}
+                          onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, buttonText: e.target.value } } : null)} />
+                      </div>
+                    )}
+                  </div>
+                </>
                 )}
 
                 <button className="btn btn-primary btn-lg w-full" onClick={async () => {

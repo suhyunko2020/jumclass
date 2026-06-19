@@ -39,6 +39,7 @@ export default function Footer() {
               </button>
             )}
             <Link to="/#contact">1:1 문의</Link>
+            <Link to="/notice">공지사항</Link>
           </div>
           <div className="footer-col">
             <h4>정책</h4>

@@ -15,6 +15,28 @@ export interface PaymentSettings {
   secretKey: string                // 토스 Secret Key (localStorage 저장, UI에서 마스킹 표시)
 }
 
+// 공지사항 한 건 (마크다운 본문)
+export interface Announcement {
+  id: string
+  title: string
+  body: string          // 마크다운
+  pinned?: boolean      // 상단 고정
+  createdAt: string
+  updatedAt?: string
+}
+
+// 사이트 진입 팝업 설정 (방문 시 1회 노출)
+export interface PopupSettings {
+  enabled: boolean
+  title: string
+  body: string                  // 팝업 본문 (짧은 안내)
+  imageUrl: string              // 선택: 팝업 이미지 URL
+  linkType: 'announcement' | 'url' | 'none'
+  linkAnnouncementId: string    // linkType==='announcement'일 때
+  linkUrl: string               // linkType==='url'일 때
+  buttonText: string            // 자세히 보기 버튼 문구
+}
+
 export interface SiteSettings {
   copyright: string
   businessInfo: string
@@ -25,6 +47,8 @@ export interface SiteSettings {
   ogImage: string
   certificateTemplate: string   // 수료증 A4 템플릿 이미지 URL (인터넷강의 수료증 발급용)
   payment: PaymentSettings
+  announcements: Announcement[]  // 공지사항 목록
+  popup: PopupSettings           // 진입 팝업
   policies: {
     privacy: string
     terms: string
@@ -56,6 +80,45 @@ const DEFAULTS: SiteSettings = {
     },
     clientKey: '',
     secretKey: '',
+  },
+  announcements: [
+    {
+      id: 'notice-relaunch-2026',
+      title: '[중요] 점클래스 리뉴얼 오픈 안내 — 기존 회원님은 재가입이 필요합니다',
+      pinned: true,
+      createdAt: '2026-06-19T05:00:00Z',
+      body: `# 점클래스가 새롭게 리뉴얼 오픈했습니다
+
+안녕하세요, 점클래스입니다.
+
+더 빠르고 안정적인 서비스를 위해 기존 시스템을 새로운 플랫폼으로 전면 이전하였습니다. 그 과정에서 회원님께 꼭 안내드릴 사항이 있어 공지드립니다.
+
+## 기존 회원님께 안내드립니다
+
+이전 사이트의 회원 정보는 보안 및 개인정보 보호를 위해 새 플랫폼으로 이관되지 않았습니다. 따라서 **기존에 가입하셨던 회원님도 새로 회원가입을 해주셔야** 정상적으로 이용이 가능합니다.
+
+- 기존 아이디·비밀번호로는 로그인되지 않습니다.
+- 회원가입은 우측 상단 [로그인] → [회원가입]에서 휴대폰 인증 후 1분이면 완료됩니다.
+
+## 기존 수강 내역이 있으신 경우
+
+리뉴얼 이전에 강의를 수강 중이셨거나 자격증 과정을 진행하고 계셨던 회원님은, 재가입 후 고객센터(1:1 문의)로 성함과 연락처를 남겨주세요. 수강 내역을 확인하여 이어서 학습하실 수 있도록 도와드리겠습니다.
+
+이용에 불편을 드려 죄송합니다. 더 나은 모습으로 보답하겠습니다.
+
+감사합니다.
+점클래스 드림`,
+    },
+  ],
+  popup: {
+    enabled: true,
+    title: '점클래스 리뉴얼 오픈 안내',
+    body: '사이트가 새롭게 리뉴얼되었습니다.\n기존 회원님도 재가입이 필요하니 안내를 꼭 확인해주세요.',
+    imageUrl: '',
+    linkType: 'announcement',
+    linkAnnouncementId: 'notice-relaunch-2026',
+    linkUrl: '',
+    buttonText: '안내 자세히 보기',
   },
   policies: {
     refund: `# 환불 정책
@@ -309,6 +372,9 @@ function getCached(): SiteSettings {
         ...(parsed.payment || {}),
         methods: { ...DEFAULTS.payment.methods, ...((parsed.payment && parsed.payment.methods) || {}) },
       },
+      // popup은 필드 누락 대비 병합, announcements는 관리자가 편집한 전체 목록을 그대로 사용
+      popup: { ...DEFAULTS.popup, ...(parsed.popup || {}) },
+      announcements: Array.isArray(parsed.announcements) ? parsed.announcements : DEFAULTS.announcements,
     }
   } catch { return DEFAULTS }
 }
@@ -329,6 +395,9 @@ export async function syncSiteSettingsFromSupabase(): Promise<void> {
     const merged = stripSecret({ ...getCached(), ...remote,
       payment: { ...DEFAULTS.payment, ...getCached().payment, ...(remote.payment || {}) },
       policies: { ...DEFAULTS.policies, ...getCached().policies, ...(remote.policies || {}) },
+      popup: { ...DEFAULTS.popup, ...getCached().popup, ...(remote.popup || {}) },
+      // Supabase에 announcements가 있으면 그것을, 없으면 기존 캐시(기본값 포함) 유지
+      announcements: Array.isArray(remote.announcements) ? remote.announcements : getCached().announcements,
     })
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
   } catch { /* 동기화 실패는 무시 — 캐시/기본값으로 동작 */ }

@@ -19,7 +19,9 @@ import InstructorsPage from './pages/InstructorsPage'
 import InstructorDetailPage from './pages/InstructorDetailPage'
 import InstructorProgressPageView from './pages/InstructorProgressPage'
 import PolicyPage from './pages/PolicyPage'
+import NoticePage from './pages/NoticePage'
 import SeoHead from './components/ui/SeoHead'
+import SitePopup from './components/ui/SitePopup'
 
 // 오픈 시각 — 이 시각 전까지는 비밀번호를 입력하지 않은 모든 방문자에게 공사중 페이지 노출
 // 비밀번호는 프론트에 두지 않고 /api/site-unlock(SITE_UNLOCK_PW 환경변수)에서 서버 검증한다.
@@ -89,11 +91,15 @@ export default function App() {
         <Route path="/instructors" element={<InstructorsPage />} />
         <Route path="/instructor/:instructorId" element={<InstructorDetailPage />} />
         <Route path="/policy/:type" element={<PolicyPage />} />
+        <Route path="/notice" element={<NoticePage />} />
+        <Route path="/notice/:id" element={<NoticePage />} />
         <Route path="/i/:token" element={<InstructorProgressPageView />} />
         <Route path="/admin2026" element={<AdminPage />} />
       </Routes>
       </div>
       {!hideFooter && <Footer />}
+      {/* 진입 팝업 — 관리자/수강(lesson)/강사진도(/i) 화면 제외 */}
+      {!hideNavbar && location.pathname !== '/lesson' && <SitePopup />}
     </AuthModalProvider>
   )
 }

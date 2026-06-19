@@ -199,7 +199,7 @@ function AuthModal({ tab, setTab, onClose }: Props) {
                 : '가입한 휴대폰 번호로 인증번호를 받아 재설정하세요'}</p>
           </div>
           <div className="modal-body">
-            {err && <div className="err-msg">{err}</div>}
+            {err && <div className="err-msg err-standalone">{err}</div>}
             {resetMsg && resetStep !== 'done' && (
               <div style={{ fontSize: '.82rem', color: 'var(--purple-2)', background: 'rgba(124,111,205,.08)', borderRadius: 'var(--r2)', padding: '10px 12px', marginBottom: '14px', lineHeight: 1.5 }}>
                 {resetMsg}

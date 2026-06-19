@@ -351,6 +351,19 @@ export async function uploadSignatureImage(userId: string, courseId: string, dat
   return data.publicUrl
 }
 
+// 공용 이미지 업로드 (관리자) — 팝업/공지 등. public 버킷에 저장 후 public URL 반환.
+export async function uploadPublicImage(file: File, prefix = 'misc'): Promise<string | null> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+  const path = `${prefix}/${Date.now()}.${ext}`
+  const { error } = await supabase.storage.from('certificate-signatures').upload(path, file, {
+    contentType: file.type || 'image/png',
+    upsert: true,
+  })
+  if (error) { console.warn('이미지 업로드 실패:', error.message); return null }
+  const { data } = supabase.storage.from('certificate-signatures').getPublicUrl(path)
+  return data.publicUrl
+}
+
 // 수료증 A4 템플릿 이미지 업로드 (관리자) → public URL 반환
 export async function uploadCertificateTemplate(file: File): Promise<string | null> {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'png'

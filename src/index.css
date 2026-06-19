@@ -697,7 +697,74 @@ body:has(.modal-overlay) {
   cursor: pointer; transition: var(--t); border: none;
 }
 .modal-close:hover { background: rgba(255,255,255,.12); color: var(--t1); }
-.err-msg { font-size: .8rem; color: var(--fail); margin-top: -8px; margin-bottom: 12px; padding: 8px 12px; background: rgba(224,82,82,.08); border-radius: var(--r1); }
+.err-msg { font-size: .8rem; color: var(--fail); margin-top: -8px; margin-bottom: 12px; padding: 8px 12px; background: rgba(224,82,82,.08); border-radius: var(--r1); line-height: 1.45; }
+/* 폼 라벨 아래가 아니라 모달 상단 등 단독으로 놓일 때 — 음수 마진 제거 */
+.err-msg.err-standalone { margin-top: 0; }
+
+/* ── 진입 팝업 ── */
+.popup-overlay {
+  position: fixed; inset: 0; z-index: 8500;
+  background: rgba(6, 7, 15, .82);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  overscroll-behavior: contain;
+  animation: popup-fade .2s ease;
+}
+@keyframes popup-fade { from { opacity: 0 } to { opacity: 1 } }
+.popup-box {
+  position: relative;
+  background: var(--bg-3); border: 1px solid var(--line);
+  border-radius: var(--r4); width: 100%; max-width: 380px;
+  max-height: 88vh; overflow: hidden auto;
+  box-shadow: 0 16px 48px rgba(0,0,0,.45);
+  display: flex; flex-direction: column;
+}
+.popup-close {
+  position: absolute; top: 12px; right: 12px; z-index: 2;
+  width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.05rem; color: #fff; background: rgba(0,0,0,.4);
+  backdrop-filter: blur(8px); cursor: pointer; border: none; transition: var(--t);
+}
+.popup-close:hover { background: rgba(0,0,0,.7); }
+.popup-img-wrap { width: 100%; line-height: 0; }
+.popup-img-wrap img { width: 100%; height: auto; display: block; }
+.popup-img-btn { display: block; width: 100%; padding: 0; border: none; background: none; cursor: pointer; }
+.popup-content { padding: 22px 22px 6px; text-align: center; }
+.popup-title { font-size: 1.12rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: 10px; }
+.popup-body { font-size: .86rem; color: var(--t2); line-height: 1.65; margin-bottom: 16px; }
+.popup-foot {
+  display: flex; border-top: 1px solid var(--line); margin-top: 16px;
+}
+.popup-foot-btn {
+  flex: 1; padding: 13px; font-size: .8rem; color: var(--t3);
+  background: none; border: none; cursor: pointer; transition: var(--t);
+}
+.popup-foot-btn:hover { color: var(--t1); background: rgba(255,255,255,.03); }
+.popup-foot-btn + .popup-foot-btn { border-left: 1px solid var(--line); }
+
+/* ── 공지사항 목록 ── */
+.notice-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.notice-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 18px 6px; border-bottom: 1px solid var(--line);
+  text-decoration: none; color: inherit; transition: var(--t);
+}
+.notice-item:hover { background: rgba(255,255,255,.02); }
+.notice-item-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.notice-pin {
+  flex-shrink: 0; font-size: .68rem; font-weight: 800; letter-spacing: .02em;
+  color: var(--gold-2); background: rgba(232,189,82,.12);
+  border: 1px solid rgba(232,189,82,.28); border-radius: 999px; padding: 3px 9px;
+}
+.notice-title {
+  font-size: .92rem; font-weight: 600; color: var(--t1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.notice-date { flex-shrink: 0; font-size: .8rem; color: var(--t3); font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .notice-item { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .notice-title { white-space: normal; }
+}
 
 /* ── Classroom / My Card ── */
 .my-list { display: flex; flex-direction: column; gap: 14px; }
