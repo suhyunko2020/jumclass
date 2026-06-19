@@ -3,7 +3,7 @@
 // 클라이언트는 fire-and-forget로 호출하며, 실패해도 사용자 경험에 영향 없음.
 //
 // 요청 (POST /api/log-event):
-// { event: 'login'|'signup'|'course_view'|'lesson_view',
+// { event: 'login'|'signup'|'course_view'|'lesson_view'|'lesson_preview',
 //   userId?, userName?, userEmail?, courseId?, courseTitle?, path? }
 //
 // 응답: 200 { ok: true } / 실패 시에도 가볍게 처리
@@ -12,7 +12,7 @@
 
 export const config = { runtime: 'edge' }
 
-const ALLOWED_EVENTS = ['login', 'signup', 'course_view', 'lesson_view']
+const ALLOWED_EVENTS = ['login', 'signup', 'course_view', 'lesson_view', 'lesson_preview']
 
 // User-Agent 간이 파싱 — 기기 유형/OS/브라우저
 function parseUA(ua: string): { device: string; os: string; browser: string } {
