@@ -7,6 +7,7 @@ import { useAuthModal } from '../components/auth/AuthModal'
 import { formatPrice, discountRate, formatDays, formatDaysShort, maskName, calcTotalDuration, getLevelColor } from '../utils/format'
 import { getMyInquiries } from '../utils/storage'
 import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
+import { logAccess } from '../utils/accessLog'
 import type { Inquiry } from '../data/types'
 
 export default function CourseDetailPage() {
@@ -29,6 +30,13 @@ export default function CourseDetailPage() {
   }
 
   const course = getCourse(courseId || '')
+
+  // 접속 로그 — 강의 상세 조회 (IP/기기는 서버에서 수집)
+  useEffect(() => {
+    if (!course) return
+    logAccess({ event: 'course_view', courseId: course.id, courseTitle: course.title, userId: user?.uid, userName: user?.name, userEmail: user?.email })
+  }, [course?.id, user?.uid])
+
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({ 0: true })
   const [tierIdx, setTierIdx] = useState(0)
   // 강사 페이지에서 진입한 경우 쿼리로 강사가 강제 지정됨 (셀렉트 잠금, 변경 불가)

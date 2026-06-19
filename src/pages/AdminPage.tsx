@@ -10,7 +10,9 @@ import {
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
+  getAccessLogs,
   type CertificateAgreementRecord,
+  type AccessLog,
 } from '../utils/storage'
 import { sendInstructorProgress, sendInquiryAnswered, sendRefundComplete } from '../utils/alimtalk'
 import { formatPrice, getLevelColor } from '../utils/format'
@@ -24,7 +26,7 @@ import {
   pickUniqueText, pickUniqueAnyText, getPoolSize,
 } from '../lib/sampleReviews'
 
-type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews' | 'settings'
+type Section = 'overview' | 'courses' | 'instructors' | 'students' | 'payments' | 'inquiries' | 'reviews' | 'logs' | 'settings'
 
 // ── 커리큘럼 편집 상태 타입 ──────────────────────────────────
 interface CurrEditSection {
@@ -141,6 +143,20 @@ export default function AdminPage() {
   }, [])
 
   const [sec, setSec] = useState<Section>('overview')
+
+  // ── 접속 로그 ──
+  const [accessLogs, setAccessLogs] = useState<AccessLog[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logEventFilter, setLogEventFilter] = useState<'all' | 'login' | 'signup' | 'course_view' | 'lesson_view'>('all')
+  const [logSearch, setLogSearch] = useState('')
+  const loadAccessLogs = useCallback(() => {
+    setLogsLoading(true)
+    getAccessLogs(300).then(rows => { setAccessLogs(rows); setLogsLoading(false) })
+  }, [])
+  useEffect(() => {
+    if (sec === 'logs' && isAdminLoggedIn) loadAccessLogs()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sec, isAdminLoggedIn])
 
   // 모달 상태
   const [answerModal, setAnswerModal] = useState<{ inq: Inquiry; text: string } | null>(null)
@@ -313,6 +329,7 @@ export default function AdminPage() {
     { sec: 'payments',    label: '결제 내역' },
     { sec: 'inquiries',   label: '문의 관리', badge: pendingCount },
     { sec: 'reviews',     label: '리뷰 관리' },
+    { sec: 'logs',        label: '접속 로그' },
     { sec: 'settings',    label: '설정' },
   ]
 
@@ -1784,6 +1801,112 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+            )
+          })()}
+
+          {/* ═══ 접속 로그 ═══ */}
+          {sec === 'logs' && (() => {
+            const EVENT_LABEL: Record<string, string> = {
+              login: '로그인', signup: '회원가입', course_view: '강의 조회', lesson_view: '강의 수강',
+            }
+            const EVENT_COLOR: Record<string, string> = {
+              login: 'var(--purple-2)', signup: 'var(--ok)', course_view: 'var(--gold-2)', lesson_view: 'var(--warn)',
+            }
+            const q = logSearch.trim().toLowerCase()
+            const filtered = accessLogs.filter(l => {
+              if (logEventFilter !== 'all' && l.event !== logEventFilter) return false
+              if (!q) return true
+              return [l.userName, l.userEmail, l.ip, l.courseTitle, l.city, l.country]
+                .some(v => (v || '').toLowerCase().includes(q))
+            })
+            const fmt = (iso: string) => {
+              const d = new Date(iso)
+              const p = (n: number) => String(n).padStart(2, '0')
+              return `${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+            }
+            return (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '8px' }}>
+                  <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', margin: 0 }}>접속 로그</h1>
+                  <button className="btn btn-ghost btn-sm" onClick={loadAccessLogs} disabled={logsLoading}>
+                    {logsLoading ? '불러오는 중…' : '↻ 새로고침'}
+                  </button>
+                </div>
+                <p style={{ fontSize: '.8rem', color: 'var(--t3)', margin: '0 0 18px' }}>
+                  최근 300건. 로그인·회원가입·강의 접속 시각/IP/위치/기기를 기록합니다. (개인정보처리방침 고지 항목)
+                </p>
+
+                {/* 필터 + 검색 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                  {([['all', '전체'], ['login', '로그인'], ['signup', '회원가입'], ['course_view', '강의 조회'], ['lesson_view', '강의 수강']] as const).map(([k, label]) => (
+                    <button key={k} className={`tab ${logEventFilter === k ? 'active' : ''}`} onClick={() => setLogEventFilter(k)}>{label}</button>
+                  ))}
+                  <input className="form-input" placeholder="이름·이메일·IP·강의·지역 검색" value={logSearch}
+                    onChange={e => setLogSearch(e.target.value)}
+                    style={{ marginLeft: 'auto', maxWidth: '260px', margin: 0 }} />
+                </div>
+
+                {logsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '60px', color: 'var(--t3)' }}>불러오는 중…</div>
+                ) : accessLogs.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--t3)', lineHeight: 1.7 }}>
+                    기록된 접속 로그가 없습니다.<br />
+                    <span style={{ fontSize: '.8rem' }}>access_logs 테이블이 생성되어 있는지 확인해주세요. (sql/access_logs.sql)</span>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="admin-table" style={{ minWidth: '760px' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ whiteSpace: 'nowrap' }}>시각</th>
+                          <th>이벤트</th>
+                          <th>사용자</th>
+                          <th>강의</th>
+                          <th>기기</th>
+                          <th>IP · 위치</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(l => (
+                          <tr key={l.id}>
+                            <td style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--t2)' }}>{fmt(l.createdAt)}</td>
+                            <td>
+                              <span style={{ fontSize: '.74rem', fontWeight: 700, color: EVENT_COLOR[l.event] || 'var(--t2)' }}>
+                                {EVENT_LABEL[l.event] || l.event}
+                              </span>
+                            </td>
+                            <td>
+                              {l.userName || l.userEmail ? (
+                                <div style={{ lineHeight: 1.35 }}>
+                                  <div style={{ fontWeight: 600 }}>{l.userName || '-'}</div>
+                                  <div style={{ fontSize: '.72rem', color: 'var(--t3)' }}>{l.userEmail || ''}</div>
+                                </div>
+                              ) : <span style={{ color: 'var(--t3)' }}>비회원</span>}
+                            </td>
+                            <td style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t2)' }}>
+                              {l.courseTitle || '-'}
+                            </td>
+                            <td style={{ fontSize: '.78rem', color: 'var(--t2)', whiteSpace: 'nowrap' }}>
+                              {[l.device, l.os, l.browser].filter(Boolean).join(' · ') || '-'}
+                            </td>
+                            <td style={{ fontSize: '.78rem', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{l.ip || '-'}</span>
+                              {(l.city || l.country) && (
+                                <span style={{ color: 'var(--t3)', marginLeft: '6px' }}>
+                                  {[l.city, l.country].filter(Boolean).join(', ')}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {filtered.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '30px', color: 'var(--t3)', fontSize: '.85rem' }}>검색 결과가 없습니다.</div>
+                    )}
+                  </div>
+                )}
+              </div>
             )
           })()}
 

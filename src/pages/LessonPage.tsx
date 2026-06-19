@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/ui/Toast'
 import { calcTotalDuration } from '../utils/format'
 import { getLessonAttachments, getAttachmentDownloadUrl } from '../hooks/useCourses'
+import { logAccess } from '../utils/accessLog'
 import type { LessonAtt } from '../hooks/useCourses'
 
 export default function LessonPage() {
@@ -46,6 +47,12 @@ export default function LessonPage() {
     if (course) document.title = `${course.title} — JUMCLASS`
     return () => { document.title = 'JUMCLASS' }
   }, [course])
+
+  // 접속 로그 — 강의 수강(시청) 진입 (IP/기기는 서버에서 수집)
+  useEffect(() => {
+    if (!course) return
+    logAccess({ event: 'lesson_view', courseId: course.id, courseTitle: course.title, userId: user?.uid, userName: user?.name, userEmail: user?.email })
+  }, [course?.id, user?.uid])
 
   // 자격증 과정은 강의 시청 페이지가 없음 — 직접 URL 접근 시 강의실로 리디렉트
   useEffect(() => {

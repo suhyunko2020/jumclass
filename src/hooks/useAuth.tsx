@@ -5,6 +5,7 @@ import type { Enrollment } from '../data/types'
 import { useCourses } from './useCourses'
 import { sendWelcome } from '../utils/alimtalk'
 import { syncSiteSettingsFromSupabase } from './useSiteSettings'
+import { logAccess } from '../utils/accessLog'
 
 // ── 앱 내부에서 사용하는 User 타입 ──────────────────────────
 export interface AppUser {
@@ -166,8 +167,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── 로그인 ────────────────────────────────────────────────
   // null = 성공, string = 에러 메시지
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (!error) return null
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error) {
+      // 접속 로그 — 로그인 성공 (IP/기기는 서버에서 수집)
+      logAccess({ event: 'login', userId: data.user?.id, userEmail: data.user?.email ?? email, userName: data.user?.user_metadata?.name })
+      return null
+    }
     // 휴대폰 인증 체제 — 이메일 인증은 사용하지 않음. (Confirm email OFF 전제)
     // OFF 전에 가입된 미인증 계정만 이 분기에 걸림.
     if (error.message.includes('Email not confirmed'))
@@ -202,6 +207,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // 회원가입 환영 알림톡 (실패해도 가입 플로우는 계속)
     sendWelcome({ phone, customerName: name }).catch(() => {})
+    // 접속 로그 — 회원가입
+    logAccess({ event: 'signup', userId: data.user.id, userEmail: email, userName: name })
     return null
   }, [])
 
