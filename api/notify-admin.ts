@@ -34,6 +34,14 @@ async function resolveAdminPhone(): Promise<string> {
 
 const SOLAPI_SEND_URL = 'https://api.solapi.com/messages/v4/send'
 
+// 카카오 채널(플러스친구) pfId — 기존 알림톡과 동일 채널
+const PF_ID = 'KA01PF260616051226226tvtVw4A32cI'
+// 관리자용 알림톡 템플릿 ID — 2026-06-19 카카오 승인 완료. 비밀값 아님(pfId처럼 공개 식별자).
+// 코드에 직접 명시. 필요 시 Vercel 환경변수로 덮어쓸 수 있음.
+// 알림톡(ATA) 발송 + 실패 시 SMS 자동대체(disableSms:false).
+const ADMIN_PAYMENT_TEMPLATE_ID = process.env.ADMIN_PAYMENT_TEMPLATE_ID || 'KA01TP260619080840282rhuhXnZqdcp'
+const ADMIN_INQUIRY_TEMPLATE_ID = process.env.ADMIN_INQUIRY_TEMPLATE_ID || 'KA01TP2606190809294840uEnsEcBhPr'
+
 function bytesToHex(b: Uint8Array): string {
   return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('')
 }
@@ -65,15 +73,33 @@ export default async function handler(req: Request): Promise<Response> {
   // 설정이 없으면 조용히 skip (알림은 부가기능 — 본 흐름에 영향 없음)
   if (!ADMIN || !KEY || !SECRET || !SENDER) return json(200, { ok: false, reason: 'not-configured' })
 
+  // 템플릿 변수 + 본문(text). text는 SMS 대체발송용이자 LMS 본문이며, 등록 템플릿과 동일 구성.
   let text = ''
+  let templateId: string | undefined
+  let variables: Record<string, string> = {}
+
   if (b.kind === 'payment') {
-    text = `[점클래스] 결제 알림\n고객: ${b.customerName || '-'}\n강의: ${b.courseTitle || '-'}\n금액: ${b.amount || '-'}\n관리자 페이지에서 확인하세요.`
+    const name = b.customerName || '-'
+    const courseTitle = b.courseTitle || '-'
+    const amount = b.amount || '-'
+    text = `[점클래스] 새 결제 알림\n\n▶ 고객명: ${name}\n▶ 강의: ${courseTitle}\n▶ 결제금액: ${amount}\n\n관리자 페이지에서 자세한 내용을 확인하세요.`
+    templateId = ADMIN_PAYMENT_TEMPLATE_ID
+    variables = { '#{고객명}': name, '#{강의명}': courseTitle, '#{결제금액}': amount }
   } else if (b.kind === 'inquiry') {
-    const content = clip2lines(b.content || '')
-    text = `[점클래스] 문의 접수\n고객: ${b.customerName || '-'}${b.subject ? `\n제목: ${b.subject}` : ''}\n${content}\n관리자 페이지에서 확인하세요.`
+    const name = b.customerName || '-'
+    const subject = b.subject || '문의'
+    const content = clip2lines(b.content || '') || '-'
+    text = `[점클래스] 새 문의 접수\n\n▶ 고객명: ${name}\n▶ 제목: ${subject}\n▶ 내용: ${content}\n\n관리자 페이지에서 답변을 등록해주세요.`
+    templateId = ADMIN_INQUIRY_TEMPLATE_ID
+    variables = { '#{고객명}': name, '#{제목}': subject, '#{내용}': content }
   } else {
     return json(400, { ok: false, reason: 'unknown-kind' })
   }
+
+  // 템플릿ID가 있으면 알림톡(ATA, 실패 시 SMS 자동대체), 없으면 문자(LMS)
+  const buildMessage = (to: string) => templateId
+    ? { to, from: SENDER, type: 'ATA', text, kakaoOptions: { pfId: PF_ID, templateId, variables, disableSms: false } }
+    : { to, from: SENDER, type: 'LMS', subject: '점클래스 알림', text }
 
   const recipients = ADMIN.split(',').map(s => normPhone(s.trim())).filter(Boolean)
   try {
@@ -83,10 +109,10 @@ export default async function handler(req: Request): Promise<Response> {
       fetch(SOLAPI_SEND_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': auth },
-        body: JSON.stringify({ message: { to, from: SENDER, type: 'LMS', subject: '점클래스 알림', text } }),
+        body: JSON.stringify({ message: buildMessage(to) }),
       }).catch(() => null)
     ))
-    return json(200, { ok: true, sent: recipients.length })
+    return json(200, { ok: true, sent: recipients.length, channel: templateId ? 'ata' : 'lms' })
   } catch (e) {
     return json(200, { ok: false, reason: e instanceof Error ? e.message : 'send-error' })
   }
