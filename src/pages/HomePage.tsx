@@ -82,7 +82,7 @@ export default function HomePage() {
           <div className="hero-inner page-enter">
             <div className="hero-text">
               <div className="hero-kicker">타로 전문 교육 플랫폼</div>
-              <h1 style={{ fontSize: 'clamp(2rem, 4.6vw, 3rem)' }}>타로 인터넷강의, 자격증<br /><em>점클래스</em>에서 제대로 배워보세요</h1>
+              <h1 style={{ fontSize: 'clamp(2rem, 4.6vw, 3rem)' }}>타로 인터넷강의, 자격증<br /><em>점클래스</em>에서 배워보세요</h1>
               <p className="hero-desc">유니버셜웨이트부터 프라임뮤즈 타로 강의 및 전문가 자격증까지,<br />현직 타로 상담사에게 전문적으로 배워보세요.</p>
               <div className="hero-cta">
                 <Link to="/courses" className="btn btn-gold btn-xl">강의 둘러보기 →</Link>
