@@ -147,11 +147,12 @@ export default function AdminPage() {
   // ── 접속 로그 ──
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  const [logsError, setLogsError] = useState<string | null>(null)
   const [logEventFilter, setLogEventFilter] = useState<'all' | 'login' | 'signup' | 'course_view' | 'lesson_view'>('all')
   const [logSearch, setLogSearch] = useState('')
   const loadAccessLogs = useCallback(() => {
     setLogsLoading(true)
-    getAccessLogs(300).then(rows => { setAccessLogs(rows); setLogsLoading(false) })
+    getAccessLogs(300).then(res => { setAccessLogs(res.logs); setLogsError(res.error); setLogsLoading(false) })
   }, [])
   useEffect(() => {
     if (sec === 'logs' && isAdminLoggedIn) loadAccessLogs()
@@ -1848,10 +1849,15 @@ export default function AdminPage() {
 
                 {logsLoading ? (
                   <div style={{ textAlign: 'center', padding: '60px', color: 'var(--t3)' }}>불러오는 중…</div>
+                ) : logsError ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--fail)', lineHeight: 1.7 }}>
+                    접속 로그를 불러오지 못했습니다.<br />
+                    <span style={{ fontSize: '.8rem', color: 'var(--t3)' }}>access_logs 테이블/권한을 확인해주세요. (sql/access_logs.sql)<br />에러: {logsError}</span>
+                  </div>
                 ) : accessLogs.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--t3)', lineHeight: 1.7 }}>
-                    기록된 접속 로그가 없습니다.<br />
-                    <span style={{ fontSize: '.8rem' }}>access_logs 테이블이 생성되어 있는지 확인해주세요. (sql/access_logs.sql)</span>
+                    아직 기록된 접속 로그가 없습니다.<br />
+                    <span style={{ fontSize: '.8rem' }}>실제 배포 사이트에서 로그인·강의 접속이 발생하면 이곳에 쌓입니다. (로컬 개발은 기록 안 함)</span>
                   </div>
                 ) : (
                   <div style={{ overflowX: 'auto' }}>

@@ -134,22 +134,23 @@ export interface AccessLog {
   browser: string | null
 }
 
-// 최근 접속 로그 조회 (기본 300건). 테이블 미생성/권한 없음 시 빈 배열.
-export async function getAccessLogs(limit = 300): Promise<AccessLog[]> {
+// 최근 접속 로그 조회 (기본 300건). 에러(테이블 미생성/권한)는 error로 구분 반환.
+export async function getAccessLogs(limit = 300): Promise<{ logs: AccessLog[]; error: string | null }> {
   const { data, error } = await supabase
     .from('access_logs')
     .select('id, created_at, user_id, user_name, user_email, event, course_id, course_title, path, ip, country, city, device, os, browser')
     .order('created_at', { ascending: false })
     .limit(limit)
-  if (error) { console.warn('access_logs 조회 실패(테이블/권한 확인):', error.message); return [] }
+  if (error) { console.warn('access_logs 조회 실패(테이블/권한 확인):', error.message); return { logs: [], error: error.message } }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({
+  const logs = (data ?? []).map((r: any) => ({
     id: r.id, createdAt: r.created_at,
     userId: r.user_id, userName: r.user_name, userEmail: r.user_email,
     event: r.event, courseId: r.course_id, courseTitle: r.course_title, path: r.path,
     ip: r.ip, country: r.country, city: r.city,
     device: r.device, os: r.os, browser: r.browser,
   }))
+  return { logs, error: null }
 }
 
 // ════════════════════════════════════════════════════════════
