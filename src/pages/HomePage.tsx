@@ -138,8 +138,8 @@ export default function HomePage() {
         <div className="container">
           <div className="section-header">
             <span className="section-kicker">점클래스 소개</span>
-            <h2>숫자로 보는 점클래스</h2>
-            <p>현재 운영 중인 강의와 환경을 한눈에 확인해보세요.</p>
+            <h2>점클래스를 선택하는 이유</h2>
+            <p>강의 구성부터 학습 환경까지, 점클래스만의 강점을 확인해보세요.</p>
           </div>
           {(() => {
             const totalLessons = publicCourses.reduce((s, c) => s + (c.lessons ?? 0), 0)
@@ -199,9 +199,9 @@ export default function HomePage() {
             return (
               <div className="feat-grid">
                 {feats.map(f => (
-                  <div key={f.headline} className="feat-card" style={{ paddingTop: '24px' }}>
+                  <div key={f.headline} className="feat-card">
                     <span className="feat-ic">{f.ic}</span>
-                    <div style={{ fontSize: '1.35rem', fontWeight: 800, letterSpacing: '-.02em', color: 'var(--t1)', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '1.45rem', fontWeight: 800, letterSpacing: '-.02em', color: 'var(--t1)', marginBottom: '5px' }}>
                       {f.headline}
                     </div>
                     <div style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--purple-2)', marginBottom: '10px' }}>

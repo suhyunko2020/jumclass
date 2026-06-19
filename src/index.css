@@ -505,12 +505,19 @@ input, textarea, select { font-family: inherit; }
 .card-orig { font-size: .8rem; color: var(--t3); text-decoration: line-through; }
 
 /* ── Features ── */
-.feat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .feat-card {
-  padding: 28px 24px;
+  padding: 28px 26px;
   background: var(--glass-1); border: 1px solid var(--line); border-radius: var(--r3);
+  transition: border-color .2s ease, transform .2s ease;
 }
-.feat-ic { font-size: 1.7rem; display: block; margin-bottom: 12px; }
+.feat-card:hover { border-color: rgba(124,111,205,.5); transform: translateY(-3px); }
+.feat-ic {
+  font-size: 1.45rem; display: inline-flex; align-items: center; justify-content: center;
+  width: 50px; height: 50px; border-radius: 14px;
+  background: rgba(124,111,205,.1); border: 1px solid rgba(124,111,205,.2);
+  margin-bottom: 16px;
+}
 .feat-card h3 { font-size: .95rem; font-weight: 700; margin-bottom: 8px; }
 .feat-card p { font-size: .83rem; color: var(--t2); line-height: 1.7; }
 
@@ -1169,6 +1176,7 @@ body:has(.modal-overlay) {
   .lesson-wrap { grid-template-columns: 1fr; height: auto; }
   .lesson-sidebar { border-left: none; border-top: 1px solid var(--line); max-height: 400px; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
+  .feat-grid { grid-template-columns: repeat(2, 1fr); }
   .hero-stats { gap: 28px; }
   .inst-detail-layout { grid-template-columns: 280px 1fr; gap: 32px; }
   .hero-inner { grid-template-columns: 1fr; gap: 48px; }
