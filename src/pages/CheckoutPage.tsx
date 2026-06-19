@@ -65,8 +65,9 @@ export default function CheckoutPage() {
   // 관리자가 카드 결제를 끈 경우 등 — 활성화된 첫 결제수단으로 기본값 보정
   useEffect(() => {
     const m = getSiteSettings().payment.methods
-    const allowed = (['CARD', 'TRANSFER', 'MOBILE_PHONE'] as TossMethod[]).filter(k =>
-      k === 'CARD' ? m.card : k === 'TRANSFER' ? m.transfer : m.phone,
+    // 결제수단은 카드 / 계좌이체만 운영 (휴대폰 결제 제외)
+    const allowed = (['CARD', 'TRANSFER'] as TossMethod[]).filter(k =>
+      k === 'CARD' ? m.card : m.transfer,
     )
     if (allowed.length && !allowed.includes(payMethod)) setPayMethod(allowed[0])
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,7 +309,6 @@ export default function CheckoutPage() {
                 const opts: { key: TossMethod; label: string }[] = [
                   ...(m.card ? [{ key: 'CARD' as const, label: '카드' }] : []),
                   ...(m.transfer ? [{ key: 'TRANSFER' as const, label: '계좌이체' }] : []),
-                  ...(m.phone ? [{ key: 'MOBILE_PHONE' as const, label: '휴대폰' }] : []),
                 ]
                 if (opts.length <= 1) return null
                 return (

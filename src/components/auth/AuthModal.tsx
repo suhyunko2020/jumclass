@@ -58,9 +58,10 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   const [otpLoading, setOtpLoading] = useState(false)
   const [otpErr, setOtpErr] = useState('')
 
-  // 비밀번호 재설정 상태
-  const [resetStep, setResetStep] = useState<'request' | 'confirm' | 'done'>('request')
-  const [resetEmail, setResetEmail] = useState('')
+  // 비밀번호 재설정 상태 (휴대폰 인증 기반)
+  // request: 번호 입력 → verify: 인증번호 확인 → confirm: 새 비밀번호 입력 → done
+  const [resetStep, setResetStep] = useState<'request' | 'verify' | 'confirm' | 'done'>('request')
+  const [resetPhone, setResetPhone] = useState('')
   const [resetCode, setResetCode] = useState('')
   const [resetPw, setResetPw] = useState('')
   const [resetPw2, setResetPw2] = useState('')
@@ -116,25 +117,45 @@ function AuthModal({ tab, setTab, onClose }: Props) {
   }
 
 
-  // ── 비밀번호 재설정 핸들러 ────────────────────────────────
+  // ── 비밀번호 재설정 핸들러 (휴대폰 알림톡 인증) ──────────────
+  // 1) 가입한 휴대폰 번호로 인증번호 발송 (회원가입과 동일한 SOLAPI 알림톡/SMS)
   async function handleResetRequest(e?: React.FormEvent) {
     e?.preventDefault()
     setErr(''); setResetMsg(''); setLoading(true)
     try {
-      const res = await fetch('/api/email-otp-send', {
+      const res = await fetch('/api/sms-otp-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail }),
+        body: JSON.stringify({ phone: resetPhone }),
       })
       const data = await res.json().catch(() => ({}))
       setLoading(false)
       if (!res.ok || !data.ok) { setErr(data.message || '인증번호 발송에 실패했습니다.'); return }
-      setResetStep('confirm')
-      setResetMsg('가입된 이메일이라면 인증번호가 발송됩니다. 메일함(스팸함 포함)을 확인해주세요.')
+      setResetStep('verify')
+      setResetMsg('인증번호를 발송했습니다. 알림톡(또는 문자)을 확인해주세요.')
     } catch {
       setLoading(false); setErr('네트워크 오류가 발생했습니다.')
     }
   }
 
+  // 2) 인증번호 확인 — 성공해야 새 비밀번호 입력 단계로 진입
+  async function handleResetVerify(e: React.FormEvent) {
+    e.preventDefault()
+    setErr(''); setLoading(true)
+    try {
+      const res = await fetch('/api/sms-otp-verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: resetPhone, code: resetCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      setLoading(false)
+      if (!res.ok || !data.ok) { setErr(data.message || '인증번호가 일치하지 않습니다.'); return }
+      setResetStep('confirm'); setResetMsg('')
+    } catch {
+      setLoading(false); setErr('네트워크 오류가 발생했습니다.')
+    }
+  }
+
+  // 3) 새 비밀번호 설정 — 인증된 휴대폰 기준으로 변경
   async function handleResetConfirm(e: React.FormEvent) {
     e.preventDefault()
     setErr('')
@@ -142,9 +163,9 @@ function AuthModal({ tab, setTab, onClose }: Props) {
     if (resetPw.length < 6) { setErr('비밀번호는 6자 이상이어야 합니다.'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/reset-password', {
+      const res = await fetch('/api/reset-password-phone', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail, code: resetCode, newPassword: resetPw }),
+        body: JSON.stringify({ phone: resetPhone, newPassword: resetPw }),
       })
       const data = await res.json().catch(() => ({}))
       setLoading(false)
@@ -169,7 +190,11 @@ function AuthModal({ tab, setTab, onClose }: Props) {
           <div className="modal-head">
             <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>🔑</div>
             <h2>비밀번호 재설정</h2>
-            <p>{resetStep === 'done' ? '비밀번호가 변경되었습니다' : '가입한 이메일로 인증번호를 받아 재설정하세요'}</p>
+            <p>{resetStep === 'done'
+              ? '비밀번호가 변경되었습니다'
+              : resetStep === 'confirm'
+                ? '새 비밀번호를 입력하세요'
+                : '가입한 휴대폰 번호로 인증번호를 받아 재설정하세요'}</p>
           </div>
           <div className="modal-body">
             {err && <div className="err-msg">{err}</div>}
@@ -185,31 +210,44 @@ function AuthModal({ tab, setTab, onClose }: Props) {
                   <div style={{ fontSize: '2.2rem', marginBottom: '10px' }}>✅</div>
                   <p style={{ color: 'var(--t2)', lineHeight: 1.6 }}>새 비밀번호로 로그인해주세요.</p>
                 </div>
-                <button className="btn btn-primary w-full" onClick={() => { setLoginForm({ email: resetEmail, password: '' }); backToLogin() }}>
+                <button className="btn btn-primary w-full" onClick={() => { setLoginForm({ email: '', password: '' }); backToLogin() }}>
                   로그인하러 가기 →
                 </button>
               </>
             ) : resetStep === 'request' ? (
+              // 1단계 — 가입한 휴대폰 번호 입력 → 인증번호 발송
               <form onSubmit={handleResetRequest}>
                 <div className="form-group">
-                  <label className="form-label" htmlFor="reset-email">가입 이메일</label>
-                  <input className="form-input" id="reset-email" type="email" placeholder="이메일 주소" required
-                    value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
+                  <label className="form-label" htmlFor="reset-phone">가입한 휴대폰 번호</label>
+                  <input className="form-input" id="reset-phone" type="tel" inputMode="numeric" placeholder="01000000000" required
+                    value={resetPhone} onChange={e => setResetPhone(e.target.value.replace(/[^0-9]/g, ''))} />
                 </div>
-                <button className="btn btn-primary w-full" type="submit" disabled={loading}>
+                <button className="btn btn-primary w-full" type="submit" disabled={loading || !resetPhone}>
                   {loading ? '발송 중…' : '인증번호 받기'}
                 </button>
               </form>
-            ) : (
-              <form onSubmit={handleResetConfirm}>
+            ) : resetStep === 'verify' ? (
+              // 2단계 — 인증번호 확인 (성공해야 비밀번호 입력 단계로)
+              <form onSubmit={handleResetVerify}>
                 <div className="form-group">
                   <label className="form-label" htmlFor="reset-code">인증번호</label>
-                  <input className="form-input" id="reset-code" inputMode="numeric" maxLength={6} placeholder="메일로 받은 6자리" required
+                  <input className="form-input" id="reset-code" inputMode="numeric" maxLength={6} placeholder="알림톡으로 받은 6자리" required autoFocus
                     value={resetCode} onChange={e => setResetCode(e.target.value.replace(/\D/g, ''))} />
                 </div>
+                <button className="btn btn-primary w-full" type="submit" disabled={loading || resetCode.length !== 6}>
+                  {loading ? '확인 중…' : '인증번호 확인'}
+                </button>
+                <button type="button" className="btn btn-ghost w-full" style={{ marginTop: '8px' }} disabled={loading}
+                  onClick={() => handleResetRequest()}>
+                  인증번호 재발송
+                </button>
+              </form>
+            ) : (
+              // 3단계 — 새 비밀번호 입력
+              <form onSubmit={handleResetConfirm}>
                 <div className="form-group">
                   <label className="form-label" htmlFor="reset-pw">새 비밀번호</label>
-                  <input className="form-input" id="reset-pw" type="password" placeholder="새 비밀번호 (6자 이상)" required minLength={6}
+                  <input className="form-input" id="reset-pw" type="password" placeholder="새 비밀번호 (6자 이상)" required minLength={6} autoFocus
                     value={resetPw} onChange={e => setResetPw(e.target.value)} autoComplete="new-password" />
                 </div>
                 <div className="form-group">
@@ -219,10 +257,6 @@ function AuthModal({ tab, setTab, onClose }: Props) {
                 </div>
                 <button className="btn btn-primary w-full" type="submit" disabled={loading}>
                   {loading ? '변경 중…' : '비밀번호 변경'}
-                </button>
-                <button type="button" className="btn btn-ghost w-full" style={{ marginTop: '8px' }} disabled={loading}
-                  onClick={() => handleResetRequest()}>
-                  인증번호 재발송
                 </button>
               </form>
             )}
@@ -280,7 +314,7 @@ function AuthModal({ tab, setTab, onClose }: Props) {
                 {loading ? '로그인 중…' : '로그인'}
               </button>
               <button type="button"
-                onClick={() => { setView('reset'); setErr(''); setResetEmail(loginForm.email) }}
+                onClick={() => { setView('reset'); setErr(''); setResetStep('request'); setResetPhone(''); setResetCode(''); setResetMsg('') }}
                 style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 'none', color: 'var(--t3)', fontSize: '.82rem', cursor: 'pointer', textDecoration: 'underline' }}>
                 비밀번호를 잊으셨나요?
               </button>

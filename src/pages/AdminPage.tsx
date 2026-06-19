@@ -1937,10 +1937,7 @@ export default function AdminPage() {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
                       {([
                         ['card', '신용카드'],
-                        ['virtualAccount', '가상계좌'],
                         ['transfer', '계좌이체'],
-                        ['phone', '휴대폰'],
-                        ['cashReceipt', '무통장'],
                       ] as const).map(([key, label]) => (
                         <label key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', borderRadius: 'var(--r2)', cursor: 'pointer', fontSize: '.82rem' }}>
                           <input type="checkbox" checked={form.payment.methods[key]}
