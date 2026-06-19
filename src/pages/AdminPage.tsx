@@ -735,7 +735,7 @@ export default function AdminPage() {
     const maxAllowed = Math.max(1, remaining)
 
     const input = window.prompt(
-      `샘플 리뷰를 몇 개 생성할까요? (1~${maxAllowed})\n\n• 한글 닉네임 70% : 영문 닉네임 30%\n• 공개된 강의 ${allCourses.length}개에 랜덤 분배\n• 최근 6개월 내 랜덤 날짜로 작성됨\n• 기존 ${existingAdminTexts.size}건과 중복되지 않는 텍스트만 선택\n• 풀 잔여 개수: ${remaining}건`,
+      `샘플 리뷰를 몇 개 생성할까요? (1~${maxAllowed})\n\n• 한글 실명 닉네임 (사이트에는 성만 노출)\n• 프로필은 실제 회원처럼 이름 첫 글자로 표시\n• 공개된 강의 ${allCourses.length}개에 랜덤 분배\n• 최근 6개월 내 랜덤 날짜로 작성됨\n• 기존 ${existingAdminTexts.size}건과 중복되지 않는 텍스트만 선택\n• 풀 잔여 개수: ${remaining}건`,
       String(Math.min(20, maxAllowed)),
     )
     if (input === null) return

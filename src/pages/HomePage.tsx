@@ -216,10 +216,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 후기 — 실제 리뷰 데이터 기반 (최신 6개) */}
+      {/* 후기 — 실제 리뷰 데이터 기반, 가로 자동 슬라이드 */}
       {(() => {
-        const reviews = getAllReviews().slice(0, 6)
+        const reviews = getAllReviews().slice(0, 14)
         if (reviews.length === 0) return null
+        // 끊김 없는 무한 스크롤을 위해 두 벌 렌더 (뒤쪽은 보조용)
+        const loop = [...reviews, ...reviews]
         return (
           <section className="section">
             <div className="container">
@@ -228,11 +230,13 @@ export default function HomePage() {
                 <h2>수강생들의 이야기</h2>
                 <p>실제 수강생들이 남긴 평점과 후기를 확인해보세요.</p>
               </div>
-              <div className="testi-grid">
-                {reviews.map(r => {
+            </div>
+            <div className="testi-marquee">
+              <div className="testi-track">
+                {loop.map((r, i) => {
                   const c = getCourse(r.courseId)
                   return (
-                    <div key={r.id} className="testi-card">
+                    <div key={`${r.id}-${i}`} className="testi-card" aria-hidden={i >= reviews.length}>
                       <div style={{ fontSize: '.9rem', color: 'var(--gold)', marginBottom: '10px', letterSpacing: '2px' }}>
                         {'★'.repeat(r.rating)}
                         <span style={{ color: 'rgba(255,255,255,.12)' }}>{'★'.repeat(5 - r.rating)}</span>

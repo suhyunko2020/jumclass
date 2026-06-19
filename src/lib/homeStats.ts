@@ -17,6 +17,11 @@ export interface HomeStats {
 
 const CACHE_KEY_PREFIX = 'jum_home_stats_'
 
+// 수강생 수 기준선 — 옛 AWS/구 강의 사이트 누적 수강생(약 1,200명 + α)
+const STUDENT_BASELINE = 1252
+// 이 시각(사이트 오픈, 2026-06-19 14:00 KST = 05:00 UTC) 이후 가입한 회원만 기준선에 추가
+const STUDENT_BASELINE_SINCE = '2026-06-19T05:00:00Z'
+
 function currentMonth(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -77,23 +82,18 @@ export async function computeAndCacheStats(opts: {
   // - enrollments user_id 합집합 + reviews 행 카운트 (1리뷰=1수강생 가정)
   //   reviews.user_id는 RLS로 anon에 마스킹될 수 있어 신뢰 불가 → 행 카운트 사용
   // - 인기 강의: enrollments(payment) + reviews 카운트 둘 다 합산
-  let studentCount = 0
   const courseEnrollCount = new Map<string, number>()
-  const enrollmentUsers = new Set<string>()
-  let reviewRowCount = 0
 
   try {
     const { data } = await supabase
       .from('enrollments')
-      .select('user_id, course_id, type')
+      .select('course_id, type')
     if (Array.isArray(data)) {
       for (const row of data) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const r = row as any
-        const uid = r.user_id as string | undefined
         const cid = r.course_id as string | undefined
         const type = (r.type ?? 'payment') as string
-        if (uid) enrollmentUsers.add(uid)
         if (cid && type === 'payment' && publicCourseIds.has(cid)) {
           courseEnrollCount.set(cid, (courseEnrollCount.get(cid) ?? 0) + 1)
         }
@@ -106,7 +106,6 @@ export async function computeAndCacheStats(opts: {
       .from('reviews')
       .select('course_id')
     if (Array.isArray(data)) {
-      reviewRowCount = data.length
       for (const row of data) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const r = row as any
@@ -118,9 +117,16 @@ export async function computeAndCacheStats(opts: {
     }
   } catch { /* 무시 */ }
 
-  // enrollments 1명 + 리뷰 6개 → 7명 (실제 결제한 사용자 + 시드 리뷰 작성자)
-  // 단, 동일 사용자가 enrollments에도 있고 리뷰도 남긴 경우 중복 카운트되는 한계는 허용 — 시드 리뷰가 압도적이라 의미 없음
-  studentCount = enrollmentUsers.size + reviewRowCount
+  // 수강생 수 = 기준선(1,252명, 옛 사이트 누적) + 오픈 이후 신규 가입 회원 수
+  let newMembers = 0
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .gte('created_at', STUDENT_BASELINE_SINCE)
+    if (Array.isArray(data)) newMembers = data.length
+  } catch { /* 무시 */ }
+  const studentCount = STUDENT_BASELINE + newMembers
 
   // 인기 강의 정렬 (결제 많은 순, 동률이면 원래 순서 유지)
   const topCourseIds = Array.from(courseEnrollCount.entries())
