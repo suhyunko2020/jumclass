@@ -34,6 +34,7 @@ export default function CourseDetailPage() {
   // 강사 페이지에서 진입한 경우 쿼리로 강사가 강제 지정됨 (셀렉트 잠금, 변경 불가)
   const forcedInstructorId = searchParams.get('assignedInstructor') || ''
   const [selectedInstructorId, setSelectedInstructorId] = useState<string>(forcedInstructorId)
+  const [showAllReviews, setShowAllReviews] = useState(false)  // 후기 4개 초과분 더보기
 
   // 환불 처리된 결제건은 "수강 중"으로 보지 않음 → 재결제 가능하도록 본인 환불 문의 조회
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
@@ -116,7 +117,8 @@ export default function CourseDetailPage() {
                   <strong>{reviewStats ? reviewStats.avg : 0}</strong>
                   <span style={{ color: 'var(--t3)' }}>(수강생 {reviewStats ? reviewStats.count : 0}명 평가)</span>
                 </div>
-                <div className="detail-stat-item">👥 수강생 {getEnrolledCount(course.id)}명</div>
+                {/* 자격증은 누적 수강생 표기 안 함 — 평점(리뷰)만 노출 */}
+                {!isCert && <div className="detail-stat-item">👥 수강생 {getEnrolledCount(course.id)}명</div>}
                 <div className="detail-stat-item">🎬 총 {totalLessons}강</div>
                 <div className="detail-stat-item">⏱ {totalDuration}</div>
               </div>
@@ -362,7 +364,7 @@ export default function CourseDetailPage() {
                       </span>
                     )}
                   </div>
-                  {reviews.map(r => (
+                  {(showAllReviews ? reviews : reviews.slice(0, 4)).map(r => (
                     <div key={r.id} className="review-card">
                       <div className="review-header">
                         <div className="review-avatar">{r.userAvatar}</div>
@@ -374,6 +376,24 @@ export default function CourseDetailPage() {
                       <p className="review-text">{r.text}</p>
                     </div>
                   ))}
+                  {reviews.length > 4 && !showAllReviews && (
+                    <button
+                      className="btn btn-ghost w-full"
+                      style={{ marginTop: '8px' }}
+                      onClick={() => setShowAllReviews(true)}
+                    >
+                      후기 더보기 ({reviews.length - 4}개 더) ↓
+                    </button>
+                  )}
+                  {reviews.length > 4 && showAllReviews && (
+                    <button
+                      className="btn btn-ghost w-full"
+                      style={{ marginTop: '8px' }}
+                      onClick={() => setShowAllReviews(false)}
+                    >
+                      접기 ↑
+                    </button>
+                  )}
                 </div>
               )}
             </div>

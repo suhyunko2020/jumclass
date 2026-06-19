@@ -215,9 +215,7 @@ export default function CoursesPage() {
                       {info.includedCount > 0 && (
                         <Stat label="포함 강의" value={`${info.includedCount}개 패키지`} />
                       )}
-                      {info.enrolled > 0 && (
-                        <Stat label="누적 수강생" value={`${info.enrolled}명`} />
-                      )}
+                      {/* 자격증은 누적 수강생 표기 안 함 — 평점(리뷰)만 노출 */}
                     </div>
 
                     <div
