@@ -65,6 +65,15 @@ export default async function handler(req: Request): Promise<Response> {
     return json(500, { ok: false, message: '문의 접수에 실패했습니다. 잠시 후 다시 시도해주세요.', detail: msg })
   }
 
+  // 관리자에게 새 문의 알림(문자) — 같은 배포의 notify-admin 엔드포인트 호출. 실패해도 접수는 성공.
+  try {
+    const origin = new URL(req.url).origin
+    await fetch(`${origin}/api/notify-admin`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'inquiry', customerName: name, subject: '홈페이지 문의', content: message }),
+    })
+  } catch { /* 알림 실패는 접수에 영향 없음 */ }
+
   // (선택) 관리자에게 새 문의 알림 메일 — 관련 env가 모두 설정된 경우에만 발송. 실패해도 접수는 성공 처리.
   const NOTIFY = process.env.CONTACT_NOTIFY_EMAIL
   const RESEND_API_KEY = process.env.RESEND_API_KEY

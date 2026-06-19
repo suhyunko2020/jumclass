@@ -1,2 +1,10 @@
 User-agent: *
-Disallow: /
+Allow: /
+Disallow: /admin2026
+Disallow: /lesson
+Disallow: /checkout
+Disallow: /classroom
+Disallow: /payment-success
+Disallow: /payment-fail
+Disallow: /my
+Disallow: /i/

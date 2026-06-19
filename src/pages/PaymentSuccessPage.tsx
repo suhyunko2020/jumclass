@@ -4,6 +4,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useAuth } from '../hooks/useAuth'
 import { loadIntent, clearIntent, type TossPaymentIntent } from '../lib/toss'
+import { notifyAdmin } from '../utils/notifyAdmin'
 import { createProgressPage, uploadSignatureImage, saveCertificateAgreement } from '../utils/storage'
 import { sendPaymentComplete, sendInstructorProgress, sendCourseStart } from '../utils/alimtalk'
 import { formatPrice } from '../utils/format'
@@ -152,6 +153,11 @@ export default function PaymentSuccessPage() {
           amount: formatPrice(intent.amount),
           period: periodLabel,
         }).then(r => { if (!r.ok) console.warn('[alimtalk:payment]', r) })
+      }
+
+      // 결제 알림(문자) — 관리자에게. 유료 결제만 (무료 수강신청 제외)
+      if (course && intent.amount > 0) {
+        notifyAdmin({ kind: 'payment', customerName: user.name, courseTitle: course.title, amount: formatPrice(intent.amount) })
       }
 
       if (isCert && intent.certAgreement?.signatureDataUrl) {

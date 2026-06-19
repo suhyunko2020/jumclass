@@ -25,7 +25,9 @@ import SitePopup from './components/ui/SitePopup'
 
 // 오픈 시각 — 이 시각 전까지는 비밀번호를 입력하지 않은 모든 방문자에게 공사중 페이지 노출
 // 비밀번호는 프론트에 두지 않고 /api/site-unlock(SITE_UNLOCK_PW 환경변수)에서 서버 검증한다.
+// 2026-06-19 정식 오픈 — 공사중 잠금 해제됨 (과거 시각이라 게이트가 항상 통과)
 const OPEN_AT_MS = new Date('2026-06-19T14:00:00+09:00').getTime()
+const SITE_OPEN = true  // 오픈 완료. true면 공사중 게이트를 완전히 비활성화
 
 export default function App() {
   const location = useLocation()
@@ -65,7 +67,7 @@ export default function App() {
 
   // 공사중 판정: 오픈 전 + 비밀번호 미입력이면 URL 직접 접근 포함 모든 페이지 차단.
   // 로컬 개발(import.meta.env.DEV)에선 /api가 없어 잠금에 갇히므로 게이트를 건너뛴다.
-  const maintenance = !import.meta.env.DEV && now < OPEN_AT_MS && !unlocked
+  const maintenance = !SITE_OPEN && !import.meta.env.DEV && now < OPEN_AT_MS && !unlocked
 
   if (maintenance) {
     return <ComingSoonPage remainingMs={OPEN_AT_MS - now} onUnlock={tryUnlock} />
