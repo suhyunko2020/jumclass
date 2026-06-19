@@ -102,6 +102,9 @@ export function saveAllLessonAttachments(items: { id: string; attachments?: Less
   for (const item of items) {
     if (item.attachments && item.attachments.length > 0) {
       store[item.id] = item.attachments
+    } else {
+      // 첨부를 모두 삭제한 항목은 캐시에서도 제거 — 안 그러면 옛 첨부가 폴백으로 되살아남
+      delete store[item.id]
     }
   }
   saveAttachmentMeta(store)
