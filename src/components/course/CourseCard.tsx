@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Course } from '../../data/types'
 import { formatPrice, discountRate, calcTotalDuration, getLevelColor } from '../../utils/format'
@@ -11,11 +12,26 @@ export default function CourseCard({ course, enrolledCount }: Props) {
   const navigate = useNavigate()
   const dr = discountRate(course.originalPrice, course.price)
   const lc = getLevelColor(course.level)
+  const [thumbError, setThumbError] = useState(false)
+
+  // 썸네일: 직접 지정값 우선 → 없으면 첫 강의 Vimeo 영상의 썸네일(첫 화면) 자동 사용
+  const firstVimeo = course.curriculum?.flatMap(s => s.items).find(i => i.vimeo)?.vimeo
+  const thumbUrl = course.thumbnail || (firstVimeo ? `https://vumbnail.com/${firstVimeo}.jpg` : '')
 
   return (
     <div className="course-card" onClick={() => navigate(`/course/${course.id}`)}>
       <div className="card-thumb">
-        <span style={{ fontSize: '3.5rem' }}>{course.emoji}</span>
+        {thumbUrl && !thumbError ? (
+          <img
+            src={thumbUrl}
+            alt={course.title}
+            className="card-thumb-img"
+            loading="lazy"
+            onError={() => setThumbError(true)}
+          />
+        ) : (
+          <span style={{ fontSize: '3.5rem' }}>{course.emoji}</span>
+        )}
         {course.badge && <span className="card-badge">{course.badge}</span>}
       </div>
       <div className="card-body">

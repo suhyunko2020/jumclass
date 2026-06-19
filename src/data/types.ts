@@ -51,6 +51,7 @@ export interface Review {
 export interface Course {
   id: string;
   emoji: string;
+  thumbnail?: string;  // 카드 썸네일 직접 지정(선택). 없으면 첫 강의 Vimeo 썸네일 자동 사용
   title: string;
   subtitle: string;
   description: string;
