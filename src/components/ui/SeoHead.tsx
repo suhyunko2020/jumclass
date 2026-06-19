@@ -56,7 +56,7 @@ function SeoWriter({ override }: { override: PageSeo | null }) {
   const { pathname } = useLocation()
 
   useEffect(() => {
-    const title = override?.title || s.seoTitle || `${SITE_NAME} | 타로 온라인 강의 · 타로 자격증`
+    const title = override?.title || s.seoTitle || `${SITE_NAME} | 타로 배우기의 시작, 입문부터 자격증까지`
     const description = override?.description || s.seoDescription || ''
     const image = override?.image || s.ogImage || DEFAULT_OG
     const url = SITE_URL + pathname
