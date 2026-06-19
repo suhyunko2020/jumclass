@@ -413,6 +413,23 @@ export async function getPaymentSecret(): Promise<string> {
   } catch { return '' }
 }
 
+// 관리자 알림 수신 번호 — 서버 전용 admin_config 테이블(관리자만 접근). 공개 설정에 노출하지 않음.
+export async function getAdminNotifyPhone(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('admin_config').select('data').eq('id', 'main').maybeSingle()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (((data?.data as any)?.adminNotifyPhone) ?? '') as string
+  } catch { return '' }
+}
+export async function saveAdminNotifyPhone(phone: string): Promise<void> {
+  const { error } = await supabase.from('admin_config').upsert(
+    { id: 'main', data: { adminNotifyPhone: phone.trim() }, updated_at: new Date().toISOString() },
+    { onConflict: 'id' },
+  )
+  if (error) throw error
+}
+
 export function useSiteSettings() {
   const get = useCallback((): SiteSettings => getCached(), [])
 

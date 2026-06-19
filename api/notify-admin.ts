@@ -7,10 +7,30 @@
 //  결제: { kind: 'payment', customerName, courseTitle, amount }
 //  문의: { kind: 'inquiry', customerName, subject, content }   // content는 최대 2줄 노출
 //
-// 필수 환경 변수: ADMIN_NOTIFY_PHONE(수신 관리자 번호, 콤마로 여러 명 가능),
-//                 SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_SENDER
+// 수신 번호: 관리자 설정(admin_config.adminNotifyPhone) 우선, 없으면 환경변수 ADMIN_NOTIFY_PHONE.
+// 필수 환경 변수: SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_SENDER
+//             (+ admin_config 조회용 SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 export const config = { runtime: 'edge' }
+
+// 관리자 알림 수신 번호 — admin_config 테이블(서버 전용) 우선, 환경변수 폴백
+async function resolveAdminPhone(): Promise<string> {
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (SUPABASE_URL && SERVICE_KEY) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/admin_config?id=eq.main&select=data`, {
+        headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` },
+      })
+      if (res.ok) {
+        const rows = await res.json().catch(() => [])
+        const phone = Array.isArray(rows) && rows[0]?.data?.adminNotifyPhone
+        if (phone && String(phone).trim()) return String(phone)
+      }
+    } catch { /* 조회 실패 시 환경변수로 폴백 */ }
+  }
+  return process.env.ADMIN_NOTIFY_PHONE || ''
+}
 
 const SOLAPI_SEND_URL = 'https://api.solapi.com/messages/v4/send'
 
@@ -38,7 +58,7 @@ export default async function handler(req: Request): Promise<Response> {
   let b: Record<string, string>
   try { b = await req.json() } catch { return json(400, { ok: false }) }
 
-  const ADMIN = process.env.ADMIN_NOTIFY_PHONE
+  const ADMIN = await resolveAdminPhone()
   const KEY = process.env.SOLAPI_API_KEY
   const SECRET = process.env.SOLAPI_API_SECRET
   const SENDER = process.env.SOLAPI_SENDER

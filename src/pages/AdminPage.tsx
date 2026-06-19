@@ -19,7 +19,7 @@ import { formatPrice, getLevelColor } from '../utils/format'
 import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
-import { useSiteSettings, getPaymentSecret, DEFAULT_POLICIES, type SiteSettings, type Announcement } from '../hooks/useSiteSettings'
+import { useSiteSettings, getPaymentSecret, getAdminNotifyPhone, saveAdminNotifyPhone, DEFAULT_POLICIES, type SiteSettings, type Announcement } from '../hooks/useSiteSettings'
 import { invalidateStatsCache } from '../lib/homeStats'
 import {
   makeSampleName, makeSampleRating, makeRandomDate,
@@ -98,6 +98,9 @@ export default function AdminPage() {
   // 토스 Secret Key 편집 모드 토글 (기본: 마스킹 표시, 클릭 시 입력창 노출)
   const [editingSecretKey, setEditingSecretKey] = useState(false)
   const [settingsTab, setSettingsTab] = useState<'basic' | 'seo' | 'payment' | 'policy' | 'notice'>('basic')
+  // 관리자 알림 수신 번호 (서버 전용 admin_config)
+  const [adminNotifyPhone, setAdminNotifyPhone] = useState('')
+  const [adminPhoneLoaded, setAdminPhoneLoaded] = useState(false)
   const toast = useToast()
   const navigate = useNavigate()
 
@@ -158,6 +161,14 @@ export default function AdminPage() {
   }, [])
   useEffect(() => {
     if (sec === 'logs' && isAdminLoggedIn) loadAccessLogs()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sec, isAdminLoggedIn])
+
+  // 설정 진입 시 관리자 알림 번호 1회 로드
+  useEffect(() => {
+    if (sec === 'settings' && isAdminLoggedIn && !adminPhoneLoaded) {
+      getAdminNotifyPhone().then(p => { setAdminNotifyPhone(p); setAdminPhoneLoaded(true) })
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sec, isAdminLoggedIn])
 
@@ -2035,6 +2046,16 @@ export default function AdminPage() {
                       onChange={e => setSiteSettingsForm(p => p ? { ...p, brandDescription: e.target.value } : null)} />
                   </div>
                   <div className="form-group">
+                    <label className="form-label">관리자 알림 수신 번호 (결제·문의 알림 받을 휴대폰)</label>
+                    <input className="form-input" type="tel" placeholder="01012345678 (여러 명은 콤마로 구분)"
+                      value={adminNotifyPhone}
+                      onChange={e => setAdminNotifyPhone(e.target.value)} />
+                    <div style={{ fontSize: '.74rem', color: 'var(--t3)', marginTop: '6px', lineHeight: 1.6 }}>
+                      결제·문의가 발생하면 이 번호로 문자(LMS) 알림이 발송됩니다. 비워두면 발송하지 않습니다.<br />
+                      여러 명에게 보내려면 콤마(,)로 구분하세요. (예: 01011112222, 01033334444)
+                    </div>
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">수료증 템플릿 (인터넷강의 수료증용 · A4 세로 이미지)</label>
                     <div style={{ fontSize: '.74rem', color: 'var(--t3)', marginBottom: '10px', lineHeight: 1.6 }}>
                       이름·강의명·수료일이 자동으로 합성됩니다. 해당 위치(이름/강의명/날짜)는 비워둔 템플릿을 올려주세요.
@@ -2412,6 +2433,8 @@ export default function AdminPage() {
                   if (!siteSettingsForm) return
                   try {
                     await saveSettings(siteSettingsForm)
+                    // 관리자 알림 번호는 서버 전용 admin_config에 별도 저장 (로드된 경우에만)
+                    if (adminPhoneLoaded) await saveAdminNotifyPhone(adminNotifyPhone)
                     setEditingSecretKey(false)
                     toast('설정이 저장되었습니다. (전 사용자에게 즉시 적용)', 'ok')
                   } catch {
