@@ -75,6 +75,7 @@ export interface Course {
   pauseConfig?: PauseConfig;
   status?: 'public' | 'private';
   includedCourseIds?: string[];
+  includedPickCount?: number;  // 자격증: 수강생이 점클래스 인터넷 강의 중 택N (0/미설정이면 고정 목록 표시)
 }
 
 export interface AttachmentDownloadLog {

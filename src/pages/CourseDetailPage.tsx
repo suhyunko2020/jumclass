@@ -121,9 +121,13 @@ export default function CourseDetailPage() {
                 <div className="detail-stat-item">⏱ {totalDuration}</div>
               </div>
               <div className="detail-instructor-row" style={{ marginBottom: 0 }}>
-                <div className="instructor-avatar">{course.instructorAvatar}</div>
+                <div className="instructor-avatar" style={courseInstructors[0]?.photo ? { overflow: 'hidden', padding: 0 } : undefined}>
+                  {courseInstructors[0]?.photo
+                    ? <img src={courseInstructors[0].photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : course.instructorAvatar}
+                </div>
                 <span style={{ color: 'var(--t2)', fontSize: '.875rem' }}>강사 &nbsp;</span>
-                <strong style={{ fontSize: '.9rem' }}>{course.instructor}</strong>
+                <strong style={{ fontSize: '.9rem' }}>{courseInstructors[0]?.name || course.instructor}</strong>
               </div>
 
               <div className="detail-divider" />
@@ -141,17 +145,30 @@ export default function CourseDetailPage() {
                 </div>
               </div>
 
-              {/* 기본 제공 강의 (자격증 과정일 때만) */}
-              {isCert && course.includedCourseIds && course.includedCourseIds.length > 0 && (
+              {/* 기본 제공 강의 (자격증 과정일 때만) — 택N이면 수강생 선택 안내 */}
+              {isCert && ((course.includedPickCount ?? 0) > 0 || (course.includedCourseIds && course.includedCourseIds.length > 0)) && (
                 <div className="detail-section">
                   <div className="detail-section-title">
-                    이 자격증 과정에 포함된 강의
+                    포함된 점클래스 인터넷 강의
                     <span style={{ fontSize: '.8rem', fontWeight: 400, color: 'var(--t3)', marginLeft: '10px' }}>
-                      결제 시 함께 수강 가능
+                      {(course.includedPickCount ?? 0) > 0
+                        ? `점클래스 인터넷 강의 중 택${course.includedPickCount}`
+                        : '결제 시 함께 수강 가능'}
                     </span>
                   </div>
+                  {(course.includedPickCount ?? 0) > 0 && (
+                    <p style={{ fontSize: '.85rem', color: 'var(--t2)', lineHeight: 1.7, margin: '0 0 14px' }}>
+                      담당 강사와 상담 후, 원하시는 점클래스 인터넷 강의 <strong style={{ color: 'var(--purple-2)' }}>{course.includedPickCount}개</strong>를 선택해 함께 수강하실 수 있습니다.
+                      {(!course.includedCourseIds || course.includedCourseIds.length === 0) && (
+                        <>{' '}<Link to="/courses" style={{ color: 'var(--purple-2)', fontWeight: 600, textDecoration: 'none' }}>강의 둘러보기 →</Link></>
+                      )}
+                    </p>
+                  )}
+                  {course.includedCourseIds && course.includedCourseIds.length > 0 && (course.includedPickCount ?? 0) > 0 && (
+                    <div style={{ fontSize: '.74rem', fontWeight: 700, color: 'var(--t3)', marginBottom: '8px' }}>선택 가능한 강의</div>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {course.includedCourseIds.map(id => {
+                    {(course.includedCourseIds ?? []).map(id => {
                       const inc = getCourse(id)
                       if (!inc) return null
                       const incTotal = inc.curriculum.reduce((s, sec) => s + sec.items.length, 0)
@@ -300,42 +317,37 @@ export default function CourseDetailPage() {
                       </div>
                     )}
                   </>
-                ) : (
+                ) : courseInstructors[0] ? (
                   <>
                     <div className="detail-section-title">강사 소개</div>
                     {(() => {
-                      // 등록된 강사 엔티티가 있으면 그 데이터를 우선 사용 (강사 관리에서 편집한 내용이 반영됨)
+                      // 강사 소개는 '강사 관리'에 등록된 강사 데이터로 통일 (강의 등록의 강사소개는 미사용)
                       const primary = courseInstructors[0]
-                      const name = primary?.name || course.instructor
-                      const subtitle = primary?.title || '전문 타로 강사'
-                      const bio = primary?.bio || course.instructorBio
                       return (
                         <div className="instructor-card">
-                          <div className="instructor-big-avatar" style={primary?.photo ? { overflow: 'hidden' } : undefined}>
-                            {primary?.photo
-                              ? <img src={primary.photo} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <div className="instructor-big-avatar" style={primary.photo ? { overflow: 'hidden' } : undefined}>
+                            {primary.photo
+                              ? <img src={primary.photo} alt={primary.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                               : course.instructorAvatar}
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div className="instructor-name">{name}</div>
-                            <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{subtitle}</div>
-                            <p className="instructor-bio">{bio}</p>
-                            {primary && (
-                              <Link to={`/instructor/${primary.id}`}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                  marginTop: '10px', fontSize: '.82rem', fontWeight: 600,
-                                  color: 'var(--purple-2)', textDecoration: 'none',
-                                }}>
-                                프로필 보러가기 →
-                              </Link>
-                            )}
+                            <div className="instructor-name">{primary.name}</div>
+                            <div style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{primary.title || '전문 타로 상담사'}</div>
+                            <p className="instructor-bio">{primary.bio}</p>
+                            <Link to={`/instructor/${primary.id}`}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                marginTop: '10px', fontSize: '.82rem', fontWeight: 600,
+                                color: 'var(--purple-2)', textDecoration: 'none',
+                              }}>
+                              프로필 보러가기 →
+                            </Link>
                           </div>
                         </div>
                       )
                     })()}
                   </>
-                )}
+                ) : null}
               </div>
 
               {/* 수강생 후기 */}

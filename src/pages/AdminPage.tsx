@@ -68,6 +68,7 @@ interface CourseEditForm {
   tiers: { days: number; price: number; originalPrice: number }[]
   whatYouLearnText: string
   includedCourseIds: string[]
+  includedPickCount: number
   instructorIds: string[]
 }
 
@@ -401,12 +402,13 @@ export default function AdminPage() {
   function handleCourseEdit(e: React.FormEvent) {
     e.preventDefault()
     if (!courseEditModal) return
-    const { _isNew, _isCustom, whatYouLearnText, tiers, id, includedCourseIds, instructorIds, ...rest } = courseEditModal
+    const { _isNew, _isCustom, whatYouLearnText, tiers, id, includedCourseIds, includedPickCount, instructorIds, ...rest } = courseEditModal
     const whatYouLearn = whatYouLearnText.split('\n').map(s => s.trim()).filter(Boolean)
     const pricingTiers = tiers.filter(t => t.price > 0)
     const price = pricingTiers[0]?.price || 0
     const originalPrice = pricingTiers[0]?.originalPrice || 0
     const finalIncluded = rest.level === '자격증' ? includedCourseIds : undefined
+    const finalPickCount = rest.level === '자격증' && includedPickCount > 0 ? includedPickCount : undefined
 
     // 강사 담당 강의 양방향 동기화
     const selectedInstSet = new Set(instructorIds)
@@ -435,11 +437,12 @@ export default function AdminPage() {
         students: existing?.students ?? 0,
         pauseConfig: existing?.pauseConfig || { maxPauses: 2, maxDays: 30 },
         includedCourseIds: finalIncluded,
+        includedPickCount: finalPickCount,
       }
       saveCustomCourse(course)
       toast(_isNew ? '강의가 등록되었습니다.' : '강의가 수정되었습니다.', 'ok')
     } else {
-      saveCourseOverride(id, { ...rest, price, originalPrice, pricingTiers, whatYouLearn, includedCourseIds: finalIncluded })
+      saveCourseOverride(id, { ...rest, price, originalPrice, pricingTiers, whatYouLearn, includedCourseIds: finalIncluded, includedPickCount: finalPickCount })
       toast('강의 정보가 업데이트되었습니다.', 'ok')
     }
     setCourseEditModal(null)
@@ -467,6 +470,7 @@ export default function AdminPage() {
       tiers: c.pricingTiers?.length ? c.pricingTiers.map(t => ({ ...t })) : DEFAULT_TIERS.map(t => ({ ...t, price: c.price, originalPrice: c.originalPrice })),
       whatYouLearnText: (c.whatYouLearn || []).join('\n'),
       includedCourseIds: c.includedCourseIds ?? [],
+      includedPickCount: c.includedPickCount ?? 0,
       instructorIds: getAllInstructors().filter(i => i.courseIds.includes(c.id)).map(i => i.id),
     })
   }
@@ -491,6 +495,7 @@ export default function AdminPage() {
       tiers: DEFAULT_TIERS.map(t => ({ ...t })),
       whatYouLearnText: '',
       includedCourseIds: [],
+      includedPickCount: 0,
       instructorIds: [],
     })
   }
@@ -2176,11 +2181,8 @@ export default function AdminPage() {
                       onChange={e => setCourseEditModal(p => p ? { ...p, instructor: e.target.value } : null)} />
                   </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">강사 소개</label>
-                  <textarea className="form-input" rows={2} placeholder="강사 경력 및 소개"
-                    value={courseEditModal.instructorBio}
-                    onChange={e => setCourseEditModal(p => p ? { ...p, instructorBio: e.target.value } : null)} />
+                <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '4px' }}>
+                  강사 소개글은 아래 <strong>담당 강사 연결</strong>의 강사 관리 데이터로 표시됩니다. (강사명·아바타는 강사 미연결 시 폴백용)
                 </div>
 
                 {/* ③ 가격 & 수강 기간 */}
@@ -2307,6 +2309,15 @@ export default function AdminPage() {
                     <>
                       <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--t3)', letterSpacing: '.08em', textTransform: 'uppercase', margin: '20px 0 12px', paddingBottom: '6px', borderBottom: '1px solid var(--line)' }}>
                         기본 제공 강의 (자격증 과정 결제 시 함께 수강 가능한 강의)
+                      </div>
+                      <div className="form-group" style={{ marginBottom: '12px' }}>
+                        <label className="form-label">수강생 선택 개수 (택N)</label>
+                        <input className="form-input" type="number" min={0} max={20} placeholder="0 = 고정 목록 그대로 표시"
+                          value={courseEditModal.includedPickCount || ''}
+                          onChange={e => setCourseEditModal(p => p ? { ...p, includedPickCount: Number(e.target.value) || 0 } : null)} />
+                        <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '4px' }}>
+                          1 이상이면 상세페이지에 "점클래스 인터넷 강의 중 택N"으로 표시됩니다(수강생이 강사와 선택). 아래 강의를 선택하면 그 강의들이 "선택 가능 목록"으로 노출되고, 비우면 전체 인터넷 강의에서 선택하도록 안내됩니다.
+                        </div>
                       </div>
                       {candidates.length === 0 ? (
                         <div style={{ fontSize: '.82rem', color: 'var(--t3)', padding: '12px 0' }}>
