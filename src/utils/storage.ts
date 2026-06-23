@@ -112,6 +112,13 @@ export async function markInquiryRefunded(id: string, answer: string): Promise<b
   return !error
 }
 
+// 문의 삭제 (관리자) — 중복 접수/오접수 정리용
+export async function deleteInquiry(id: string): Promise<boolean> {
+  const { error } = await supabase.from('inquiries').delete().eq('id', id)
+  if (error) console.warn('[deleteInquiry] 삭제 실패:', error.message)
+  return !error
+}
+
 // ════════════════════════════════════════════════════════════
 // 접속 로그 (어드민 분석) — access_logs 테이블, 관리자만 SELECT (RLS)
 // ════════════════════════════════════════════════════════════

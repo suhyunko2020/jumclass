@@ -6,7 +6,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
-  getInquiries, answerInquiry, markInquiryRefunded, uploadCertificateTemplate, uploadPublicImage,
+  getInquiries, answerInquiry, markInquiryRefunded, deleteInquiry, uploadCertificateTemplate, uploadPublicImage,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
@@ -1594,6 +1594,19 @@ export default function AdminPage() {
                                 ✓ 환불 처리됨 · {new Date(inq.refundedAt).toLocaleDateString('ko-KR')}
                               </span>
                             )}
+                            {/* 삭제 — 중복/오접수 문의 정리용 */}
+                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--t3)', marginLeft: 'auto' }}
+                              onClick={async () => {
+                                const msg = inq.type === 'refund'
+                                  ? '이 환불 문의를 삭제하시겠습니까?\n\n중복 접수 정리용입니다. 같은 강의의 환불 기록이 이것 하나뿐이라면, 삭제 시 해당 수강생의 「환불됨」 표기와 접근 차단이 풀릴 수 있습니다.'
+                                  : '이 문의를 삭제하시겠습니까?\n\n삭제하면 복구할 수 없습니다.'
+                                if (!confirm(msg)) return
+                                const ok = await deleteInquiry(inq.id)
+                                toast(ok ? '문의가 삭제되었습니다.' : '삭제 실패 — 콘솔을 확인해주세요.', ok ? 'ok' : 'err')
+                                if (ok) refresh()
+                              }}>
+                              🗑 삭제
+                            </button>
                           </div>
                         </div>
                       )}
