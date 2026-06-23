@@ -22,6 +22,7 @@ import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
 import { useSiteSettings, getPaymentSecret, getAdminNotifyPhone, saveAdminNotifyPhone, DEFAULT_POLICIES, type SiteSettings, type Announcement } from '../hooks/useSiteSettings'
 import { invalidateStatsCache } from '../lib/homeStats'
+import { isEnrollmentRefunded, type RefundRecord } from '../lib/refundStatus'
 import {
   makeSampleName, makeSampleRating, makeRandomDate,
   pickUniqueText, pickUniqueAnyText, getPoolSize,
@@ -333,6 +334,16 @@ export default function AdminPage() {
   }
 
   const pendingCount = inquiries.filter(i => i.status === 'pending').length
+  // 환불 완료된 수강건 판정용 — 사용자별로 그룹(다른 회원의 환불에 오판정되지 않도록).
+  // 결제내역/수강생에서 '환불됨' 표기에 사용.
+  const refundsByUser = new Map<string, RefundRecord[]>()
+  for (const q of inquiries) {
+    if (q.type === 'refund' && q.refundedAt && q.metadata?.courseId && q.userId) {
+      const list = refundsByUser.get(q.userId) ?? []
+      list.push({ courseId: q.metadata.courseId, orderDate: q.metadata.orderDate ?? '', refundedAt: q.refundedAt })
+      refundsByUser.set(q.userId, list)
+    }
+  }
 
   const allInstructors = getAllInstructors()
 
@@ -1254,14 +1265,16 @@ export default function AdminPage() {
                                     ? `${c.emoji} ${c.title.slice(0, 8)}${inst ? ` (${inst.name})` : ''}`
                                     : e.courseId
                                   const key = `${e.courseId}:${e.assignedInstructorId || 'none'}`
+                                  const refunded = isEnrollmentRefunded(e.courseId, e.enrolledAt, refundsByUser.get(u.uid) ?? [])
                                   return (
                                     <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                       <button
-                                        style={{ fontSize: '.72rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: 'rgba(124,111,205,.1)', color: 'var(--purple-2)', cursor: 'pointer' }}
+                                        style={{ fontSize: '.72rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: refunded ? 'rgba(224,82,82,.12)' : 'rgba(124,111,205,.1)', color: refunded ? 'var(--fail)' : 'var(--purple-2)', textDecoration: refunded ? 'line-through' : 'none', cursor: 'pointer' }}
                                         onClick={() => setEnrollEditModal({ user: u, enrollment: { ...e }, course: c })}
                                       >
                                         {label}
                                       </button>
+                                      {refunded && <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--fail)', whiteSpace: 'nowrap' }}>환불됨</span>}
                                       <button
                                         title="수강 취소"
                                         style={{ fontSize: '.65rem', color: 'var(--fail)', cursor: 'pointer', padding: '1px 4px', borderRadius: '3px', background: 'rgba(224,82,82,.1)' }}
@@ -1314,6 +1327,7 @@ export default function AdminPage() {
                     <tbody>
                       {allEnrollments.map((e, i) => {
                         const c = courses.find(x => x.id === e.courseId)
+                        const refunded = isEnrollmentRefunded(e.courseId, e.enrolledAt, refundsByUser.get(e.userId) ?? [])
                         const expired = !e.paused && new Date(e.expiryDate) <= new Date()
                         const daysLeft = e.paused
                           ? `${e.remainingDays || 0}일 (휴강)`
@@ -1359,8 +1373,8 @@ export default function AdminPage() {
                               )}
                             </td>
                             <td>
-                              <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', background: expired ? 'rgba(224,82,82,.1)' : e.paused ? 'rgba(232,156,56,.1)' : 'rgba(52,196,124,.1)', color: expired ? 'var(--fail)' : e.paused ? 'var(--warn)' : 'var(--ok)' }}>
-                                {expired ? '만료' : e.paused ? '휴강' : '수강중'}
+                              <span style={{ fontSize: '.68rem', padding: '2px 7px', borderRadius: 'var(--pill)', fontWeight: refunded ? 700 : 400, background: refunded ? 'rgba(224,82,82,.18)' : expired ? 'rgba(224,82,82,.1)' : e.paused ? 'rgba(232,156,56,.1)' : 'rgba(52,196,124,.1)', color: refunded || expired ? 'var(--fail)' : e.paused ? 'var(--warn)' : 'var(--ok)' }}>
+                                {refunded ? '환불됨' : expired ? '만료' : e.paused ? '휴강' : '수강중'}
                               </span>
                             </td>
                           </tr>
@@ -1559,11 +1573,8 @@ export default function AdminPage() {
                                   if (!confirm('환불 처리하시겠습니까?\n\n수강생의 해당 강의 수강이 즉시 종료되고, 결제 내역이 환불 내역으로 이동합니다.')) return
                                   const ok = await markInquiryRefunded(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
                                   if (ok) {
-                                    // 환불 완료 → 해당 수강 등록을 즉시 삭제하여 강의 접근 차단 (직접 URL 접근 포함).
-                                    // 재결제 시에는 새 enrollment가 생성되므로 영향 없음.
-                                    if (inq.userId && inq.metadata?.courseId) {
-                                      await cancelEnrollment(inq.userId, inq.metadata.courseId, refundEnrollment?.assignedInstructorId ?? undefined)
-                                    }
+                                    // 환불 완료 시 enrollment는 남겨두고(어드민에 '환불됨' 표기 위해),
+                                    // 접근 차단은 환불 인지 게이트(LessonPage·Classroom)가 담당한다.
                                     // 환불완료 알림톡 (고객) — 금액은 환불 요청 메시지에서 추출.
                                     // 번호는 서버가 userId로 조회(관리자→타인 발송).
                                     const amount = inq.message.match(/환불 예상 금액:\s*([^\n]+)/)?.[1]?.trim() || '-'
