@@ -7,6 +7,8 @@ import { useToast } from '../components/ui/Toast'
 import { calcTotalDuration } from '../utils/format'
 import { getLessonAttachments, getAttachmentDownloadUrl } from '../hooks/useCourses'
 import { logAccess } from '../utils/accessLog'
+import { getMyInquiries } from '../utils/storage'
+import { refundRecords, isEnrollmentRefunded, type RefundRecord } from '../lib/refundStatus'
 import type { LessonAtt } from '../hooks/useCourses'
 
 export default function LessonPage() {
@@ -27,6 +29,13 @@ export default function LessonPage() {
     if (user) refreshUser()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 환불 처리 내역 로드 — 환불된 수강건은 직접 URL 접근도 차단하기 위함
+  const [refundRecs, setRefundRecs] = useState<RefundRecord[]>([])
+  useEffect(() => {
+    if (!user) { setRefundRecs([]); return }
+    getMyInquiries(user.uid).then(qs => setRefundRecs(refundRecords(qs))).catch(() => {})
+  }, [user?.uid])
 
   const [reviewModal, setReviewModal] = useState(false)
   const [reviewRating, setReviewRating] = useState(5)
@@ -90,8 +99,10 @@ export default function LessonPage() {
     )
   }
 
-  const enrolled = isEnrolled(courseId)
   const enrollment = getEnrollment(courseId)
+  // 환불 처리된 수강건은 접근 차단 (직접 URL 포함) — isEnrolled는 환불을 모르므로 별도 판정
+  const refunded = !!enrollment && isEnrollmentRefunded(courseId, enrollment.enrolledAt, refundRecs)
+  const enrolled = isEnrolled(courseId) && !refunded
   const done = enrollment?.completedLessons || []
   const allLessons = course.curriculum.flatMap(s => s.items)
   const firstFree = allLessons.find(l => l.status === 'free')

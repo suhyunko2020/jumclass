@@ -134,6 +134,9 @@ export default function MyPage() {
   // 결제내역(수강중) — 환불 처리된 결제건은 제외 (환불 후 재결제분은 enrolled_at이 갱신돼 다시 노출됨)
   const refunds = refundRecords(inquiries)
   const activeEnrollments = enrollments.filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
+  // 환불 중복 접수 방지 — 처리되지 않은(접수중) 환불 문의가 이미 있으면 재접수 불가
+  const hasPendingRefund = (courseId: string, orderDate: string) =>
+    inquiries.some(q => q.type === 'refund' && !q.refundedAt && q.metadata?.courseId === courseId && q.metadata?.orderDate === orderDate)
   // 환불내역 — 환불 문의(영구 보존) 기반. 재결제로 enrollment가 갱신/재사용돼도 환불 기록은 그대로 유지된다.
   const refundHistory = inquiries
     .filter(q => q.type === 'refund' && q.refundedAt && q.metadata?.courseId)
@@ -151,6 +154,11 @@ export default function MyPage() {
   }
 
   async function openRefundRequest(courseId: string, orderDate: string, assignedInstructorId?: string) {
+    // 중복 접수 차단 — 이미 접수중인 환불이 있으면 안내만 하고 종료
+    if (hasPendingRefund(courseId, orderDate)) {
+      toast('이미 환불 접수 중입니다. 처리 결과를 기다려 주세요.', 'info')
+      return
+    }
     const course = getCourse(courseId)
     if (!course) return
     const enrollment = assignedInstructorId
@@ -199,6 +207,12 @@ export default function MyPage() {
 
   async function submitRefund() {
     if (!refundModal || !refundReason.trim() || !refundConfirmed) return
+    // 안전장치 — 모달을 띄운 사이 다른 경로로 접수됐을 수 있으니 한 번 더 확인
+    if (hasPendingRefund(refundModal.courseId, refundModal.orderDate)) {
+      toast('이미 환불 접수 중입니다. 처리 결과를 기다려 주세요.', 'info')
+      setRefundModal(null)
+      return
+    }
     const unit = refundModal.isCert ? '회' : '강'
     const msg = `결제일: ${refundModal.orderDate}\n강의: ${refundModal.courseTitle}\n수강 진도: ${refundModal.completedCount}/${refundModal.totalLessons}${unit} (${refundModal.progress}%)\n환불 예상 금액: ${formatPrice(refundModal.refundAmount)}\n\n환불 사유: ${refundReason}`
     await addInquiry(user!.uid, user!.name, user!.email, '결제 환불 요청합니다.', msg, 'refund', { courseId: refundModal.courseId, orderDate: refundModal.orderDate })
@@ -391,10 +405,17 @@ export default function MyPage() {
                             <div className="payment-item-bottom">
                               <span className="payment-item-price">{formatPrice(c.price)}</span>
                               {e.type !== 'manual' && !isExpired && (
-                                <button className="btn btn-ghost btn-sm"
-                                  onClick={() => openRefundRequest(c.id, date, e.assignedInstructorId)}>
-                                  환불 요청
-                                </button>
+                                hasPendingRefund(c.id, date) ? (
+                                  <button className="btn btn-ghost btn-sm" disabled
+                                    style={{ opacity: .55, cursor: 'default' }}>
+                                    환불 접수 중
+                                  </button>
+                                ) : (
+                                  <button className="btn btn-ghost btn-sm"
+                                    onClick={() => openRefundRequest(c.id, date, e.assignedInstructorId)}>
+                                    환불 요청
+                                  </button>
+                                )
                               )}
                               {isExpired && (
                                 <button className="btn btn-ghost btn-sm"

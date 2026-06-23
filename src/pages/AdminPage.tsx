@@ -1559,6 +1559,11 @@ export default function AdminPage() {
                                   if (!confirm('환불 처리하시겠습니까?\n\n수강생의 해당 강의 수강이 즉시 종료되고, 결제 내역이 환불 내역으로 이동합니다.')) return
                                   const ok = await markInquiryRefunded(inq.id, '환불 처리가 완료되었습니다. 감사합니다.')
                                   if (ok) {
+                                    // 환불 완료 → 해당 수강 등록을 즉시 삭제하여 강의 접근 차단 (직접 URL 접근 포함).
+                                    // 재결제 시에는 새 enrollment가 생성되므로 영향 없음.
+                                    if (inq.userId && inq.metadata?.courseId) {
+                                      await cancelEnrollment(inq.userId, inq.metadata.courseId, refundEnrollment?.assignedInstructorId ?? undefined)
+                                    }
                                     // 환불완료 알림톡 (고객) — 금액은 환불 요청 메시지에서 추출.
                                     // 번호는 서버가 userId로 조회(관리자→타인 발송).
                                     const amount = inq.message.match(/환불 예상 금액:\s*([^\n]+)/)?.[1]?.trim() || '-'
