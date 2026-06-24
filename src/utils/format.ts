@@ -54,7 +54,7 @@ export function maskName(name: string): string {
 
 export function calcRefund(
   course: { badge: string; price: number },
-  enrollment: { enrolledAt: string; expiryDate: string; completedLessons?: string[] },
+  enrollment: { enrolledAt: string; expiryDate: string; completedLessons?: string[]; lessonWatch?: Record<string, number> },
   totalLessons: number,
   // 자격증 과정은 강사 진도 페이지 체크 수로 override
   certCompletedCount?: number
@@ -88,19 +88,31 @@ export function calcRefund(
     return { refundable: false, refundAmount: 0, penalty: 0, reason: '총 강습 기간의 1/2 경과 후 — 환불 불가' }
   }
 
-  // 인터넷 강의
+  // 인터넷 강의 — 공제는 '90% 완료 강의 수'가 아니라 '실제 시청 분량(lesson_watch)' 기준.
+  // (각 강의를 89%까지만 보고 전액 환불받는 악용 차단. 완료 강의는 100%로 계산)
+  const watchMap = enrollment.lessonWatch ?? {}
+  const seen = new Set<string>()
+  let watchedSum = 0
+  for (const lid of Object.keys(watchMap)) { watchedSum += Math.min(100, Math.max(0, watchMap[lid] ?? 0)); seen.add(lid) }
+  for (const lid of (enrollment.completedLessons ?? [])) { if (!seen.has(lid)) watchedSum += 100 }
+  const consumedLessons = watchedSum / 100                                  // 시청 분량을 '강의 수'로 환산 (예: 89%×8강 ≈ 7.12강)
+  const consumedFraction = totalLessons > 0 ? Math.min(1, consumedLessons / totalLessons) : 0
+
   const halfPeriod = totalDays / 2
-  if (completedCount === 0) {
+  // 사실상 미수강(총 분량의 5% 미만 시청) → 전액
+  if (consumedFraction < 0.05) {
     return { refundable: true, refundAmount: price - penalty10, penalty: penalty10, reason: '수강 시작 전 — 전액 환불 (위약금 10% 별도)' }
   }
-  if (daysSinceEnroll <= 7 && completedCount <= 2) {
+  // 7일 이내 & 2강 분량 이하 시청 → 90%
+  if (daysSinceEnroll <= 7 && consumedLessons <= 2) {
     const amount = Math.round(price * 0.9)
-    return { refundable: true, refundAmount: amount - penalty10, penalty: penalty10, reason: '수강 시작 후 7일 이내 (2강 이하) — 90% 환불 (위약금 10% 별도)' }
+    return { refundable: true, refundAmount: amount - penalty10, penalty: penalty10, reason: '수강 시작 후 7일 이내 (2강 이하 시청) — 90% 환불 (위약금 10% 별도)' }
   }
+  // 기간 1/2 이내 → 실제 시청 분량만큼 공제 후 환불
   if (daysSinceEnroll <= halfPeriod) {
-    const watched = Math.round((completedCount / totalLessons) * price)
+    const watched = Math.round(consumedFraction * price)
     const amount = price - watched
-    return { refundable: true, refundAmount: Math.max(0, amount - penalty10), penalty: penalty10, reason: `수강 시작 후 7일 이후 (기간 1/2 이하) — 수강한 강의 공제 후 환불 (위약금 10% 별도)` }
+    return { refundable: true, refundAmount: Math.max(0, amount - penalty10), penalty: penalty10, reason: '수강 시작 후 (기간 1/2 이내) — 실제 시청 분량 공제 후 환불 (위약금 10% 별도)' }
   }
   return { refundable: false, refundAmount: 0, penalty: 0, reason: '수강 기간의 1/2 초과 — 환불 불가' }
 }
