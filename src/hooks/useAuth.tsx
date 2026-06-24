@@ -260,6 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       expiry_date: expiry.toISOString(),
       progress: 0,
       completed_lessons: [],
+      lesson_watch: {},   // 재결제 시 시청률도 함께 리셋 — 각 결제 사이클을 독립 메터링(환불 이중 차감 방지)
       type: 'payment',
       paused: false,
       pause_count: 0,
