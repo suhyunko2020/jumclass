@@ -119,6 +119,26 @@ export async function deleteInquiry(id: string): Promise<boolean> {
   return !error
 }
 
+// 회원 이메일(로그인 ID) 변경 (관리자) — 서버 Admin API 경유.
+// 관리자 본인 세션 토큰을 함께 보내 서버에서 권한 검증.
+export async function adminChangeUserEmail(userId: string, email: string): Promise<{ ok: boolean; error?: string }> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) return { ok: false, error: '관리자 로그인이 필요합니다.' }
+  try {
+    const res = await fetch('/api/admin-change-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ userId, email }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !body.ok) return { ok: false, error: body.error || `요청 실패 (${res.status})` }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : '네트워크 오류' }
+  }
+}
+
 // ════════════════════════════════════════════════════════════
 // 접속 로그 (어드민 분석) — access_logs 테이블, 관리자만 SELECT (RLS)
 // ════════════════════════════════════════════════════════════

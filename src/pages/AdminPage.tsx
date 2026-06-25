@@ -7,7 +7,7 @@ import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
   getInquiries, answerInquiry, markInquiryRefunded, deleteInquiry, uploadCertificateTemplate, uploadPublicImage,
-  getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin,
+  getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin, adminChangeUserEmail,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
   getAccessLogs,
@@ -1288,10 +1288,24 @@ export default function AdminPage() {
                           </td>
                           <td style={{ fontSize: '.8rem', color: 'var(--t3)' }}>{new Date(u.createdAt).toLocaleDateString()}</td>
                           <td>
-                            <button className="btn btn-primary btn-sm"
-                              onClick={() => setEnrollModal({ user: u, courseId: courses[0]?.id || '', days: 365, instructorId: '' })}>
-                              + 수강 등록
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <button className="btn btn-primary btn-sm"
+                                onClick={() => setEnrollModal({ user: u, courseId: courses[0]?.id || '', days: 365, instructorId: '' })}>
+                                + 수강 등록
+                              </button>
+                              <button className="btn btn-ghost btn-sm"
+                                onClick={async () => {
+                                  const next = window.prompt(`${u.name}님의 새 이메일을 입력하세요.\n현재: ${u.email}`, u.email)?.trim().toLowerCase()
+                                  if (!next || next === u.email) return
+                                  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(next)) { toast('이메일 형식이 올바르지 않습니다.', 'err'); return }
+                                  if (!confirm(`이메일을 변경하시겠습니까?\n\n${u.email}\n→ ${next}\n\n변경 후 회원은 새 이메일로 로그인합니다.`)) return
+                                  const res = await adminChangeUserEmail(u.uid, next)
+                                  toast(res.ok ? '이메일이 변경되었습니다.' : `변경 실패: ${res.error}`, res.ok ? 'ok' : 'err')
+                                  if (res.ok) refresh()
+                                }}>
+                                ✉ 이메일 변경
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
