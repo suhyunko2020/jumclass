@@ -7,6 +7,7 @@ import { useToast } from '../components/ui/Toast'
 import { formatPrice, calcRefund } from '../utils/format'
 import {
   getMyInquiries, addInquiry, editInquiry as editInquiryStorage, addInquiryReply,
+  editInquiryReply, deleteInquiryReply,
   getProgressPageByEnrollment,
 } from '../utils/storage'
 import type { Inquiry, InquiryMessage, InstructorProgressPage } from '../data/types'
@@ -41,6 +42,8 @@ export default function MyPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [replyDraft, setReplyDraft] = useState<Record<string, string>>({})
   const [replyingId, setReplyingId] = useState<string | null>(null)
+  const [editKey, setEditKey] = useState<string | null>(null)   // `${inquiryId}:${at}` 편집 중인 댓글
+  const [editText, setEditText] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [modalTitle, setModalTitle] = useState('문의 작성')
   const [form, setForm] = useState<InquiryForm>(emptyForm)
@@ -248,7 +251,23 @@ export default function MyPage() {
     setReplyDraft(d => ({ ...d, [q.id]: '' }))
     // 관리자에게 새 답글 알림
     notifyAdmin({ kind: 'inquiry', customerName: user!.name, subject: `[답글] ${q.subject}`, content: body })
-    toast('답글이 등록되었습니다.', 'ok')
+    toast('댓글이 등록되었습니다.', 'ok')
+    await loadInquiries()
+  }
+
+  async function saveEditComment(inquiryId: string, at: string) {
+    const res = await editInquiryReply(inquiryId, at, editText, 'user')
+    if (!res.ok) { toast(res.error || '수정 실패', 'err'); return }
+    setEditKey(null); setEditText('')
+    toast('댓글을 수정했습니다.', 'ok')
+    await loadInquiries()
+  }
+
+  async function removeComment(inquiryId: string, at: string) {
+    if (!confirm('이 댓글을 삭제하시겠습니까?')) return
+    const res = await deleteInquiryReply(inquiryId, at, 'user')
+    if (!res.ok) { toast(res.error || '삭제 실패', 'err'); return }
+    toast('댓글을 삭제했습니다.', 'ok')
     await loadInquiries()
   }
 
@@ -480,6 +499,9 @@ export default function MyPage() {
                       const isOpen = openBodies[q.id]
                       const comments = commentsOf(q)
                       const canEdit = !isAns && (q.thread?.length ?? 0) === 0
+                      // 턴 — 관리자가 마지막으로 답변한 뒤에만 사용자가 댓글 가능
+                      const lastSender = (q.thread && q.thread.length) ? q.thread[q.thread.length - 1].sender : (q.answer ? 'admin' : 'user')
+                      const userTurn = lastSender === 'admin'
                       return (
                         <div key={q.id} className={`inquiry-item ${isOpen ? 'open' : ''}`}>
                           {/* 헤더 */}
@@ -507,37 +529,63 @@ export default function MyPage() {
                               {comments.length > 0 && (
                                 <>
                                   <div className="qa-comments-title">댓글 {comments.length}</div>
-                                  {comments.map((c, i) => (
+                                  {comments.map((c, i) => {
+                                    const k = `${q.id}:${c.at}`
+                                    const editing = editKey === k
+                                    const mine = c.sender === 'user'
+                                    return (
                                     <div key={i} className="qa-comment">
                                       <div className={`qa-comment-ava ${c.sender}`}>{c.sender === 'admin' ? '운영' : '나'}</div>
                                       <div className="qa-comment-main">
                                         <div className="qa-comment-meta">
                                           <span className="qa-comment-author">{c.sender === 'admin' ? '점클래스' : '나'}</span>
                                           {c.sender === 'admin' && <span className="qa-badge-admin">운영자</span>}
-                                          <span className="qa-comment-time">{new Date(c.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                          <span className="qa-comment-time">{new Date(c.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}{c.editedAt ? ' (수정됨)' : ''}</span>
+                                          {mine && !resolved && !editing && (
+                                            <span style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                                              <button className="qa-link" onClick={() => { setEditKey(k); setEditText(c.body) }}>수정</button>
+                                              <button className="qa-link danger" onClick={() => removeComment(q.id, c.at)}>삭제</button>
+                                            </span>
+                                          )}
                                         </div>
-                                        <div className="qa-comment-body">{c.body}</div>
+                                        {editing ? (
+                                          <div className="qa-write">
+                                            <textarea className="form-input" rows={2} value={editText} onChange={e => setEditText(e.target.value)} style={{ resize: 'vertical' }} />
+                                            <div className="qa-write-actions">
+                                              <button className="btn btn-ghost btn-sm" onClick={() => { setEditKey(null); setEditText('') }}>취소</button>
+                                              <button className="btn btn-primary btn-sm" disabled={!editText.trim()} onClick={() => saveEditComment(q.id, c.at)}>저장</button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="qa-comment-body">{c.body}</div>
+                                        )}
                                       </div>
                                     </div>
-                                  ))}
+                                  ) })}
                                 </>
                               )}
 
                               {resolved ? (
                                 <div className="qa-closed">✓ 완료 처리된 문의입니다.</div>
-                              ) : (
+                              ) : userTurn ? (
                                 <div className="qa-write">
                                   <textarea className="form-input" rows={2} placeholder="댓글을 입력하세요" value={replyDraft[q.id] || ''}
                                     onChange={e => setReplyDraft(d => ({ ...d, [q.id]: e.target.value }))} style={{ resize: 'vertical' }} />
                                   <div className="qa-write-actions">
-                                    {canEdit && (
-                                      <button className="btn btn-ghost btn-sm" onClick={() => openEditInquiry(q)}>문의 수정</button>
-                                    )}
                                     <button className="btn btn-primary btn-sm" disabled={replyingId === q.id || !(replyDraft[q.id] || '').trim()}
                                       onClick={() => submitUserReply(q)}>
                                       {replyingId === q.id ? '등록 중…' : '댓글 등록'}
                                     </button>
                                   </div>
+                                </div>
+                              ) : (
+                                <div className="qa-closed" style={{ background: 'transparent', textAlign: 'left' }}>
+                                  {canEdit ? (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                      <span>관리자 답변을 기다리고 있어요.</span>
+                                      <button className="btn btn-ghost btn-sm" onClick={() => openEditInquiry(q)}>문의 수정</button>
+                                    </div>
+                                  ) : '관리자 답변이 등록되면 이어서 댓글을 남길 수 있어요.'}
                                 </div>
                               )}
                             </div>

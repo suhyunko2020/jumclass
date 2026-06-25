@@ -170,7 +170,8 @@ export interface InstructorProgressPage {
 export interface InquiryMessage {
   sender: 'user' | 'admin';
   body: string;
-  at: string;            // ISO
+  at: string;            // ISO — 메시지 식별자로도 사용
+  editedAt?: string;     // 수정 시각
 }
 
 export interface Inquiry {

@@ -111,15 +111,50 @@ export async function addInquiryReply(id: string, sender: 'user' | 'admin', body
   const text = body.trim()
   if (!text) return { ok: false, error: '내용을 입력해주세요.' }
   const { data: cur, error: readErr } = await supabase
-    .from('inquiries').select('thread, resolved_at').eq('id', id).single()
+    .from('inquiries').select('thread, answer, resolved_at').eq('id', id).single()
   if (readErr || !cur) return { ok: false, error: '문의를 찾을 수 없습니다.' }
   if (cur.resolved_at) return { ok: false, error: '이미 완료된 문의입니다.' }
   const thread = Array.isArray(cur.thread) ? cur.thread : []
+  // 턴 규칙 — 사용자는 '관리자가 마지막으로 답변한 뒤'에만 댓글을 달 수 있다(연속 알림톡 방지).
+  if (sender === 'user') {
+    const lastSender = thread.length ? thread[thread.length - 1].sender : (cur.answer ? 'admin' : 'user')
+    if (lastSender !== 'admin') return { ok: false, error: '관리자 답변 후에 댓글을 남길 수 있습니다.' }
+  }
   thread.push({ sender, body: text, at: new Date().toISOString() })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const patch: any = { thread, status: sender === 'user' ? 'pending' : 'answered' }
   if (sender === 'admin') patch.answered_at = new Date().toISOString()
   const { error } = await supabase.from('inquiries').update(patch).eq('id', id)
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
+// 댓글 수정 — at(타임스탬프)로 메시지를 식별. requester가 'user'면 본인('user') 댓글만, 'admin'이면 모든 댓글.
+export async function editInquiryReply(id: string, at: string, body: string, requester: 'user' | 'admin'): Promise<{ ok: boolean; error?: string }> {
+  const text = body.trim()
+  if (!text) return { ok: false, error: '내용을 입력해주세요.' }
+  const { data: cur, error: readErr } = await supabase.from('inquiries').select('thread, resolved_at').eq('id', id).single()
+  if (readErr || !cur) return { ok: false, error: '문의를 찾을 수 없습니다.' }
+  if (cur.resolved_at) return { ok: false, error: '완료된 문의는 수정할 수 없습니다.' }
+  const thread = Array.isArray(cur.thread) ? cur.thread : []
+  const idx = thread.findIndex((m: { at: string }) => m.at === at)
+  if (idx < 0) return { ok: false, error: '댓글을 찾을 수 없습니다.' }
+  if (requester === 'user' && thread[idx].sender !== 'user') return { ok: false, error: '본인 댓글만 수정할 수 있습니다.' }
+  thread[idx] = { ...thread[idx], body: text, editedAt: new Date().toISOString() }
+  const { error } = await supabase.from('inquiries').update({ thread }).eq('id', id)
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
+// 댓글 삭제 — at으로 식별. 권한 규칙은 수정과 동일.
+export async function deleteInquiryReply(id: string, at: string, requester: 'user' | 'admin'): Promise<{ ok: boolean; error?: string }> {
+  const { data: cur, error: readErr } = await supabase.from('inquiries').select('thread, resolved_at').eq('id', id).single()
+  if (readErr || !cur) return { ok: false, error: '문의를 찾을 수 없습니다.' }
+  if (cur.resolved_at) return { ok: false, error: '완료된 문의는 수정할 수 없습니다.' }
+  const thread = Array.isArray(cur.thread) ? cur.thread : []
+  const idx = thread.findIndex((m: { at: string }) => m.at === at)
+  if (idx < 0) return { ok: false, error: '댓글을 찾을 수 없습니다.' }
+  if (requester === 'user' && thread[idx].sender !== 'user') return { ok: false, error: '본인 댓글만 삭제할 수 있습니다.' }
+  thread.splice(idx, 1)
+  const { error } = await supabase.from('inquiries').update({ thread }).eq('id', id)
   return error ? { ok: false, error: error.message } : { ok: true }
 }
 

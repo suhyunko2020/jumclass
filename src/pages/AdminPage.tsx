@@ -6,7 +6,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
-  getInquiries, answerInquiry, addInquiryReply, resolveInquiry, markInquiryRefunded, deleteInquiry, uploadCertificateTemplate, uploadPublicImage,
+  getInquiries, answerInquiry, addInquiryReply, editInquiryReply, deleteInquiryReply, resolveInquiry, markInquiryRefunded, deleteInquiry, uploadCertificateTemplate, uploadPublicImage,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin, adminChangeUserEmail,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
@@ -17,7 +17,7 @@ import {
 } from '../utils/storage'
 import { sendInstructorProgress, sendInquiryAnswered, sendRefundComplete } from '../utils/alimtalk'
 import { formatPrice, getLevelColor } from '../utils/format'
-import type { Inquiry, Course, LessonItem, CurriculumSection, Instructor, InstructorService, ProgressChecklistItem } from '../data/types'
+import type { Inquiry, InquiryMessage, Course, LessonItem, CurriculumSection, Instructor, InstructorService, ProgressChecklistItem } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
 import { useSiteSettings, getPaymentSecret, getAdminNotifyPhone, saveAdminNotifyPhone, DEFAULT_POLICIES, type SiteSettings, type Announcement } from '../hooks/useSiteSettings'
@@ -189,6 +189,8 @@ export default function AdminPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [adminReplyDraft, setAdminReplyDraft] = useState<Record<string, string>>({})
   const [adminReplyingId, setAdminReplyingId] = useState<string | null>(null)
+  const [cmtEditKey, setCmtEditKey] = useState<string | null>(null)
+  const [cmtEditText, setCmtEditText] = useState('')
   const [reviews, setReviews] = useState<{ id: string; courseId: string; userId: string; userName: string; userAvatar: string; rating: number; text: string; date: string; source?: string }[]>([])
   const [adminReviewModal, setAdminReviewModal] = useState(false)
   const [arForm, setArForm] = useState({ courseId: '', userName: '', rating: 5, text: '' })
@@ -413,8 +415,8 @@ export default function AdminPage() {
 
   // ── 1:1 문의 대댓글 (관리자) ──────────────────────────────────
   // 글 본문(message) 이후의 댓글 목록 — 첫 답변(answer) + 스레드
-  function commentsOf(inq: Inquiry): { sender: 'user' | 'admin'; body: string; at: string }[] {
-    const msgs: { sender: 'user' | 'admin'; body: string; at: string }[] = inq.answer ? [{ sender: 'admin', body: inq.answer, at: inq.answeredAt || inq.date }] : []
+  function commentsOf(inq: Inquiry): InquiryMessage[] {
+    const msgs: InquiryMessage[] = inq.answer ? [{ sender: 'admin', body: inq.answer, at: inq.answeredAt || inq.date }] : []
     return msgs.concat(inq.thread ?? [])
   }
 
@@ -439,6 +441,22 @@ export default function AdminPage() {
     const ok = await resolveInquiry(inq.id)
     toast(ok ? '답변 완료로 처리되었습니다.' : '처리 실패 — 콘솔을 확인해주세요.', ok ? 'ok' : 'err')
     if (ok) refresh()
+  }
+
+  async function saveCmtEdit(inquiryId: string, at: string) {
+    const res = await editInquiryReply(inquiryId, at, cmtEditText, 'admin')
+    if (!res.ok) { toast(res.error || '수정 실패', 'err'); return }
+    setCmtEditKey(null); setCmtEditText('')
+    toast('댓글을 수정했습니다.', 'ok')
+    refresh()
+  }
+
+  async function removeCmt(inquiryId: string, at: string) {
+    if (!confirm('이 댓글을 삭제하시겠습니까?')) return
+    const res = await deleteInquiryReply(inquiryId, at, 'admin')
+    if (!res.ok) { toast(res.error || '삭제 실패', 'err'); return }
+    toast('댓글을 삭제했습니다.', 'ok')
+    refresh()
   }
 
   // ── 수동 수강 등록 ──────────────────────────────────────────
@@ -1597,19 +1615,39 @@ export default function AdminPage() {
                           {(() => { const cmts = commentsOf(inq); return cmts.length > 0 && (
                             <>
                               <div className="qa-comments-title">댓글 {cmts.length}</div>
-                              {cmts.map((m, i) => (
+                              {cmts.map((m, i) => {
+                                const k = `${inq.id}:${m.at}`
+                                const editing = cmtEditKey === k
+                                const inThread = (inq.thread ?? []).some(t => t.at === m.at)
+                                return (
                                 <div key={i} className="qa-comment">
                                   <div className={`qa-comment-ava ${m.sender}`}>{m.sender === 'admin' ? '운영' : '회원'}</div>
                                   <div className="qa-comment-main">
                                     <div className="qa-comment-meta">
                                       <span className="qa-comment-author">{m.sender === 'admin' ? '점클래스' : inq.userName}</span>
                                       {m.sender === 'admin' && <span className="qa-badge-admin">운영자</span>}
-                                      <span className="qa-comment-time">{new Date(m.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                      <span className="qa-comment-time">{new Date(m.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}{m.editedAt ? ' (수정됨)' : ''}</span>
+                                      {inThread && !inq.resolvedAt && !editing && (
+                                        <span style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                                          <button className="qa-link" onClick={() => { setCmtEditKey(k); setCmtEditText(m.body) }}>수정</button>
+                                          <button className="qa-link danger" onClick={() => removeCmt(inq.id, m.at)}>삭제</button>
+                                        </span>
+                                      )}
                                     </div>
-                                    <div className="qa-comment-body">{m.body}</div>
+                                    {editing ? (
+                                      <div className="qa-write">
+                                        <textarea className="form-input" rows={2} value={cmtEditText} onChange={e => setCmtEditText(e.target.value)} style={{ resize: 'vertical' }} />
+                                        <div className="qa-write-actions">
+                                          <button className="btn btn-ghost btn-sm" onClick={() => { setCmtEditKey(null); setCmtEditText('') }}>취소</button>
+                                          <button className="btn btn-primary btn-sm" disabled={!cmtEditText.trim()} onClick={() => saveCmtEdit(inq.id, m.at)}>저장</button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="qa-comment-body">{m.body}</div>
+                                    )}
                                   </div>
                                 </div>
-                              ))}
+                              ) })}
                             </>
                           ) })()}
 
