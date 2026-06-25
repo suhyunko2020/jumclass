@@ -232,10 +232,9 @@ export default function MyPage() {
     setModalOpen(true)
   }
 
-  // 첫 메시지 + 첫 답변 + 스레드를 하나의 대화 배열로 합침
-  function convoOf(q: Inquiry): InquiryMessage[] {
-    const msgs: InquiryMessage[] = [{ sender: 'user', body: q.message, at: q.date }]
-    if (q.answer) msgs.push({ sender: 'admin', body: q.answer, at: q.answeredAt || q.date })
+  // 글 본문(message) 이후의 댓글 목록 — 첫 답변(answer) + 스레드
+  function commentsOf(q: Inquiry): InquiryMessage[] {
+    const msgs: InquiryMessage[] = q.answer ? [{ sender: 'admin', body: q.answer, at: q.answeredAt || q.date }] : []
     return msgs.concat(q.thread ?? [])
   }
 
@@ -479,7 +478,7 @@ export default function MyPage() {
                       const statusLabel = resolved ? '완료' : isAns ? '답변 도착' : '답변 대기'
                       const d = new Date(q.date).toLocaleDateString('ko-KR')
                       const isOpen = openBodies[q.id]
-                      const convo = convoOf(q)
+                      const comments = commentsOf(q)
                       const canEdit = !isAns && (q.thread?.length ?? 0) === 0
                       return (
                         <div key={q.id} className={`inquiry-item ${isOpen ? 'open' : ''}`}>
@@ -500,35 +499,43 @@ export default function MyPage() {
                             </div>
                           </div>
 
-                          {/* 본문 — 대화형 */}
+                          {/* 본문 — 게시판 글 + 댓글 */}
                           {isOpen && (
                             <div className="inquiry-body">
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {convo.map((m, i) => (
-                                  <div key={i} style={{ alignSelf: m.sender === 'admin' ? 'flex-start' : 'flex-end', maxWidth: '88%' }}>
-                                    <div style={{ fontSize: '.68rem', color: 'var(--t3)', marginBottom: '3px', textAlign: m.sender === 'admin' ? 'left' : 'right' }}>
-                                      {m.sender === 'admin' ? '관리자 ✦' : '나'} · {new Date(m.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              <div className="qa-post">{q.message}</div>
+
+                              {comments.length > 0 && (
+                                <>
+                                  <div className="qa-comments-title">댓글 {comments.length}</div>
+                                  {comments.map((c, i) => (
+                                    <div key={i} className="qa-comment">
+                                      <div className={`qa-comment-ava ${c.sender}`}>{c.sender === 'admin' ? '운영' : '나'}</div>
+                                      <div className="qa-comment-main">
+                                        <div className="qa-comment-meta">
+                                          <span className="qa-comment-author">{c.sender === 'admin' ? '점클래스' : '나'}</span>
+                                          {c.sender === 'admin' && <span className="qa-badge-admin">운영자</span>}
+                                          <span className="qa-comment-time">{new Date(c.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                        </div>
+                                        <div className="qa-comment-body">{c.body}</div>
+                                      </div>
                                     </div>
-                                    <div style={{ padding: '10px 13px', borderRadius: 'var(--r2)', whiteSpace: 'pre-wrap', fontSize: '.875rem', lineHeight: 1.6, background: m.sender === 'admin' ? 'rgba(124,111,205,.12)' : 'var(--glass-2)', color: 'var(--t1)' }}>
-                                      {m.body}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
+                                  ))}
+                                </>
+                              )}
 
                               {resolved ? (
-                                <div style={{ marginTop: '14px', fontSize: '.8rem', color: 'var(--t3)', textAlign: 'center' }}>✓ 완료 처리된 문의입니다.</div>
+                                <div className="qa-closed">✓ 완료 처리된 문의입니다.</div>
                               ) : (
-                                <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                  <textarea className="form-input" rows={2} placeholder="답글을 입력하세요" value={replyDraft[q.id] || ''}
+                                <div className="qa-write">
+                                  <textarea className="form-input" rows={2} placeholder="댓글을 입력하세요" value={replyDraft[q.id] || ''}
                                     onChange={e => setReplyDraft(d => ({ ...d, [q.id]: e.target.value }))} style={{ resize: 'vertical' }} />
-                                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                  <div className="qa-write-actions">
                                     {canEdit && (
                                       <button className="btn btn-ghost btn-sm" onClick={() => openEditInquiry(q)}>문의 수정</button>
                                     )}
                                     <button className="btn btn-primary btn-sm" disabled={replyingId === q.id || !(replyDraft[q.id] || '').trim()}
                                       onClick={() => submitUserReply(q)}>
-                                      {replyingId === q.id ? '전송 중…' : '답글 보내기'}
+                                      {replyingId === q.id ? '등록 중…' : '댓글 등록'}
                                     </button>
                                   </div>
                                 </div>

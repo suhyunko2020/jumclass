@@ -412,9 +412,9 @@ export default function AdminPage() {
   }
 
   // ── 1:1 문의 대댓글 (관리자) ──────────────────────────────────
-  function convoOf(inq: Inquiry): { sender: 'user' | 'admin'; body: string; at: string }[] {
-    const msgs: { sender: 'user' | 'admin'; body: string; at: string }[] = [{ sender: 'user', body: inq.message, at: inq.date }]
-    if (inq.answer) msgs.push({ sender: 'admin', body: inq.answer, at: inq.answeredAt || inq.date })
+  // 글 본문(message) 이후의 댓글 목록 — 첫 답변(answer) + 스레드
+  function commentsOf(inq: Inquiry): { sender: 'user' | 'admin'; body: string; at: string }[] {
+    const msgs: { sender: 'user' | 'admin'; body: string; at: string }[] = inq.answer ? [{ sender: 'admin', body: inq.answer, at: inq.answeredAt || inq.date }] : []
     return msgs.concat(inq.thread ?? [])
   }
 
@@ -1590,33 +1590,42 @@ export default function AdminPage() {
                               )}
                             </div>
                           )}
-                          {/* 대화형 — 첫 메시지 + 답변 + 대댓글 */}
-                          <div style={{ margin: '14px 0 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {convoOf(inq).map((m, i) => (
-                              <div key={i} style={{ alignSelf: m.sender === 'admin' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}>
-                                <div style={{ fontSize: '.66rem', color: 'var(--t3)', marginBottom: '3px', textAlign: m.sender === 'admin' ? 'right' : 'left' }}>
-                                  {m.sender === 'admin' ? '관리자 ✦' : inq.userName} · {new Date(m.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                                <div style={{ padding: '10px 13px', borderRadius: 'var(--r2)', whiteSpace: 'pre-wrap', fontSize: '.85rem', lineHeight: 1.6, color: 'var(--t1)', background: m.sender === 'admin' ? 'rgba(52,196,124,.08)' : 'var(--glass-1)', border: `1px solid ${m.sender === 'admin' ? 'rgba(52,196,124,.18)' : 'var(--line)'}` }}>
-                                  {m.body}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                          {/* 게시판 글 본문 */}
+                          <div className="qa-post">{inq.message}</div>
 
-                          {/* 회원 1:1 문의 — 인라인 답글 + 완료 처리 (홈문의는 메일 답변이라 제외) */}
+                          {/* 댓글 */}
+                          {(() => { const cmts = commentsOf(inq); return cmts.length > 0 && (
+                            <>
+                              <div className="qa-comments-title">댓글 {cmts.length}</div>
+                              {cmts.map((m, i) => (
+                                <div key={i} className="qa-comment">
+                                  <div className={`qa-comment-ava ${m.sender}`}>{m.sender === 'admin' ? '운영' : '회원'}</div>
+                                  <div className="qa-comment-main">
+                                    <div className="qa-comment-meta">
+                                      <span className="qa-comment-author">{m.sender === 'admin' ? '점클래스' : inq.userName}</span>
+                                      {m.sender === 'admin' && <span className="qa-badge-admin">운영자</span>}
+                                      <span className="qa-comment-time">{new Date(m.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div className="qa-comment-body">{m.body}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </>
+                          ) })()}
+
+                          {/* 회원 1:1 문의 — 댓글 입력 + 완료 처리 (홈문의는 메일 답변이라 제외) */}
                           {inq.type !== 'contact' && (
                             inq.resolvedAt ? (
-                              <div style={{ fontSize: '.78rem', color: 'var(--t3)', marginBottom: '12px' }}>✓ {new Date(inq.resolvedAt).toLocaleDateString('ko-KR')} 답변 완료 처리됨</div>
+                              <div className="qa-closed">✓ {new Date(inq.resolvedAt).toLocaleDateString('ko-KR')} 답변 완료 처리됨</div>
                             ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-                                <textarea className="form-input" rows={2} placeholder="답글을 입력하세요" value={adminReplyDraft[inq.id] || ''}
+                              <div className="qa-write">
+                                <textarea className="form-input" rows={2} placeholder="댓글을 입력하세요" value={adminReplyDraft[inq.id] || ''}
                                   onChange={e => setAdminReplyDraft(d => ({ ...d, [inq.id]: e.target.value }))} style={{ resize: 'vertical' }} />
-                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                <div className="qa-write-actions">
                                   <button className="btn btn-ghost btn-sm" onClick={() => handleResolveInquiry(inq)}>✓ 답변 완료</button>
                                   <button className="btn btn-primary btn-sm" disabled={adminReplyingId === inq.id || !(adminReplyDraft[inq.id] || '').trim()}
                                     onClick={() => submitAdminReply(inq)}>
-                                    {adminReplyingId === inq.id ? '전송 중…' : '답글 보내기'}
+                                    {adminReplyingId === inq.id ? '등록 중…' : '댓글 등록'}
                                   </button>
                                 </div>
                               </div>
