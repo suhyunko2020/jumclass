@@ -1621,7 +1621,7 @@ export default function AdminPage() {
                                 const inThread = (inq.thread ?? []).some(t => t.at === m.at)
                                 return (
                                 <div key={i} className="qa-comment">
-                                  <div className={`qa-comment-ava ${m.sender}`}>{m.sender === 'admin' ? '운영' : '회원'}</div>
+                                  <div className={`qa-comment-ava ${m.sender}`}>{m.sender === 'admin' ? <img src="/favicon.png" alt="점클래스" /> : '회원'}</div>
                                   <div className="qa-comment-main">
                                     <div className="qa-comment-meta">
                                       <span className="qa-comment-author">{m.sender === 'admin' ? '점클래스' : inq.userName}</span>

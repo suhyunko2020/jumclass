@@ -535,7 +535,7 @@ export default function MyPage() {
                                     const mine = c.sender === 'user'
                                     return (
                                     <div key={i} className="qa-comment">
-                                      <div className={`qa-comment-ava ${c.sender}`}>{c.sender === 'admin' ? '운영' : '나'}</div>
+                                      <div className={`qa-comment-ava ${c.sender}`}>{c.sender === 'admin' ? <img src="/favicon.png" alt="점클래스" /> : '나'}</div>
                                       <div className="qa-comment-main">
                                         <div className="qa-comment-meta">
                                           <span className="qa-comment-author">{c.sender === 'admin' ? '점클래스' : '나'}</span>
