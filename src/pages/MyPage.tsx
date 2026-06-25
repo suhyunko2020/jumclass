@@ -6,10 +6,10 @@ import { useInstructors } from '../hooks/useInstructors'
 import { useToast } from '../components/ui/Toast'
 import { formatPrice, calcRefund } from '../utils/format'
 import {
-  getMyInquiries, addInquiry, editInquiry as editInquiryStorage,
+  getMyInquiries, addInquiry, editInquiry as editInquiryStorage, addInquiryReply,
   getProgressPageByEnrollment,
 } from '../utils/storage'
-import type { Inquiry, InstructorProgressPage } from '../data/types'
+import type { Inquiry, InquiryMessage, InstructorProgressPage } from '../data/types'
 import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
 import { sendInquiryReceived } from '../utils/alimtalk'
 import { notifyAdmin } from '../utils/notifyAdmin'
@@ -39,6 +39,8 @@ export default function MyPage() {
 
   const [tab, setTab] = useState<MyTab>((searchParams.get('tab') as MyTab) || 'payments')
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
+  const [replyDraft, setReplyDraft] = useState<Record<string, string>>({})
+  const [replyingId, setReplyingId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalTitle, setModalTitle] = useState('문의 작성')
   const [form, setForm] = useState<InquiryForm>(emptyForm)
@@ -228,6 +230,27 @@ export default function MyPage() {
     setForm({ id: q.id, type: q.type, subject: q.subject, message: q.message })
     setModalTitle('문의 수정')
     setModalOpen(true)
+  }
+
+  // 첫 메시지 + 첫 답변 + 스레드를 하나의 대화 배열로 합침
+  function convoOf(q: Inquiry): InquiryMessage[] {
+    const msgs: InquiryMessage[] = [{ sender: 'user', body: q.message, at: q.date }]
+    if (q.answer) msgs.push({ sender: 'admin', body: q.answer, at: q.answeredAt || q.date })
+    return msgs.concat(q.thread ?? [])
+  }
+
+  async function submitUserReply(q: Inquiry) {
+    const body = (replyDraft[q.id] || '').trim()
+    if (!body) return
+    setReplyingId(q.id)
+    const res = await addInquiryReply(q.id, 'user', body)
+    setReplyingId(null)
+    if (!res.ok) { toast(res.error || '전송에 실패했습니다.', 'err'); return }
+    setReplyDraft(d => ({ ...d, [q.id]: '' }))
+    // 관리자에게 새 답글 알림
+    notifyAdmin({ kind: 'inquiry', customerName: user!.name, subject: `[답글] ${q.subject}`, content: body })
+    toast('답글이 등록되었습니다.', 'ok')
+    await loadInquiries()
   }
 
   async function submitInquiry(e: React.FormEvent) {
@@ -451,16 +474,20 @@ export default function MyPage() {
                 ) : (
                   <div className="inquiry-list">
                     {inquiries.map(q => {
+                      const resolved = !!q.resolvedAt
                       const isAns = q.status === 'answered'
+                      const statusLabel = resolved ? '완료' : isAns ? '답변 도착' : '답변 대기'
                       const d = new Date(q.date).toLocaleDateString('ko-KR')
                       const isOpen = openBodies[q.id]
+                      const convo = convoOf(q)
+                      const canEdit = !isAns && (q.thread?.length ?? 0) === 0
                       return (
                         <div key={q.id} className={`inquiry-item ${isOpen ? 'open' : ''}`}>
                           {/* 헤더 */}
                           <div className="inquiry-header" onClick={() => toggleBody(q.id)}>
                             <div className="inquiry-header-left">
-                              <span className={`inquiry-status ${isAns ? 'answered' : 'pending'}`}>
-                                {isAns ? '답변완료' : '답변대기'}
+                              <span className={`inquiry-status ${resolved || isAns ? 'answered' : 'pending'}`}>
+                                {statusLabel}
                               </span>
                               <span className="inquiry-subject">
                                 {q.type === 'refund' && <span className="inquiry-refund-tag">환불</span>}
@@ -473,20 +500,37 @@ export default function MyPage() {
                             </div>
                           </div>
 
-                          {/* 본문 */}
+                          {/* 본문 — 대화형 */}
                           {isOpen && (
                             <div className="inquiry-body">
-                              <div className="inquiry-message">{q.message}</div>
-                              {!isAns && (
-                                <button className="btn btn-ghost btn-sm" style={{ marginTop: '12px' }}
-                                  onClick={() => openEditInquiry(q)}>
-                                  수정하기
-                                </button>
-                              )}
-                              {isAns && (
-                                <div className="inquiry-answer">
-                                  <div className="inquiry-answer-label">관리자 답변 ✦</div>
-                                  <div className="inquiry-answer-text">{q.answer}</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {convo.map((m, i) => (
+                                  <div key={i} style={{ alignSelf: m.sender === 'admin' ? 'flex-start' : 'flex-end', maxWidth: '88%' }}>
+                                    <div style={{ fontSize: '.68rem', color: 'var(--t3)', marginBottom: '3px', textAlign: m.sender === 'admin' ? 'left' : 'right' }}>
+                                      {m.sender === 'admin' ? '관리자 ✦' : '나'} · {new Date(m.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                    <div style={{ padding: '10px 13px', borderRadius: 'var(--r2)', whiteSpace: 'pre-wrap', fontSize: '.875rem', lineHeight: 1.6, background: m.sender === 'admin' ? 'rgba(124,111,205,.12)' : 'var(--glass-2)', color: 'var(--t1)' }}>
+                                      {m.body}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {resolved ? (
+                                <div style={{ marginTop: '14px', fontSize: '.8rem', color: 'var(--t3)', textAlign: 'center' }}>✓ 완료 처리된 문의입니다.</div>
+                              ) : (
+                                <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  <textarea className="form-input" rows={2} placeholder="답글을 입력하세요" value={replyDraft[q.id] || ''}
+                                    onChange={e => setReplyDraft(d => ({ ...d, [q.id]: e.target.value }))} style={{ resize: 'vertical' }} />
+                                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                    {canEdit && (
+                                      <button className="btn btn-ghost btn-sm" onClick={() => openEditInquiry(q)}>문의 수정</button>
+                                    )}
+                                    <button className="btn btn-primary btn-sm" disabled={replyingId === q.id || !(replyDraft[q.id] || '').trim()}
+                                      onClick={() => submitUserReply(q)}>
+                                      {replyingId === q.id ? '전송 중…' : '답글 보내기'}
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>

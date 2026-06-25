@@ -6,7 +6,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useToast } from '../components/ui/Toast'
 import {
   getCustomCourses,
-  getInquiries, answerInquiry, markInquiryRefunded, deleteInquiry, uploadCertificateTemplate, uploadPublicImage,
+  getInquiries, answerInquiry, addInquiryReply, resolveInquiry, markInquiryRefunded, deleteInquiry, uploadCertificateTemplate, uploadPublicImage,
   getAllUsers, getAllEnrollmentsAdmin, cancelEnrollment, updateEnrollmentAdmin, adminChangeUserEmail,
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
@@ -187,6 +187,8 @@ export default function AdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [allEnrollments, setAllEnrollments] = useState<any[]>([])
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
+  const [adminReplyDraft, setAdminReplyDraft] = useState<Record<string, string>>({})
+  const [adminReplyingId, setAdminReplyingId] = useState<string | null>(null)
   const [reviews, setReviews] = useState<{ id: string; courseId: string; userId: string; userName: string; userAvatar: string; rating: number; text: string; date: string; source?: string }[]>([])
   const [adminReviewModal, setAdminReviewModal] = useState(false)
   const [arForm, setArForm] = useState({ courseId: '', userName: '', rating: 5, text: '' })
@@ -333,7 +335,7 @@ export default function AdminPage() {
     )
   }
 
-  const pendingCount = inquiries.filter(i => i.status === 'pending').length
+  const pendingCount = inquiries.filter(i => !i.resolvedAt && i.status === 'pending').length
   // 환불 완료된 수강건 판정용 — 사용자별로 그룹(다른 회원의 환불에 오판정되지 않도록).
   // 결제내역/수강생에서 '환불됨' 표기에 사용.
   const refundsByUser = new Map<string, RefundRecord[]>()
@@ -407,6 +409,36 @@ export default function AdminPage() {
     toast('답변이 등록되었습니다.', 'ok')
     setAnswerModal(null)
     refresh()
+  }
+
+  // ── 1:1 문의 대댓글 (관리자) ──────────────────────────────────
+  function convoOf(inq: Inquiry): { sender: 'user' | 'admin'; body: string; at: string }[] {
+    const msgs: { sender: 'user' | 'admin'; body: string; at: string }[] = [{ sender: 'user', body: inq.message, at: inq.date }]
+    if (inq.answer) msgs.push({ sender: 'admin', body: inq.answer, at: inq.answeredAt || inq.date })
+    return msgs.concat(inq.thread ?? [])
+  }
+
+  async function submitAdminReply(inq: Inquiry) {
+    const body = (adminReplyDraft[inq.id] || '').trim()
+    if (!body) return
+    setAdminReplyingId(inq.id)
+    const res = await addInquiryReply(inq.id, 'admin', body)
+    setAdminReplyingId(null)
+    if (!res.ok) { toast(res.error || '전송에 실패했습니다.', 'err'); return }
+    setAdminReplyDraft(d => ({ ...d, [inq.id]: '' }))
+    // 회원에게 새 답글 알림톡 (홈문의/환불은 별도 경로라 제외)
+    if (inq.type !== 'refund' && inq.type !== 'contact' && inq.userId) {
+      sendInquiryAnswered({ userId: inq.userId, customerName: inq.userName, title: inq.subject }).catch(() => {})
+    }
+    toast('답글을 보냈습니다.', 'ok')
+    refresh()
+  }
+
+  async function handleResolveInquiry(inq: Inquiry) {
+    if (!confirm('이 문의를 「답변 완료」로 닫으시겠습니까?\n\n완료 후에는 사용자·관리자 모두 추가 댓글을 달 수 없습니다.')) return
+    const ok = await resolveInquiry(inq.id)
+    toast(ok ? '답변 완료로 처리되었습니다.' : '처리 실패 — 콘솔을 확인해주세요.', ok ? 'ok' : 'err')
+    if (ok) refresh()
   }
 
   // ── 수동 수강 등록 ──────────────────────────────────────────
@@ -1511,11 +1543,11 @@ export default function AdminPage() {
                         </div>
                         <span style={{
                           fontSize: '.7rem', padding: '3px 10px', borderRadius: 'var(--pill)', flexShrink: 0,
-                          background: inq.status === 'answered' ? 'rgba(52,196,124,.1)' : 'rgba(232,156,56,.1)',
-                          color: inq.status === 'answered' ? 'var(--ok)' : 'var(--warn)',
-                          border: `1px solid ${inq.status === 'answered' ? 'rgba(52,196,124,.2)' : 'rgba(232,156,56,.2)'}`,
+                          background: inq.resolvedAt ? 'rgba(124,111,205,.12)' : inq.status === 'answered' ? 'rgba(52,196,124,.1)' : 'rgba(232,156,56,.1)',
+                          color: inq.resolvedAt ? 'var(--purple-2)' : inq.status === 'answered' ? 'var(--ok)' : 'var(--warn)',
+                          border: `1px solid ${inq.resolvedAt ? 'rgba(124,111,205,.25)' : inq.status === 'answered' ? 'rgba(52,196,124,.2)' : 'rgba(232,156,56,.2)'}`,
                         }}>
-                          {inq.status === 'answered' ? '답변 완료' : '답변 대기'}
+                          {inq.resolvedAt ? '완료' : inq.status === 'answered' ? '답변함' : '답변 대기'}
                         </span>
                       </button>
                       {expanded && (
@@ -1558,14 +1590,37 @@ export default function AdminPage() {
                               )}
                             </div>
                           )}
-                          <p style={{ fontSize: '.875rem', color: 'var(--t2)', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: '14px 0 12px' }}>{inq.message}</p>
-                          {inq.status === 'answered' && (
-                            <div style={{ padding: '12px 16px', background: 'rgba(52,196,124,.05)', border: '1px solid rgba(52,196,124,.15)', borderRadius: 'var(--r2)', marginBottom: '12px' }}>
-                              <div style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--ok)', marginBottom: '6px' }}>
-                                관리자 답변 ({inq.answeredAt ? new Date(inq.answeredAt).toLocaleDateString() : ''})
+                          {/* 대화형 — 첫 메시지 + 답변 + 대댓글 */}
+                          <div style={{ margin: '14px 0 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {convoOf(inq).map((m, i) => (
+                              <div key={i} style={{ alignSelf: m.sender === 'admin' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}>
+                                <div style={{ fontSize: '.66rem', color: 'var(--t3)', marginBottom: '3px', textAlign: m.sender === 'admin' ? 'right' : 'left' }}>
+                                  {m.sender === 'admin' ? '관리자 ✦' : inq.userName} · {new Date(m.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                <div style={{ padding: '10px 13px', borderRadius: 'var(--r2)', whiteSpace: 'pre-wrap', fontSize: '.85rem', lineHeight: 1.6, color: 'var(--t1)', background: m.sender === 'admin' ? 'rgba(52,196,124,.08)' : 'var(--glass-1)', border: `1px solid ${m.sender === 'admin' ? 'rgba(52,196,124,.18)' : 'var(--line)'}` }}>
+                                  {m.body}
+                                </div>
                               </div>
-                              <div style={{ fontSize: '.855rem', color: 'var(--t1)', whiteSpace: 'pre-wrap' }}>{inq.answer}</div>
-                            </div>
+                            ))}
+                          </div>
+
+                          {/* 회원 1:1 문의 — 인라인 답글 + 완료 처리 (홈문의는 메일 답변이라 제외) */}
+                          {inq.type !== 'contact' && (
+                            inq.resolvedAt ? (
+                              <div style={{ fontSize: '.78rem', color: 'var(--t3)', marginBottom: '12px' }}>✓ {new Date(inq.resolvedAt).toLocaleDateString('ko-KR')} 답변 완료 처리됨</div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                                <textarea className="form-input" rows={2} placeholder="답글을 입력하세요" value={adminReplyDraft[inq.id] || ''}
+                                  onChange={e => setAdminReplyDraft(d => ({ ...d, [inq.id]: e.target.value }))} style={{ resize: 'vertical' }} />
+                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                  <button className="btn btn-ghost btn-sm" onClick={() => handleResolveInquiry(inq)}>✓ 답변 완료</button>
+                                  <button className="btn btn-primary btn-sm" disabled={adminReplyingId === inq.id || !(adminReplyDraft[inq.id] || '').trim()}
+                                    onClick={() => submitAdminReply(inq)}>
+                                    {adminReplyingId === inq.id ? '전송 중…' : '답글 보내기'}
+                                  </button>
+                                </div>
+                              </div>
+                            )
                           )}
                           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             {inq.type === 'contact' && (
@@ -1575,12 +1630,12 @@ export default function AdminPage() {
                                 ✉ 메일로 답변
                               </a>
                             )}
-                            <button className={`btn btn-sm ${inq.status !== 'answered' ? 'btn-primary' : 'btn-ghost'}`}
-                              onClick={() => setAnswerModal({ inq, text: inq.answer || '' })}>
-                              {inq.type === 'contact'
-                                ? (inq.status !== 'answered' ? '답변 완료로 표시' : '답변 메모 수정')
-                                : (inq.status !== 'answered' ? '답변 작성' : '답변 수정')}
-                            </button>
+                            {inq.type === 'contact' && (
+                              <button className={`btn btn-sm ${inq.status !== 'answered' ? 'btn-primary' : 'btn-ghost'}`}
+                                onClick={() => setAnswerModal({ inq, text: inq.answer || '' })}>
+                                {inq.status !== 'answered' ? '답변 완료로 표시' : '답변 메모 수정'}
+                              </button>
+                            )}
                             {inq.type === 'refund' && !inq.refundedAt && (
                               <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
                                 onClick={async () => {

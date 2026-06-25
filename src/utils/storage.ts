@@ -37,6 +37,8 @@ function rowToInquiry(r: any): Inquiry {
     status: r.status as 'pending' | 'answered',
     answer: r.answer ?? '',
     answeredAt: r.answered_at ?? undefined,
+    thread: Array.isArray(r.thread) ? r.thread : [],
+    resolvedAt: r.resolved_at ?? undefined,
     refundedAt: r.refunded_at ?? undefined,
     date: r.created_at,
     metadata: (r.course_id || r.order_date)
@@ -98,6 +100,33 @@ export async function editInquiry(id: string, subject: string, message: string):
 export async function answerInquiry(id: string, answer: string): Promise<boolean> {
   const { error } = await supabase.from('inquiries')
     .update({ status: 'answered', answer, answered_at: new Date().toISOString() })
+    .eq('id', id)
+  return !error
+}
+
+// 1:1 문의 대댓글 추가 — 사용자/관리자가 스레드에 메시지를 덧붙인다.
+// 사용자가 달면 status='pending'(관리자 대기), 관리자가 달면 'answered'.
+// 완료(resolved_at) 처리된 문의에는 댓글을 달 수 없다.
+export async function addInquiryReply(id: string, sender: 'user' | 'admin', body: string): Promise<{ ok: boolean; error?: string }> {
+  const text = body.trim()
+  if (!text) return { ok: false, error: '내용을 입력해주세요.' }
+  const { data: cur, error: readErr } = await supabase
+    .from('inquiries').select('thread, resolved_at').eq('id', id).single()
+  if (readErr || !cur) return { ok: false, error: '문의를 찾을 수 없습니다.' }
+  if (cur.resolved_at) return { ok: false, error: '이미 완료된 문의입니다.' }
+  const thread = Array.isArray(cur.thread) ? cur.thread : []
+  thread.push({ sender, body: text, at: new Date().toISOString() })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const patch: any = { thread, status: sender === 'user' ? 'pending' : 'answered' }
+  if (sender === 'admin') patch.answered_at = new Date().toISOString()
+  const { error } = await supabase.from('inquiries').update(patch).eq('id', id)
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
+// 관리자 — 문의를 '답변 완료'로 닫는다. (더 이상 댓글 불가, 미처리 카운트에서 제외)
+export async function resolveInquiry(id: string): Promise<boolean> {
+  const { error } = await supabase.from('inquiries')
+    .update({ resolved_at: new Date().toISOString(), status: 'answered' })
     .eq('id', id)
   return !error
 }

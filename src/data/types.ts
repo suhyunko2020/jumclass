@@ -167,6 +167,12 @@ export interface InstructorProgressPage {
   updatedAt: string;
 }
 
+export interface InquiryMessage {
+  sender: 'user' | 'admin';
+  body: string;
+  at: string;            // ISO
+}
+
 export interface Inquiry {
   id: string;
   userId: string;
@@ -178,6 +184,8 @@ export interface Inquiry {
   status: 'pending' | 'answered';
   answer: string;
   answeredAt?: string;
+  thread?: InquiryMessage[];   // 첫 메시지(message)/첫 답변(answer) 이후 주고받은 대댓글
+  resolvedAt?: string;         // 관리자가 '답변 완료' 처리한 시각 (있으면 닫힌 문의)
   refundedAt?: string;   // 환불 요청(type='refund')이 관리자에 의해 환불 처리된 시각
   date: string;
   metadata?: {
