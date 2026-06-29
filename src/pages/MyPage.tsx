@@ -12,6 +12,7 @@ import {
 } from '../utils/storage'
 import type { Inquiry, InquiryMessage, InstructorProgressPage } from '../data/types'
 import { refundRecords, buildRefundedKeys, refundedKey } from '../lib/refundStatus'
+import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
 import { sendInquiryReceived } from '../utils/alimtalk'
 import { notifyAdmin } from '../utils/notifyAdmin'
 
@@ -48,6 +49,7 @@ export default function MyPage() {
   const [modalTitle, setModalTitle] = useState('문의 작성')
   const [form, setForm] = useState<InquiryForm>(emptyForm)
   const [openBodies, setOpenBodies] = useState<Record<string, boolean>>({})
+  const [termsOpen, setTermsOpen] = useState(false)   // 자격증 약관 보기 팝업
   // 자격증 강의 강사 진도 맵 — 수강 완료 뱃지 판단용
   const [certProgressMap, setCertProgressMap] = useState<Record<string, InstructorProgressPage | null>>({})
 
@@ -486,6 +488,10 @@ export default function MyPage() {
                             {isFreeGrant && (
                               <div className="payment-item-note">
                                 자격증 과정에 포함되어 제공된 강의입니다. 자격증 환불 시 실제 시청한 분량만큼 위약금으로 정산됩니다.
+                                더 자세한 사항은 수강 동의서 작성 시 약관을 참고하세요.
+                                <button type="button" className="payment-item-note-link" onClick={() => setTermsOpen(true)}>
+                                  약관 보기
+                                </button>
                               </div>
                             )}
                             <div className="payment-item-bottom">
@@ -826,6 +832,48 @@ export default function MyPage() {
         </div>
         )
       })()}
+
+      {/* 자격증 약관 보기 팝업 — 포함 제공 강의 안내용 */}
+      {termsOpen && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setTermsOpen(false) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '640px' }}>
+            <button className="modal-close" onClick={() => setTermsOpen(false)}>✕</button>
+            <div className="modal-head">
+              <h2>{CERTIFICATE_AGREEMENT.title}</h2>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontSize: '.8rem', color: 'var(--t2)', lineHeight: 1.7 }}>
+                {CERTIFICATE_AGREEMENT.subtitle && (
+                  <div style={{ color: 'var(--t3)', marginBottom: '6px' }}>{CERTIFICATE_AGREEMENT.subtitle}</div>
+                )}
+                <p style={{ marginBottom: '12px' }}>{CERTIFICATE_AGREEMENT.preamble}</p>
+                {CERTIFICATE_AGREEMENT.chapters.map((ch, ci) => (
+                  <div key={ci} style={{ marginBottom: '14px' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--t1)', margin: '10px 0 6px' }}>{ch.title}</div>
+                    {ch.articles.map((art, ai) => (
+                      <div key={ai} style={{ marginBottom: '10px' }}>
+                        <div style={{ fontWeight: 600, color: 'var(--t1)', marginBottom: '3px' }}>
+                          {art.number} [{art.subject}]
+                        </div>
+                        {art.paragraphs.map((p, pi) => (
+                          <p key={pi} style={{ whiteSpace: 'pre-wrap', margin: '2px 0' }}>{p}</p>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {CERTIFICATE_AGREEMENT.closing.map((c, i) => (
+                  <p key={i} style={{ margin: '8px 0' }}>{c}</p>
+                ))}
+                <div style={{ color: 'var(--t3)', fontSize: '.74rem', marginTop: '12px' }}>
+                  버전 {CERTIFICATE_AGREEMENT.version}
+                </div>
+              </div>
+              <button className="btn btn-ghost w-full" style={{ marginTop: '16px' }} onClick={() => setTermsOpen(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

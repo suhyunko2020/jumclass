@@ -22,7 +22,7 @@ import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
 import { useSiteSettings, getPaymentSecret, getAdminNotifyPhone, saveAdminNotifyPhone, DEFAULT_POLICIES, type SiteSettings, type Announcement } from '../hooks/useSiteSettings'
 import { invalidateStatsCache } from '../lib/homeStats'
-import { isEnrollmentRefunded, type RefundRecord } from '../lib/refundStatus'
+import { buildRefundedKeys, refundedKey, type RefundRecord } from '../lib/refundStatus'
 import {
   makeSampleName, makeSampleRating, makeRandomDate,
   pickUniqueText, pickUniqueAnyText, getPoolSize,
@@ -348,6 +348,18 @@ export default function AdminPage() {
       list.push({ courseId: q.metadata.courseId, orderDate: q.metadata.orderDate ?? '', refundedAt: q.refundedAt })
       refundsByUser.set(q.userId, list)
     }
+  }
+  // 사용자별 환불 키 집합 — 자격증 환불 시 묶음 무료강의까지 '환불됨'으로 판정.
+  // allEnrollments(전체 평면 리스트)를 userId로 묶어 묶음(bundled) 정보를 함께 본다.
+  const enrollmentsByUser = new Map<string, any[]>()
+  for (const e of allEnrollments) {
+    const list = enrollmentsByUser.get(e.userId) ?? []
+    list.push(e)
+    enrollmentsByUser.set(e.userId, list)
+  }
+  const refundedKeysByUser = new Map<string, Set<string>>()
+  for (const [uid, recs] of refundsByUser) {
+    refundedKeysByUser.set(uid, buildRefundedKeys(enrollmentsByUser.get(uid) ?? [], recs))
   }
 
   const allInstructors = getAllInstructors()
@@ -1325,7 +1337,7 @@ export default function AdminPage() {
                                     ? `${c.emoji} ${c.title.slice(0, 8)}${inst ? ` (${inst.name})` : ''}`
                                     : e.courseId
                                   const key = `${e.courseId}:${e.assignedInstructorId || 'none'}`
-                                  const refunded = isEnrollmentRefunded(e.courseId, e.enrolledAt, refundsByUser.get(u.uid) ?? [])
+                                  const refunded = (refundedKeysByUser.get(u.uid) ?? new Set()).has(refundedKey(e.courseId, e.enrolledAt))
                                   return (
                                     <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                       <button
@@ -1401,7 +1413,7 @@ export default function AdminPage() {
                     <tbody>
                       {allEnrollments.map((e, i) => {
                         const c = courses.find(x => x.id === e.courseId)
-                        const refunded = isEnrollmentRefunded(e.courseId, e.enrolledAt, refundsByUser.get(e.userId) ?? [])
+                        const refunded = (refundedKeysByUser.get(e.userId) ?? new Set()).has(refundedKey(e.courseId, e.enrolledAt))
                         const expired = !e.paused && new Date(e.expiryDate) <= new Date()
                         const daysLeft = e.paused
                           ? `${e.remainingDays || 0}일 (휴강)`
