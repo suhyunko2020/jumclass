@@ -17,7 +17,7 @@ import {
 import CertificateAgreementForm, { type AgreementFormValue } from '../components/course/CertificateAgreementForm'
 import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
 import type { InstructorProgressPage, Inquiry, Enrollment } from '../data/types'
-import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
+import { refundRecords, buildRefundedKeys, refundedKey } from '../lib/refundStatus'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { renderCertificate, downloadCertificatePdf, type RenderedCertificate } from '../utils/certificate'
 
@@ -199,8 +199,10 @@ export default function ClassroomPage() {
 
   // 환불 처리된 결제건은 강의실 목록에서 제외
   const refunds = refundRecords(inquiries)
+  // 환불된 결제건 + 환불된 자격증에 묶인 무료 강의를 함께 제외
+  const refundedKeys = buildRefundedKeys(user.enrollments || [], refunds)
   const enrollments = (user.enrollments || [])
-    .filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
+    .filter(e => !refundedKeys.has(refundedKey(e.courseId, e.enrolledAt)))
     // 등록일(결제일) 최신순으로 정렬 — 목록이 뒤죽박죽 보이지 않도록
     .sort((a, b) => new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime())
 

@@ -11,7 +11,7 @@ import {
   getProgressPageByEnrollment,
 } from '../utils/storage'
 import type { Inquiry, InquiryMessage, InstructorProgressPage } from '../data/types'
-import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
+import { refundRecords, buildRefundedKeys, refundedKey } from '../lib/refundStatus'
 import { sendInquiryReceived } from '../utils/alimtalk'
 import { notifyAdmin } from '../utils/notifyAdmin'
 
@@ -139,7 +139,9 @@ export default function MyPage() {
   )
   // 결제내역(수강중) — 환불 처리된 결제건은 제외 (환불 후 재결제분은 enrolled_at이 갱신돼 다시 노출됨)
   const refunds = refundRecords(inquiries)
-  const activeEnrollments = enrollments.filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
+  // 환불된 결제건 + 환불된 자격증에 묶인 무료 강의를 함께 제외
+  const refundedKeys = buildRefundedKeys(enrollments, refunds)
+  const activeEnrollments = enrollments.filter(e => !refundedKeys.has(refundedKey(e.courseId, e.enrolledAt)))
   // 환불 중복 접수 방지 — 처리되지 않은(접수중) 환불 문의가 이미 있으면 재접수 불가
   const hasPendingRefund = (courseId: string, orderDate: string) =>
     inquiries.some(q => q.type === 'refund' && !q.refundedAt && q.metadata?.courseId === courseId && q.metadata?.orderDate === orderDate)
@@ -441,6 +443,9 @@ export default function MyPage() {
                       const isUnlimited = daysLeft > 3000
                       // 수강 완료 판단 — 자격증은 모든 회차 체크 (강사별 독립), 일반은 progress 100%
                       const isCert = c.level === '자격증'
+                      // 수동 등록 분기: 자격증(무통장 결제) vs 무료 제공(자격증 묶음 인터넷강의)
+                      // 고객에겐 '수동 등록' 같은 내부 용어 대신 수강 상태/무료 여부를 보여준다
+                      const isFreeGrant = e.type === 'manual' && !isCert
                       const certPage = isCert ? certProgressMap[certKey(e.courseId, e.assignedInstructorId)] : null
                       const certChecked = certPage?.checklist.filter(i => i.checked).length ?? 0
                       const certTotal = certPage?.checklist.length ?? 0
@@ -466,8 +471,8 @@ export default function MyPage() {
                                   </span>
                                 )}
                               </div>
-                              {e.type === 'manual'
-                                ? <span className="badge-manual">수동 등록</span>
+                              {isFreeGrant
+                                ? <span className="badge-manual">자격증 포함</span>
                                 : isExpired
                                 ? <span className="badge-expired">만료</span>
                                 : isComplete
@@ -478,8 +483,13 @@ export default function MyPage() {
                               결제일 {date} &nbsp;·&nbsp; {c.level} &nbsp;·&nbsp;
                               {isUnlimited ? ' 무제한 시청' : isExpired ? ' 만료됨' : ` 잔여 ${daysLeft}일`}
                             </div>
+                            {isFreeGrant && (
+                              <div className="payment-item-note">
+                                자격증 과정에 포함되어 제공된 강의입니다. 자격증 환불 시 실제 시청한 분량만큼 위약금으로 정산됩니다.
+                              </div>
+                            )}
                             <div className="payment-item-bottom">
-                              <span className="payment-item-price">{formatPrice(c.price)}</span>
+                              <span className="payment-item-price">{isFreeGrant ? '과정 포함 제공' : formatPrice(c.price)}</span>
                               {(e.type !== 'manual' || isCert) && !isExpired && (
                                 hasPendingRefund(c.id, date) ? (
                                   <button className="btn btn-ghost btn-sm" disabled
