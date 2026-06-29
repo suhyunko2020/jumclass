@@ -310,6 +310,8 @@ export default function ClassroomPage() {
                       <div className="my-card-title">{c.title}</div>
                       {isPaused
                         ? <span className="my-card-status-warn">⏸ 휴강중</span>
+                        : (isCert && certAgreedMap[certKey(c.id, e.assignedInstructorId)] === false)
+                        ? <span className="my-card-status-warn">● 대기중</span>
                         : isComplete
                         ? <span className="my-card-status-done">✓ 수강 완료</span>
                         : <span className="my-card-status-ok">● 수강중</span>}

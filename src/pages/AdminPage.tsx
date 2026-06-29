@@ -177,7 +177,8 @@ export default function AdminPage() {
   // 모달 상태
   const [answerModal, setAnswerModal] = useState<{ inq: Inquiry; text: string } | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [enrollModal, setEnrollModal] = useState<{ user: any; courseId: string; days: number; instructorId: string } | null>(null)
+  // included: 자격증과 함께 등록할 기본 제공 인터넷강의 { courseId: 선택기간(days) }
+  const [enrollModal, setEnrollModal] = useState<{ user: any; courseId: string; days: number; instructorId: string; included: Record<string, number> } | null>(null)
   const [courseEditModal, setCourseEditModal] = useState<CourseEditForm | null>(null)
   const [courseDetailModal, setCourseDetailModal] = useState<Course | null>(null)
   const [curriculumModal, setCurriculumModal] = useState<CurriculumModalState | null>(null)
@@ -459,6 +460,18 @@ export default function AdminPage() {
     refresh()
   }
 
+  // 자격증의 기본 제공 인터넷강의를 기본 선택값(각 강의 첫 티어 기간)으로 구성
+  function defaultIncluded(courseId: string): Record<string, number> {
+    const c = courses.find(x => x.id === courseId)
+    if (c?.level !== '자격증') return {}
+    const inc: Record<string, number> = {}
+    for (const id of (c.includedCourseIds || [])) {
+      const ic = courses.find(x => x.id === id)
+      inc[id] = ic?.pricingTiers?.[0]?.days ?? 90
+    }
+    return inc
+  }
+
   // ── 수동 수강 등록 ──────────────────────────────────────────
   async function handleEnroll(e: React.FormEvent) {
     e.preventDefault()
@@ -478,8 +491,13 @@ export default function AdminPage() {
         sec.items.map(item => ({ id: item.id, title: item.title, description: sec.section, checked: false }))
       )
       const pp = await createProgressPage({ userId: enrollModal.user.uid, courseId: course.id, instructorId, checklist })
+      // 함께 등록할 기본 제공 인터넷강의 (무료, 강사 없음) — 선택한 기간으로 등록
+      let incCount = 0
+      for (const [incId, incDays] of Object.entries(enrollModal.included || {})) {
+        if (await enrollManual(enrollModal.user.uid, incId, incDays)) incCount++
+      }
       toast(pp
-        ? `${enrollModal.user.name}님 자격증 등록 + 진도 관리 페이지 생성 완료`
+        ? `${enrollModal.user.name}님 자격증 등록 + 진도 페이지 생성${incCount > 0 ? ` + 기본 제공 강의 ${incCount}개 등록` : ''} 완료`
         : `${enrollModal.user.name}님 등록됐으나 진도 페이지 생성 실패 — 다시 시도해주세요.`, pp ? 'ok' : 'err')
     } else {
       toast(`${enrollModal.user.name}님 수동 등록 완료`, 'ok')
@@ -1340,7 +1358,7 @@ export default function AdminPage() {
                           <td>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               <button className="btn btn-primary btn-sm"
-                                onClick={() => setEnrollModal({ user: u, courseId: courses[0]?.id || '', days: 365, instructorId: '' })}>
+                                onClick={() => setEnrollModal({ user: u, courseId: courses[0]?.id || '', days: 365, instructorId: '', included: defaultIncluded(courses[0]?.id || '') })}>
                                 + 수강 등록
                               </button>
                               <button className="btn btn-ghost btn-sm"
@@ -3014,7 +3032,7 @@ export default function AdminPage() {
                   <label className="form-label">강의 선택</label>
                   <select className="form-input"
                     value={enrollModal.courseId}
-                    onChange={e => setEnrollModal(p => p ? { ...p, courseId: e.target.value, instructorId: '' } : null)}>
+                    onChange={e => setEnrollModal(p => p ? { ...p, courseId: e.target.value, instructorId: '', included: defaultIncluded(e.target.value) } : null)}>
                     {courses.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.title}</option>)}
                   </select>
                 </div>
@@ -3054,6 +3072,47 @@ export default function AdminPage() {
                     {enrollModal.days >= 9999 ? '무제한' : `${enrollModal.days}일`} 수강 가능
                   </div>
                 </div>
+                {/* 자격증 — 함께 등록할 기본 제공 인터넷강의 */}
+                {(() => {
+                  const course = courses.find(c => c.id === enrollModal.courseId)
+                  const incIds = course?.level === '자격증' ? (course.includedCourseIds || []) : []
+                  if (incIds.length === 0) return null
+                  return (
+                    <div className="form-group">
+                      <label className="form-label">함께 등록할 기본 제공 강의</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {incIds.map(incId => {
+                          const ic = courses.find(c => c.id === incId)
+                          if (!ic) return null
+                          const checked = enrollModal.included[incId] !== undefined
+                          const tiers = ic.pricingTiers?.length ? ic.pricingTiers : [{ days: 30, price: 0, originalPrice: 0 }, { days: 90, price: 0, originalPrice: 0 }, { days: 9999, price: 0, originalPrice: 0 }]
+                          const curDays = enrollModal.included[incId] ?? (tiers[0]?.days ?? 90)
+                          return (
+                            <div key={incId} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 'var(--r2)' }}>
+                              <input type="checkbox" checked={checked}
+                                onChange={e => setEnrollModal(p => {
+                                  if (!p) return p
+                                  const next = { ...p.included }
+                                  if (e.target.checked) next[incId] = curDays
+                                  else delete next[incId]
+                                  return { ...p, included: next }
+                                })} />
+                              <span style={{ flex: 1, fontSize: '.82rem' }}>{ic.emoji} {ic.title}</span>
+                              <select className="form-input" style={{ width: 'auto', padding: '4px 8px', fontSize: '.78rem', margin: 0 }}
+                                value={curDays} disabled={!checked}
+                                onChange={e => setEnrollModal(p => p ? { ...p, included: { ...p.included, [incId]: Number(e.target.value) } } : null)}>
+                                {tiers.map(t => <option key={t.days} value={t.days}>{t.days >= 9999 ? '무제한' : `${t.days}일`}{t.price > 0 ? ` · ${formatPrice(t.price)}` : ''}</option>)}
+                              </select>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div style={{ fontSize: '.72rem', color: 'var(--t3)', marginTop: '6px', lineHeight: 1.5 }}>
+                        체크한 강의가 무료로 함께 등록됩니다. 선택한 기간의 가격이 환불 시 시청분만큼 공제 기준이 됩니다.
+                      </div>
+                    </div>
+                  )
+                })()}
                 <button type="submit" className="btn btn-primary w-full">등록하기</button>
               </form>
             </div>
