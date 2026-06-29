@@ -10,8 +10,11 @@ import {
   getProgressPageByEnrollment,
   getCertificateAgreementByEnrollment,
   getMyInquiries,
+  uploadSignatureImage,
+  saveCertificateAgreement,
   type CertificateAgreementRecord,
 } from '../utils/storage'
+import CertificateAgreementForm, { type AgreementFormValue } from '../components/course/CertificateAgreementForm'
 import { CERTIFICATE_AGREEMENT } from '../data/certificateAgreement'
 import type { InstructorProgressPage, Inquiry, Enrollment } from '../data/types'
 import { refundRecords, isEnrollmentRefunded } from '../lib/refundStatus'
@@ -43,6 +46,43 @@ export default function ClassroomPage() {
   const [agreementModal, setAgreementModal] = useState<{ courseId: string; courseTitle: string; instructorId?: string } | null>(null)
   const [agreementRecord, setAgreementRecord] = useState<CertificateAgreementRecord | null>(null)
   const [agreementLoading, setAgreementLoading] = useState(false)
+
+  // 자격증 수강 동의서 서명 여부 맵 (certKey → 서명 완료) + 서명 작성 모달
+  const [certAgreedMap, setCertAgreedMap] = useState<Record<string, boolean>>({})
+  const [signModal, setSignModal] = useState<{ courseId: string; courseTitle: string; instructorId?: string } | null>(null)
+  const [signValue, setSignValue] = useState<AgreementFormValue>({ name: '', birthdate: '', phone: '', phoneVerified: false, signatureDataUrl: null })
+  const [signSubmitting, setSignSubmitting] = useState(false)
+
+  async function submitSignature() {
+    if (!signModal || !user) return
+    const v = signValue
+    if (!v.name.trim() || !v.birthdate || !v.phone.trim() || !v.phoneVerified || !v.signatureDataUrl) {
+      toast('이름·생년월일·연락처 인증·서명을 모두 완료해주세요.', 'err'); return
+    }
+    setSignSubmitting(true)
+    try {
+      const signatureUrl = await uploadSignatureImage(user.uid, signModal.courseId, v.signatureDataUrl)
+      if (!signatureUrl) { toast('서명 이미지 저장에 실패했습니다.', 'err'); return }
+      const ok = await saveCertificateAgreement({
+        userId: user.uid,
+        courseId: signModal.courseId,
+        signerName: v.name.trim(),
+        signerBirthdate: v.birthdate,
+        signerPhone: v.phone.trim(),
+        signatureUrl,
+        agreementVersion: CERTIFICATE_AGREEMENT.version,
+        agreementSnapshot: CERTIFICATE_AGREEMENT,
+        assignedInstructorId: signModal.instructorId || null,
+      })
+      if (!ok) { toast('수강 동의서 저장에 실패했습니다.', 'err'); return }
+      setCertAgreedMap(m => ({ ...m, [certKey(signModal.courseId, signModal.instructorId)]: true }))
+      toast('수강 동의서가 등록되었습니다. 이제 수강을 진행할 수 있어요.', 'ok')
+      setSignModal(null)
+      setSignValue({ name: '', birthdate: '', phone: '', phoneVerified: false, signatureDataUrl: null })
+    } finally {
+      setSignSubmitting(false)
+    }
+  }
   // 환불 처리된 강의 숨김용 — 본인 환불 문의 조회
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
 
@@ -79,14 +119,19 @@ export default function ClassroomPage() {
     if (!user) return
     const certEnrollments = (user.enrollments || [])
       .filter(e => getCourse(e.courseId)?.level === '자격증')
-    if (certEnrollments.length === 0) { setCertProgressMap({}); return }
+    if (certEnrollments.length === 0) { setCertProgressMap({}); setCertAgreedMap({}); return }
     Promise.all(certEnrollments.map(async e => {
-      const page = await getProgressPageByEnrollment(user.uid, e.courseId, e.assignedInstructorId)
-      return [certKey(e.courseId, e.assignedInstructorId), page] as const
+      const [page, agreement] = await Promise.all([
+        getProgressPageByEnrollment(user.uid, e.courseId, e.assignedInstructorId),
+        getCertificateAgreementByEnrollment(user.uid, e.courseId, e.assignedInstructorId),
+      ])
+      return [certKey(e.courseId, e.assignedInstructorId), page, !!agreement] as const
     })).then(results => {
       const map: Record<string, InstructorProgressPage | null> = {}
-      results.forEach(([key, p]) => { map[key] = p })
+      const amap: Record<string, boolean> = {}
+      results.forEach(([key, p, signed]) => { map[key] = p; amap[key] = signed })
       setCertProgressMap(map)
+      setCertAgreedMap(amap)
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, (user?.enrollments || []).length])
@@ -286,9 +331,21 @@ export default function ClassroomPage() {
                           : `${prog}% 완료 · ${isPaused ? `휴강 중 (잔여 ${daysLeft}일)` : `잔여 ${daysLeft}일 남음`}`}
                       </div>
                     </div>
+                    {/* 자격증 — 수강 동의서 미작성 시 안내 (무통장 수동등록 등) */}
+                    {isCert && certAgreedMap[certKey(c.id, e.assignedInstructorId)] === false && (
+                      <div style={{ fontSize: '.78rem', color: 'var(--warn)', background: 'rgba(232,156,56,.1)', border: '1px solid rgba(232,156,56,.25)', borderRadius: 'var(--r2)', padding: '8px 11px', marginBottom: '10px', lineHeight: 1.5 }}>
+                        ⚠ 수강을 시작하려면 <b>수강 동의서 작성(서명)</b>이 필요합니다.
+                      </div>
+                    )}
                     {/* 액션 버튼 */}
                     <div className="my-card-actions">
                       {isCert ? (
+                        certAgreedMap[certKey(c.id, e.assignedInstructorId)] === false ? (
+                          <button className="btn btn-primary btn-sm"
+                            onClick={e2 => { e2.stopPropagation(); setSignValue({ name: '', birthdate: '', phone: '', phoneVerified: false, signatureDataUrl: null }); setSignModal({ courseId: c.id, courseTitle: c.title, instructorId: e.assignedInstructorId }) }}>
+                            📝 수강 동의서 작성
+                          </button>
+                        ) : (
                         <>
                           <button className="btn btn-primary btn-sm"
                             onClick={e2 => { e2.stopPropagation(); setProgressViewModal({ courseId: c.id, courseTitle: c.title, instructorId: e.assignedInstructorId }) }}>
@@ -300,6 +357,7 @@ export default function ClassroomPage() {
                             📄 약관 보기
                           </button>
                         </>
+                        )
                       ) : isPaused ? (
                         <button className="btn btn-primary btn-sm"
                           onClick={e2 => { e2.stopPropagation(); doResume(c.id) }}>
@@ -627,6 +685,28 @@ export default function ClassroomPage() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수강 동의서 작성 모달 (자격증 — 무통장 수동등록 등 미서명자) */}
+      {signModal && (
+        <div className="modal-overlay" onClick={e2 => { if (e2.target === e2.currentTarget && !signSubmitting) setSignModal(null) }}>
+          <div className="modal-box" style={{ maxWidth: '640px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <button className="modal-close" onClick={() => !signSubmitting && setSignModal(null)}>✕</button>
+            <div style={{ padding: '22px 24px 12px' }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 800, letterSpacing: '-.02em' }}>수강 동의서 작성</h2>
+              <p style={{ fontSize: '.85rem', color: 'var(--t2)', marginTop: '4px' }}>{signModal.courseTitle}</p>
+            </div>
+            <div className="modal-body" style={{ overflowY: 'auto', padding: '0 24px 8px' }}>
+              <CertificateAgreementForm value={signValue} onChange={setSignValue} />
+            </div>
+            <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--line)', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => !signSubmitting && setSignModal(null)} disabled={signSubmitting}>취소</button>
+              <button className="btn btn-primary btn-sm" onClick={submitSignature} disabled={signSubmitting}>
+                {signSubmitting ? '저장 중…' : '동의서 제출'}
+              </button>
             </div>
           </div>
         </div>
