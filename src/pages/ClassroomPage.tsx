@@ -222,6 +222,15 @@ export default function ClassroomPage() {
   const all = getPublicCourses()
   const notEnrolled = all.filter(c => !enrollments.some(e => e.courseId === c.id)).slice(0, 2)
 
+  // 자격증 수강 동의서 미서명 시, 그 자격증에 묶어 등록된 무료 인터넷강의를 잠금(대기중)
+  const gatedBundledIds = new Set<string>()
+  for (const ce of enrollments) {
+    if (getCourse(ce.courseId)?.level !== '자격증') continue
+    if (certAgreedMap[certKey(ce.courseId, ce.assignedInstructorId)] !== true) {
+      for (const b of (ce.bundled || [])) gatedBundledIds.add(b.courseId)
+    }
+  }
+
   async function doPause(courseId: string) {
     const c = getCourse(courseId)
     const enr = getEnrollment(courseId)
@@ -274,6 +283,8 @@ export default function ClassroomPage() {
               const c = getCourse(e.courseId)
               if (!c) return null
               const isCert = c.level === '자격증'
+              // 자격증 동의서 미서명으로 잠긴 묶음 인터넷강의 (시청 불가, 대기중)
+              const gated = !isCert && gatedBundledIds.has(c.id)
               const isPaused = !!e.paused
               const daysLeft = isPaused
                 ? (e.remainingDays || 0)
@@ -302,7 +313,11 @@ export default function ClassroomPage() {
               return (
                 <div key={cardKey} className={`my-card${isPaused ? ' paused' : ''}`}
                   style={{ cursor: isCert ? 'default' : undefined }}
-                  onClick={() => !isPaused && !isCert && navigate(`/lesson?course=${c.id}`)}>
+                  onClick={() => {
+                    if (isPaused || isCert) return
+                    if (gated) { toast('먼저 자격증 과정 수강 동의서를 작성해주세요.', 'err'); return }
+                    navigate(`/lesson?course=${c.id}`)
+                  }}>
                   <div className="my-card-thumb">{c.emoji}</div>
                   <div className="my-card-body">
                     {/* 타이틀 + 상태 뱃지 */}
@@ -310,7 +325,7 @@ export default function ClassroomPage() {
                       <div className="my-card-title">{c.title}</div>
                       {isPaused
                         ? <span className="my-card-status-warn">⏸ 휴강중</span>
-                        : (isCert && certAgreedMap[certKey(c.id, e.assignedInstructorId)] === false)
+                        : ((isCert && certAgreedMap[certKey(c.id, e.assignedInstructorId)] !== true) || gated)
                         ? <span className="my-card-status-warn">● 대기중</span>
                         : isComplete
                         ? <span className="my-card-status-done">✓ 수강 완료</span>
@@ -334,7 +349,7 @@ export default function ClassroomPage() {
                       </div>
                     </div>
                     {/* 자격증 — 수강 동의서 미작성 시 안내 (무통장 수동등록 등) */}
-                    {isCert && certAgreedMap[certKey(c.id, e.assignedInstructorId)] === false && (
+                    {isCert && certAgreedMap[certKey(c.id, e.assignedInstructorId)] !== true && (
                       <div style={{ fontSize: '.78rem', color: 'var(--warn)', background: 'rgba(232,156,56,.1)', border: '1px solid rgba(232,156,56,.25)', borderRadius: 'var(--r2)', padding: '8px 11px', marginBottom: '10px', lineHeight: 1.5 }}>
                         ⚠ 수강을 시작하려면 <b>수강 동의서 작성(서명)</b>이 필요합니다.
                       </div>
@@ -342,7 +357,7 @@ export default function ClassroomPage() {
                     {/* 액션 버튼 */}
                     <div className="my-card-actions">
                       {isCert ? (
-                        certAgreedMap[certKey(c.id, e.assignedInstructorId)] === false ? (
+                        certAgreedMap[certKey(c.id, e.assignedInstructorId)] !== true ? (
                           <button className="btn btn-primary btn-sm"
                             onClick={e2 => { e2.stopPropagation(); setSignValue({ name: '', birthdate: '', phone: '', phoneVerified: false, signatureDataUrl: null }); setSignModal({ courseId: c.id, courseTitle: c.title, instructorId: e.assignedInstructorId }) }}>
                             📝 수강 동의서 작성
@@ -364,6 +379,11 @@ export default function ClassroomPage() {
                         <button className="btn btn-primary btn-sm"
                           onClick={e2 => { e2.stopPropagation(); doResume(c.id) }}>
                           강의 재개하기 →
+                        </button>
+                      ) : gated ? (
+                        <button className="btn btn-primary btn-sm" style={{ opacity: .5, cursor: 'not-allowed' }}
+                          onClick={e2 => { e2.stopPropagation(); toast('먼저 자격증 과정 수강 동의서를 작성해주세요.', 'err') }}>
+                          계속 수강하기 →
                         </button>
                       ) : (
                         <button className="btn btn-primary btn-sm"

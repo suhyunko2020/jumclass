@@ -7,7 +7,7 @@ import { useToast } from '../components/ui/Toast'
 import { calcTotalDuration } from '../utils/format'
 import { getLessonAttachments, getAttachmentDownloadUrl } from '../hooks/useCourses'
 import { logAccess } from '../utils/accessLog'
-import { getMyInquiries } from '../utils/storage'
+import { getMyInquiries, getCertificateAgreementByEnrollment } from '../utils/storage'
 import { refundRecords, isEnrollmentRefunded, type RefundRecord } from '../lib/refundStatus'
 import type { LessonAtt } from '../hooks/useCourses'
 
@@ -35,6 +35,26 @@ export default function LessonPage() {
   useEffect(() => {
     if (!user) { setRefundRecs([]); return }
     getMyInquiries(user.uid).then(qs => setRefundRecs(refundRecords(qs))).catch(() => {})
+  }, [user?.uid])
+
+  // 자격증 동의서 서명 여부 로드 — 묶음 강의(미서명 자격증) 직접 접근 차단용
+  const [certSignedMap, setCertSignedMap] = useState<Record<string, boolean>>({})
+  const [certSignedLoaded, setCertSignedLoaded] = useState(false)
+  useEffect(() => {
+    if (!user) { setCertSignedMap({}); setCertSignedLoaded(false); return }
+    const certEnrs = (user.enrollments || []).filter(en => getCourse(en.courseId)?.level === '자격증')
+    if (certEnrs.length === 0) { setCertSignedMap({}); setCertSignedLoaded(true); return }
+    setCertSignedLoaded(false)
+    Promise.all(certEnrs.map(async en => {
+      const a = await getCertificateAgreementByEnrollment(user.uid, en.courseId, en.assignedInstructorId)
+      return [`${en.courseId}:${en.assignedInstructorId || ''}`, !!a] as const
+    })).then(rs => {
+      const m: Record<string, boolean> = {}
+      rs.forEach(([k, v]) => { m[k] = v })
+      setCertSignedMap(m)
+      setCertSignedLoaded(true)
+    }).catch(() => setCertSignedLoaded(true))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid])
 
   const [reviewModal, setReviewModal] = useState(false)
@@ -77,6 +97,20 @@ export default function LessonPage() {
   useEffect(() => {
     if (course && course.level === '자격증') navigate('/classroom', { replace: true })
   }, [course, navigate])
+
+  // 묶음 강의 잠금 — 미서명 자격증에 묶인 무료 인터넷강의는 동의서 작성 전 시청 불가
+  useEffect(() => {
+    if (!certSignedLoaded || !course || !user) return
+    const gated = (user.enrollments || []).some(en =>
+      getCourse(en.courseId)?.level === '자격증' &&
+      certSignedMap[`${en.courseId}:${en.assignedInstructorId || ''}`] !== true &&
+      (en.bundled || []).some(b => b.courseId === course.id))
+    if (gated) {
+      toast('먼저 자격증 과정 수강 동의서를 작성해주세요.', 'err')
+      navigate('/classroom', { replace: true })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [certSignedLoaded, course?.id, user?.uid])
 
   if (authLoading) {
     return (
