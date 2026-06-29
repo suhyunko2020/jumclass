@@ -190,22 +190,27 @@ export default function MyPage() {
       ? (certTotal > 0 ? Math.round((certChecked / certTotal) * 100) : 0)
       : (enrollment.progress || 0)
 
-    // 자격증 — 함께 무료 제공된 인터넷강의(includedCourseIds)의 실제 시청분을 위약금 형태로 공제.
-    // 차감액 = (수강생이 등록받은 기간의 티어 가격) × 실제 시청 분량. (일반 강의 환불 공제와 동일 기준)
+    // 자격증 — 함께 무료 묶어 등록한 인터넷강의의 실제 시청분을 위약금 형태로 공제.
+    // 대상: 그 수강건에 기록된 bundled(건별 자유선택). 없으면 강의의 includedCourseIds로 폴백.
+    // 차감액 = (묶을 때 선택한 기간의 티어 가격) × 실제 시청 분량. (일반 강의 환불 공제와 동일 기준)
     let includedDeduction = 0
     const includedLines: { title: string; amount: number }[] = []
-    if (isCert && course.includedCourseIds?.length) {
-      for (const incId of course.includedCourseIds) {
-        const incCourse = getCourse(incId)
-        const incEnr = (user!.enrollments || []).find(en => en.courseId === incId)
+    if (isCert) {
+      const bundled = (enrollment.bundled && enrollment.bundled.length)
+        ? enrollment.bundled
+        : (course.includedCourseIds || []).map(id => ({ courseId: id, days: 0 }))
+      for (const b of bundled) {
+        const incCourse = getCourse(b.courseId)
+        const incEnr = (user!.enrollments || []).find(en => en.courseId === b.courseId)
         if (!incCourse || !incEnr) continue
         const incTotal = incCourse.curriculum.reduce((s, sec) => s + sec.items.length, 0)
         const frac = consumedFraction(incEnr, incTotal)
         if (frac <= 0) continue
-        const incDays = Math.round((new Date(incEnr.expiryDate).getTime() - new Date(incEnr.enrolledAt).getTime()) / 86400000)
+        // 가격 기준 기간: 묶을 때 선택한 days, 없으면 실제 등록 기간
+        const incDays = b.days || Math.round((new Date(incEnr.expiryDate).getTime() - new Date(incEnr.enrolledAt).getTime()) / 86400000)
         const tiers = incCourse.pricingTiers || []
         const tier = tiers.length
-          ? tiers.slice().sort((a, b) => Math.abs(a.days - incDays) - Math.abs(b.days - incDays))[0]
+          ? tiers.slice().sort((a, b2) => Math.abs(a.days - incDays) - Math.abs(b2.days - incDays))[0]
           : null
         const tierPrice = tier?.price ?? incCourse.price
         const deduct = Math.round(tierPrice * frac)

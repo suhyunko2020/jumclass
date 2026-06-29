@@ -35,7 +35,7 @@ interface AuthContextType {
   logAttachmentDownload: (courseId: string, lessonId: string, attachmentName: string) => Promise<void>
   pauseCourse: (courseId: string) => Promise<boolean>
   resumeCourse: (courseId: string) => Promise<boolean>
-  enrollManual: (uid: string, courseId: string, days: number, assignedInstructorId?: string) => Promise<boolean>
+  enrollManual: (uid: string, courseId: string, days: number, assignedInstructorId?: string, bundled?: { courseId: string; days: number }[]) => Promise<boolean>
   // 관리자 권한 — admin_users 테이블 조회 결과 (user가 있을 때만 true 가능)
   isAdminLoggedIn: boolean
   adminCheckLoading: boolean   // admin_users 조회 중 여부 (초기 가드용)
@@ -53,6 +53,7 @@ function rowToEnrollment(row: Record<string, unknown>): Enrollment {
     progress: (row.progress as number) ?? 0,
     completedLessons: (row.completed_lessons as string[]) ?? [],
     lessonWatch: (row.lesson_watch as Record<string, number> | undefined) ?? {},
+    bundled: (row.bundled as { courseId: string; days: number }[] | undefined) ?? [],
     type: (row.type as Enrollment['type']) ?? 'payment',
     paused: (row.paused as boolean) ?? false,
     pausedAt: row.paused_at as string | undefined,
@@ -457,7 +458,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── 수동 등록 (관리자) ────────────────────────────────────
   // assignedInstructorId: 자격증 과정 수동 등록 시 담당 강사 지정 (진도 관리 페이지 연결용)
-  const enrollManual = useCallback(async (uid: string, courseId: string, days: number, assignedInstructorId?: string) => {
+  const enrollManual = useCallback(async (uid: string, courseId: string, days: number, assignedInstructorId?: string, bundled?: { courseId: string; days: number }[]) => {
     const expiry = new Date()
     expiry.setDate(expiry.getDate() + days)
 
@@ -470,6 +471,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       type: 'manual',
       paused: false,
       pause_count: 0,
+      bundled: bundled ?? [],
       ...(assignedInstructorId ? { assigned_instructor_id: assignedInstructorId } : {}),
     }
 

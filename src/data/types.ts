@@ -91,6 +91,7 @@ export interface Enrollment {
   progress: number;
   completedLessons: string[];
   lessonWatch?: Record<string, number>;  // 강의별 최대 시청률(0~100) — 시청 비례 진도
+  bundled?: { courseId: string; days: number }[];  // 자격증과 함께 묶어 등록한 무료 인터넷강의(환불 공제용)
   type?: 'manual' | 'payment';
   paused?: boolean;
   pausedAt?: string;
