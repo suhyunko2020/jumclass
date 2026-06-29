@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useCourses } from '../hooks/useCourses'
 import { useInstructors } from '../hooks/useInstructors'
 import { useToast } from '../components/ui/Toast'
-import { formatPrice, calcRefund } from '../utils/format'
+import { formatPrice, calcRefund, consumedFraction } from '../utils/format'
 import {
   getMyInquiries, addInquiry, editInquiry as editInquiryStorage, addInquiryReply,
   editInquiryReply, deleteInquiryReply,
@@ -107,6 +107,7 @@ export default function MyPage() {
     completedCount: number; totalLessons: number; progress: number;
     daysSinceEnroll: number; totalDays: number;
     isCert: boolean;
+    includedDeduction: number; includedLines: { title: string; amount: number }[];
   } | null>(null)
   const [refundReason, setRefundReason] = useState('')
   const [refundConfirmed, setRefundConfirmed] = useState(false)
@@ -188,11 +189,36 @@ export default function MyPage() {
     const progress = isCert
       ? (certTotal > 0 ? Math.round((certChecked / certTotal) * 100) : 0)
       : (enrollment.progress || 0)
+
+    // 자격증 — 함께 무료 제공된 인터넷강의(includedCourseIds)의 실제 시청분을 위약금 형태로 공제.
+    // 차감액 = (수강생이 등록받은 기간의 티어 가격) × 실제 시청 분량. (일반 강의 환불 공제와 동일 기준)
+    let includedDeduction = 0
+    const includedLines: { title: string; amount: number }[] = []
+    if (isCert && course.includedCourseIds?.length) {
+      for (const incId of course.includedCourseIds) {
+        const incCourse = getCourse(incId)
+        const incEnr = (user!.enrollments || []).find(en => en.courseId === incId)
+        if (!incCourse || !incEnr) continue
+        const incTotal = incCourse.curriculum.reduce((s, sec) => s + sec.items.length, 0)
+        const frac = consumedFraction(incEnr, incTotal)
+        if (frac <= 0) continue
+        const incDays = Math.round((new Date(incEnr.expiryDate).getTime() - new Date(incEnr.enrolledAt).getTime()) / 86400000)
+        const tiers = incCourse.pricingTiers || []
+        const tier = tiers.length
+          ? tiers.slice().sort((a, b) => Math.abs(a.days - incDays) - Math.abs(b.days - incDays))[0]
+          : null
+        const tierPrice = tier?.price ?? incCourse.price
+        const deduct = Math.round(tierPrice * frac)
+        if (deduct > 0) { includedDeduction += deduct; includedLines.push({ title: incCourse.title, amount: deduct }) }
+      }
+    }
+
     const result = calcRefund(
       course,
       enrollment,
       totalLessons,
       isCert ? completedCount : undefined,
+      includedDeduction,
     )
     // 자정 기준으로 일수 계산 — 어제 등록하면 시각과 무관하게 "1일 경과"
     const enrolledMidnight = new Date(enrollment.enrolledAt); enrolledMidnight.setHours(0, 0, 0, 0)
@@ -205,6 +231,7 @@ export default function MyPage() {
       ...result, price: course.price, badge: course.badge,
       completedCount, totalLessons, progress,
       daysSinceEnroll, totalDays, isCert,
+      includedDeduction, includedLines,
     })
     setRefundReason('')
     setRefundConfirmed(false)
@@ -219,7 +246,10 @@ export default function MyPage() {
       return
     }
     const unit = refundModal.isCert ? '회' : '강'
-    const msg = `결제일: ${refundModal.orderDate}\n강의: ${refundModal.courseTitle}\n수강 진도: ${refundModal.completedCount}/${refundModal.totalLessons}${unit} (${refundModal.progress}%)\n환불 예상 금액: ${formatPrice(refundModal.refundAmount)}\n\n환불 사유: ${refundReason}`
+    const incLine = refundModal.includedDeduction > 0
+      ? `\n기본 제공 강의 공제: -${formatPrice(refundModal.includedDeduction)}${refundModal.includedLines.length ? ` (${refundModal.includedLines.map(l => `${l.title} ${formatPrice(l.amount)}`).join(', ')})` : ''}`
+      : ''
+    const msg = `결제일: ${refundModal.orderDate}\n강의: ${refundModal.courseTitle}\n수강 진도: ${refundModal.completedCount}/${refundModal.totalLessons}${unit} (${refundModal.progress}%)${incLine}\n환불 예상 금액: ${formatPrice(refundModal.refundAmount)}\n\n환불 사유: ${refundReason}`
     await addInquiry(user!.uid, user!.name, user!.email, '결제 환불 요청합니다.', msg, 'refund', { courseId: refundModal.courseId, orderDate: refundModal.orderDate })
     sendInquiryReceived({ phone: user!.phone, userId: user!.uid, customerName: user!.name, title: '결제 환불 요청합니다.' }).catch(() => {})
     notifyAdmin({ kind: 'inquiry', customerName: user!.name, subject: '환불 요청', content: `${refundModal.courseTitle}\n환불 예상: ${formatPrice(refundModal.refundAmount)}` })
@@ -445,7 +475,7 @@ export default function MyPage() {
                             </div>
                             <div className="payment-item-bottom">
                               <span className="payment-item-price">{formatPrice(c.price)}</span>
-                              {e.type !== 'manual' && !isExpired && (
+                              {(e.type !== 'manual' || isCert) && !isExpired && (
                                 hasPendingRefund(c.id, date) ? (
                                   <button className="btn btn-ghost btn-sm" disabled
                                     style={{ opacity: .55, cursor: 'default' }}>
@@ -706,7 +736,7 @@ export default function MyPage() {
                     </div>
                   </div>
                 ) : refundModal.refundable ? (() => {
-                  const baseRefund = refundModal.refundAmount + refundModal.penalty
+                  const baseRefund = refundModal.refundAmount + refundModal.penalty + refundModal.includedDeduction
                   const policyRatio = refundModal.price > 0 ? Math.round((baseRefund / refundModal.price) * 100) : 0
                   const policyLabel = policyRatio === 100
                     ? '전액 기준'
@@ -725,6 +755,12 @@ export default function MyPage() {
                         <span style={{ color: 'var(--t2)' }}>위약금 <span style={{ fontSize: '.72rem', color: 'var(--t3)' }}>(계약대금 10% 별도)</span></span>
                         <span style={{ color: 'var(--fail)' }}>-{formatPrice(refundModal.penalty)}</span>
                       </div>
+                      {refundModal.includedDeduction > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '.82rem' }}>
+                          <span style={{ color: 'var(--t2)' }}>기본 제공 강의 공제 <span style={{ fontSize: '.72rem', color: 'var(--t3)' }}>(시청분, 위약금 형태)</span></span>
+                          <span style={{ color: 'var(--fail)' }}>-{formatPrice(refundModal.includedDeduction)}</span>
+                        </div>
+                      )}
                       <div style={{ borderTop: '1px solid var(--line)', paddingTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '.9rem' }}>
                         <span style={{ fontWeight: 700 }}>환불 예상 금액</span>
                         <span style={{ fontWeight: 800, color: 'var(--ok)' }}>{formatPrice(refundModal.refundAmount)}</span>
