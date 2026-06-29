@@ -199,7 +199,10 @@ export default function ClassroomPage() {
 
   // 환불 처리된 결제건은 강의실 목록에서 제외
   const refunds = refundRecords(inquiries)
-  const enrollments = (user.enrollments || []).filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
+  const enrollments = (user.enrollments || [])
+    .filter(e => !isEnrollmentRefunded(e.courseId, e.enrolledAt, refunds))
+    // 등록일(결제일) 최신순으로 정렬 — 목록이 뒤죽박죽 보이지 않도록
+    .sort((a, b) => new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime())
 
   // 수강 완료 판정 — 자격증은 모든 회차 체크, 일반은 진도 100%
   const isEnrollmentComplete = (e: Enrollment): boolean => {
