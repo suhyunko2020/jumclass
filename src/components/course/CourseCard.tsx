@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Course } from '../../data/types'
 import { formatPrice, discountRate, calcTotalDuration, getLevelColor } from '../../utils/format'
+import { vimeoOembedTarget } from '../../utils/vimeo'
 
 interface Props {
   course: Course
@@ -27,7 +28,7 @@ export default function CourseCard({ course, enrolledCount }: Props) {
     if (thumbCache.has(firstVimeo)) { setThumb(thumbCache.get(firstVimeo) || ''); return }
     let alive = true
     // Vimeo oEmbed — 공개 영상은 썸네일 URL, 비공개/제한 영상은 null → 이모지 폴백
-    fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${firstVimeo}&width=720`)
+    fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(vimeoOembedTarget(firstVimeo))}&width=720`)
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         const url = (d && d.thumbnail_url) || ''

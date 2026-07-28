@@ -35,6 +35,13 @@ export interface PopupSettings {
   linkAnnouncementId: string    // linkType==='announcement'일 때
   linkUrl: string               // linkType==='url'일 때
   buttonText: string            // 자세히 보기 버튼 문구
+  // 재노출 정책 — 방문자가 팝업을 닫은 뒤 언제 다시 띄울지
+  //   'always'  : 접속할 때마다 (닫기 전용, 다시 보지 않기 없음)
+  //   'daily'   : '오늘 하루 보지 않기'
+  //   'days'    : 'N일 동안 보지 않기'
+  //   'forever' : '다시 보지 않기' (영구)
+  dismissMode: 'always' | 'daily' | 'days' | 'forever'
+  dismissDays: number           // dismissMode==='days'일 때 숨김 일수
 }
 
 export interface SiteSettings {
@@ -119,6 +126,8 @@ const DEFAULTS: SiteSettings = {
     linkAnnouncementId: 'notice-relaunch-2026',
     linkUrl: '',
     buttonText: '안내 자세히 보기',
+    dismissMode: 'daily',
+    dismissDays: 7,
   },
   policies: {
     refund: `# 환불 정책

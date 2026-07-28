@@ -10,9 +10,22 @@ function popupKey(p: PopupSettings): string {
   return 'jum_popup_' + (h >>> 0).toString(36)
 }
 
+// 저장값은 "다시 노출해도 되는 시각(ms)" 또는 'forever'.
+// 과거 버전에서 저장한 'YYYY-M-D'(오늘 하루 보지 않기) 형식도 그대로 인식한다.
+const FOREVER = 'forever'
+
 function todayStr(): string {
   const d = new Date()
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+}
+
+// 저장된 값 기준으로 지금 팝업을 숨겨야 하는지 판단
+function isDismissed(raw: string | null): boolean {
+  if (!raw) return false
+  if (raw === FOREVER) return true
+  if (raw === todayStr()) return true          // 구버전 호환
+  const until = Number(raw)
+  return Number.isFinite(until) && Date.now() < until
 }
 
 export default function SitePopup() {
@@ -24,10 +37,9 @@ export default function SitePopup() {
   useEffect(() => {
     if (!popup?.enabled) return
     if (!popup.title && !popup.body && !popup.imageUrl) return
-    // '오늘 하루 보지 않기'를 누른 날이면 노출 생략
+    // '다시 보지 않기 / N일간 보지 않기'를 누른 상태면 노출 생략
     try {
-      const seen = localStorage.getItem(popupKey(popup))
-      if (seen === todayStr()) return
+      if (isDismissed(localStorage.getItem(popupKey(popup)))) return
     } catch { /* 무시 */ }
     // 첫 페인트 직후 노출 (살짝 지연으로 깜빡임 방지)
     const t = setTimeout(() => setOpen(true), 350)
@@ -39,10 +51,27 @@ export default function SitePopup() {
 
   function close() { setOpen(false) }
 
-  function dismissToday() {
-    try { localStorage.setItem(popupKey(popup), todayStr()) } catch { /* 무시 */ }
+  // 관리자가 설정한 재노출 정책에 따라 숨김 기간을 저장
+  function dismiss() {
+    const mode = popup.dismissMode || 'daily'
+    let value = ''
+    if (mode === 'forever') value = FOREVER
+    else if (mode === 'days') {
+      const days = Math.max(1, popup.dismissDays || 7)
+      value = String(Date.now() + days * 86400000)
+    } else {
+      // daily — 오늘 자정까지
+      const end = new Date(); end.setHours(23, 59, 59, 999)
+      value = String(end.getTime())
+    }
+    try { localStorage.setItem(popupKey(popup), value) } catch { /* 무시 */ }
     setOpen(false)
   }
+
+  const dismissLabel =
+    popup.dismissMode === 'forever' ? '다시 보지 않기'
+    : popup.dismissMode === 'days' ? `${Math.max(1, popup.dismissDays || 7)}일 동안 보지 않기`
+    : '오늘 하루 보지 않기'
 
   function goLink() {
     if (popup.linkType === 'announcement' && popup.linkAnnouncementId) {
@@ -88,7 +117,9 @@ export default function SitePopup() {
         )}
 
         <div className="popup-foot">
-          <button className="popup-foot-btn" onClick={dismissToday}>오늘 하루 보지 않기</button>
+          {popup.dismissMode !== 'always' && (
+            <button className="popup-foot-btn" onClick={dismiss}>{dismissLabel}</button>
+          )}
           <button className="popup-foot-btn" onClick={close}>닫기</button>
         </div>
       </div>

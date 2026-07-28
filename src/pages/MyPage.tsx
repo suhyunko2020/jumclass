@@ -620,7 +620,7 @@ export default function MyPage() {
                                 <div className="qa-closed">✓ 완료 처리된 문의입니다.</div>
                               ) : userTurn ? (
                                 <div className="qa-write">
-                                  <textarea className="form-input" rows={2} placeholder="댓글을 입력하세요" value={replyDraft[q.id] || ''}
+                                  <textarea className="form-input" rows={4} placeholder="댓글을 입력하세요" value={replyDraft[q.id] || ''}
                                     onChange={e => setReplyDraft(d => ({ ...d, [q.id]: e.target.value }))} style={{ resize: 'vertical' }} />
                                   <div className="qa-write-actions">
                                     <button className="btn btn-primary btn-sm" disabled={replyingId === q.id || !(replyDraft[q.id] || '').trim()}

@@ -17,6 +17,7 @@ import {
 } from '../utils/storage'
 import { sendInstructorProgress, sendInquiryAnswered, sendRefundComplete } from '../utils/alimtalk'
 import { formatPrice, getLevelColor } from '../utils/format'
+import { normalizeVimeo, vimeoOembedTarget } from '../utils/vimeo'
 import type { Inquiry, InquiryMessage, Course, LessonItem, CurriculumSection, Instructor, InstructorService, ProgressChecklistItem } from '../data/types'
 import { useInstructors } from '../hooks/useInstructors'
 import { saveAllLessonAttachments, getLessonAttachments, uploadLessonAttachment, type LessonAtt } from '../hooks/useCourses'
@@ -733,7 +734,7 @@ export default function AdminPage() {
   async function currFetchVimeoDuration(sectionKey: string, lessonId: string, vimeoId: string) {
     if (!vimeoId) return
     try {
-      const res = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${vimeoId}`)
+      const res = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(vimeoOembedTarget(vimeoId))}`)
       if (!res.ok) return
       const data = await res.json()
       if (data.duration) {
@@ -1658,7 +1659,8 @@ export default function AdminPage() {
                                     </div>
                                     {editing ? (
                                       <div className="qa-write">
-                                        <textarea className="form-input" rows={2} value={cmtEditText} onChange={e => setCmtEditText(e.target.value)} style={{ resize: 'vertical' }} />
+                                        <textarea className="form-input" rows={6} value={cmtEditText} onChange={e => setCmtEditText(e.target.value)}
+                                          style={{ resize: 'vertical', minHeight: '130px', lineHeight: 1.7 }} />
                                         <div className="qa-write-actions">
                                           <button className="btn btn-ghost btn-sm" onClick={() => { setCmtEditKey(null); setCmtEditText('') }}>취소</button>
                                           <button className="btn btn-primary btn-sm" disabled={!cmtEditText.trim()} onClick={() => saveCmtEdit(inq.id, m.at)}>저장</button>
@@ -1679,8 +1681,9 @@ export default function AdminPage() {
                               <div className="qa-closed">✓ {new Date(inq.resolvedAt).toLocaleDateString('ko-KR')} 답변 완료 처리됨</div>
                             ) : (
                               <div className="qa-write">
-                                <textarea className="form-input" rows={2} placeholder="댓글을 입력하세요" value={adminReplyDraft[inq.id] || ''}
-                                  onChange={e => setAdminReplyDraft(d => ({ ...d, [inq.id]: e.target.value }))} style={{ resize: 'vertical' }} />
+                                <textarea className="form-input" rows={7} placeholder="댓글을 입력하세요" value={adminReplyDraft[inq.id] || ''}
+                                  onChange={e => setAdminReplyDraft(d => ({ ...d, [inq.id]: e.target.value }))}
+                                  style={{ resize: 'vertical', minHeight: '150px', lineHeight: 1.7 }} />
                                 <div className="qa-write-actions">
                                   <button className="btn btn-ghost btn-sm" onClick={() => handleResolveInquiry(inq)}>✓ 답변 완료</button>
                                   <button className="btn btn-primary btn-sm" disabled={adminReplyingId === inq.id || !(adminReplyDraft[inq.id] || '').trim()}
@@ -2612,6 +2615,31 @@ export default function AdminPage() {
                         <label className="form-label">버튼 문구</label>
                         <input className="form-input" placeholder="예) 안내 자세히 보기" value={form.popup.buttonText}
                           onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, buttonText: e.target.value } } : null)} />
+                      </div>
+                    )}
+
+                    <div className="form-group">
+                      <label className="form-label">다시 보지 않기 옵션</label>
+                      <select className="form-input"
+                        value={form.popup.dismissMode || 'daily'}
+                        onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, dismissMode: e.target.value as SiteSettings['popup']['dismissMode'] } } : null)}>
+                        <option value="daily">오늘 하루 보지 않기</option>
+                        <option value="days">N일 동안 보지 않기</option>
+                        <option value="forever">다시 보지 않기 (영구)</option>
+                        <option value="always">항상 표시 (닫기만 가능)</option>
+                      </select>
+                      <div style={{ fontSize: '.75rem', color: 'var(--t3)', marginTop: '6px', lineHeight: 1.6 }}>
+                        방문자가 팝업을 닫은 뒤 다시 띄울 시점을 정합니다. 브라우저에 저장되므로 기기·브라우저별로 적용되며,
+                        팝업 내용(제목·본문·이미지·링크)을 수정하면 새 안내로 보고 모두에게 다시 노출됩니다.
+                      </div>
+                    </div>
+
+                    {form.popup.dismissMode === 'days' && (
+                      <div className="form-group">
+                        <label className="form-label">숨김 일수</label>
+                        <input className="form-input" type="number" min={1} max={365}
+                          value={form.popup.dismissDays ?? 7}
+                          onChange={e => setSiteSettingsForm(p => p ? { ...p, popup: { ...p.popup, dismissDays: Math.max(1, Number(e.target.value) || 1) } } : null)} />
                       </div>
                     )}
                   </div>
@@ -3797,9 +3825,16 @@ export default function AdminPage() {
                         <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 80px auto', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
                           <span />
                           <input className="form-input" style={{ padding: '5px 8px', fontSize: '.78rem' }}
-                            placeholder="Vimeo ID" value={item.vimeo}
+                            placeholder="Vimeo ID 또는 링크 붙여넣기" value={item.vimeo}
+                            title="숫자 ID, 전체 URL(https://vimeo.com/123456789/abcdef), 임베드 코드 모두 사용 가능합니다. 비공개 링크 영상은 해시(h=)까지 자동 인식됩니다."
                             onChange={e => currUpdateLesson(sec._key, item.id, 'vimeo', e.target.value)}
-                            onBlur={() => { if (item.vimeo && !item.duration) currFetchVimeoDuration(sec._key, item.id, item.vimeo) }} />
+                            onBlur={() => {
+                              // 붙여넣은 URL/임베드코드를 "id" 또는 "id?h=해시" 형태로 정규화
+                              const norm = normalizeVimeo(item.vimeo)
+                              if (norm && norm !== item.vimeo) currUpdateLesson(sec._key, item.id, 'vimeo', norm)
+                              const v = norm || item.vimeo
+                              if (v && !item.duration) currFetchVimeoDuration(sec._key, item.id, v)
+                            }} />
                           <input className="form-input" style={{ padding: '5px 8px', fontSize: '.78rem' }}
                             placeholder="00:00" value={item.duration}
                             onChange={e => currUpdateLesson(sec._key, item.id, 'duration', e.target.value)} />

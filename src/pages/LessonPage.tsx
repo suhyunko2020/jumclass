@@ -5,6 +5,7 @@ import { useCourses } from '../hooks/useCourses'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/ui/Toast'
 import { calcTotalDuration } from '../utils/format'
+import { vimeoEmbedUrl } from '../utils/vimeo'
 import { getLessonAttachments, getAttachmentDownloadUrl } from '../hooks/useCourses'
 import { logAccess } from '../utils/accessLog'
 import { getMyInquiries, getCertificateAgreementByEnrollment } from '../utils/storage'
@@ -599,7 +600,7 @@ function LessonVideo({ vimeo, onProgress }: { vimeo: string; onProgress: (percen
     <div className="video-box">
       <iframe
         ref={iframeRef}
-        src={`https://player.vimeo.com/video/${vimeo}?title=0&byline=0&portrait=0&color=7C6FCD`}
+        src={vimeoEmbedUrl(vimeo)}
         allow="autoplay; fullscreen; picture-in-picture"
         allowFullScreen
       />
