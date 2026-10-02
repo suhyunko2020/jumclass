@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js'
 import type { Enrollment } from '../data/types'
 import { useCourses } from './useCourses'
 import { sendWelcome } from '../utils/alimtalk'
+import { isEmailWithdrawn } from '../utils/storage'
 import { syncSiteSettingsFromSupabase } from './useSiteSettings'
 import { logAccess } from '../utils/accessLog'
 
@@ -203,6 +204,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── 회원가입 ──────────────────────────────────────────────
   // null = 성공(인증메일 발송), string = 에러 메시지
   const signup = useCallback(async (name: string, email: string, password: string, phone: string): Promise<string | null> => {
+    // 탈퇴한 이메일은 재가입 불가 (DB 트리거가 최종 차단하지만, 먼저 안내해 준다)
+    if (await isEmailWithdrawn(email)) {
+      return '탈퇴 처리된 계정의 이메일입니다. 다른 이메일로 가입해주세요.'
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -211,7 +216,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: window.location.origin,
       },
     })
-    if (error) return error.message
+    if (error) {
+      // 트리거 차단 메시지는 사용자용 문구로 변환
+      if (/withdrawn_email_blocked/i.test(error.message)) {
+        return '탈퇴 처리된 계정의 이메일입니다. 다른 이메일로 가입해주세요.'
+      }
+      return error.message
+    }
     if (!data.user) return '가입에 실패했습니다. 다시 시도해주세요.'
 
     // 프로필 저장 (휴대폰 번호 포함 — 알림톡 발송용)

@@ -1370,3 +1370,12 @@ body:has(.modal-overlay) {
   .inst-card-photo { aspect-ratio: 1 / 1; }
   .instructor-grid { grid-template-columns: 1fr; }
 }
+
+/* 회원 탈퇴 — 눈에 띄되 로그아웃보다 약하게 */
+.mypage-withdraw-link { display: block; width: 100%; margin-top: 10px; padding: 4px; background: none; border: none; font-size: .76rem; color: var(--t3); text-decoration: underline; cursor: pointer; }
+.mypage-withdraw-link:hover { color: var(--fail); }
+.withdraw-warn { background: rgba(224,82,82,.08); border: 1px solid rgba(224,82,82,.2); border-radius: var(--r2); padding: 14px 16px; font-size: .82rem; color: var(--t2); line-height: 1.7; }
+.withdraw-warn strong { display: block; color: var(--fail); margin-bottom: 8px; font-size: .88rem; }
+.withdraw-warn ul { margin: 0; padding-left: 18px; }
+.withdraw-warn li { margin: 3px 0; }
+.withdraw-warn b { color: var(--t1); }

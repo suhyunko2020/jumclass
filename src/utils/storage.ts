@@ -203,6 +203,36 @@ export async function adminChangeUserEmail(userId: string, email: string): Promi
   }
 }
 
+// 회원 탈퇴 — 계정 삭제 + 개인정보 익명화 + 재가입 차단.
+// userId 생략 시 본인 탈퇴, 지정 시 관리자가 해당 회원을 탈퇴 처리(서버에서 권한 검증).
+// 수강·결제·문의 기록은 법정 보존 의무에 따라 남고 개인정보만 지워진다.
+export async function withdrawUser(userId?: string): Promise<{ ok: boolean; error?: string }> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) return { ok: false, error: '로그인이 필요합니다.' }
+  try {
+    const res = await fetch('/api/withdraw-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(userId ? { userId } : {}),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !body.ok) return { ok: false, error: body.error || `요청 실패 (${res.status})` }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : '네트워크 오류' }
+  }
+}
+
+// 탈퇴한 이메일인지 확인 (가입 화면 사전 안내용 — 목록 자체는 노출되지 않음)
+export async function isEmailWithdrawn(email: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('is_email_withdrawn', { p_email: email })
+    if (error) return false
+    return data === true
+  } catch { return false }
+}
+
 // ════════════════════════════════════════════════════════════
 // 접속 로그 (어드민 분석) — access_logs 테이블, 관리자만 SELECT (RLS)
 // ════════════════════════════════════════════════════════════

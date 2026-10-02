@@ -13,7 +13,7 @@ import {
   getAccessLogs,
   createProgressPage,
   type CertificateAgreementRecord,
-  type AccessLog,
+  type AccessLog, withdrawUser,
 } from '../utils/storage'
 import { sendInstructorProgress, sendInquiryAnswered, sendRefundComplete } from '../utils/alimtalk'
 import { formatPrice, getLevelColor } from '../utils/format'
@@ -1377,6 +1377,23 @@ export default function AdminPage() {
                                   if (res.ok) refresh()
                                 }}>
                                 ✉ 이메일 변경
+                              </button>
+                              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--fail)' }}
+                                onClick={async () => {
+                                  if (!confirm(
+                                    `${u.name}(${u.email}) 님을 탈퇴 처리하시겠습니까?\n\n` +
+                                    `• 로그인 계정이 삭제되어 다시 접속할 수 없습니다.\n` +
+                                    `• 이름·연락처·이메일 등 개인정보가 익명화됩니다.\n` +
+                                    `• 이 이메일로는 재가입할 수 없습니다.\n` +
+                                    `• 결제·수강·문의 기록은 법정 보존 의무에 따라 남습니다.\n\n` +
+                                    `이 작업은 되돌릴 수 없습니다.`
+                                  )) return
+                                  if (!confirm(`정말 진행할까요?\n\n${u.email} 탈퇴 처리`)) return
+                                  const res = await withdrawUser(u.uid)
+                                  toast(res.ok ? '탈퇴 처리되었습니다.' : `탈퇴 실패: ${res.error}`, res.ok ? 'ok' : 'err')
+                                  if (res.ok) refresh()
+                                }}>
+                                탈퇴 처리
                               </button>
                             </div>
                           </td>

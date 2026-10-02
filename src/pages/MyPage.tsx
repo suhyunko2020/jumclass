@@ -8,7 +8,7 @@ import { formatPrice, calcRefund, consumedFraction } from '../utils/format'
 import {
   getMyInquiries, addInquiry, editInquiry as editInquiryStorage, addInquiryReply,
   editInquiryReply, deleteInquiryReply,
-  getProgressPageByEnrollment,
+  getProgressPageByEnrollment, withdrawUser,
 } from '../utils/storage'
 import type { Inquiry, InquiryMessage, InstructorProgressPage } from '../data/types'
 import { refundRecords, buildRefundedKeys, refundedKey } from '../lib/refundStatus'
@@ -50,6 +50,9 @@ export default function MyPage() {
   const [form, setForm] = useState<InquiryForm>(emptyForm)
   const [openBodies, setOpenBodies] = useState<Record<string, boolean>>({})
   const [termsOpen, setTermsOpen] = useState(false)   // 자격증 약관 보기 팝업
+  const [withdrawOpen, setWithdrawOpen] = useState(false)  // 회원 탈퇴 모달
+  const [withdrawConfirm, setWithdrawConfirm] = useState('')
+  const [withdrawing, setWithdrawing] = useState(false)
   // 자격증 강의 강사 진도 맵 — 수강 완료 뱃지 판단용
   const [certProgressMap, setCertProgressMap] = useState<Record<string, InstructorProgressPage | null>>({})
 
@@ -371,6 +374,9 @@ export default function MyPage() {
               <button className="btn btn-ghost w-full btn-sm"
                 onClick={() => { logout(); navigate('/') }}>
                 로그아웃
+              </button>
+              <button className="mypage-withdraw-link" onClick={() => setWithdrawOpen(true)}>
+                회원 탈퇴
               </button>
             </div>
           </aside>
@@ -832,6 +838,58 @@ export default function MyPage() {
         </div>
         )
       })()}
+
+      {/* 회원 탈퇴 */}
+      {withdrawOpen && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !withdrawing) setWithdrawOpen(false) }}>
+          <div className="modal-box" style={{ position: 'relative', maxWidth: '480px' }}>
+            <button className="modal-close" onClick={() => !withdrawing && setWithdrawOpen(false)}>✕</button>
+            <div className="modal-head">
+              <h2>회원 탈퇴</h2>
+            </div>
+            <div className="modal-body">
+              <div className="withdraw-warn">
+                <strong>탈퇴하시면 되돌릴 수 없습니다.</strong>
+                <ul>
+                  <li>계정이 삭제되어 <b>다시 로그인할 수 없습니다.</b></li>
+                  <li>수강 중인 강의가 있어도 <b>즉시 시청이 중단</b>됩니다.</li>
+                  <li>이름·연락처 등 개인정보는 삭제(익명화)됩니다.</li>
+                  <li>이 이메일로는 <b>다시 가입할 수 없습니다.</b></li>
+                  <li>결제·수강 기록은 관련 법령에 따라 일정 기간 보관됩니다.</li>
+                </ul>
+              </div>
+              <p style={{ fontSize: '.84rem', color: 'var(--t2)', margin: '14px 0 8px' }}>
+                계속하시려면 아래에 <b style={{ color: 'var(--fail)' }}>탈퇴합니다</b> 를 입력해주세요.
+              </p>
+              <input className="form-input" placeholder="탈퇴합니다" value={withdrawConfirm}
+                disabled={withdrawing}
+                onChange={e => setWithdrawConfirm(e.target.value)} />
+              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                <button className="btn btn-ghost" style={{ flex: 1 }} disabled={withdrawing}
+                  onClick={() => { setWithdrawOpen(false); setWithdrawConfirm('') }}>
+                  취소
+                </button>
+                <button className="btn" style={{ flex: 1, background: 'var(--fail)', color: '#fff' }}
+                  disabled={withdrawing || withdrawConfirm.trim() !== '탈퇴합니다'}
+                  onClick={async () => {
+                    setWithdrawing(true)
+                    const res = await withdrawUser()
+                    if (res.ok) {
+                      toast('탈퇴가 완료되었습니다. 이용해주셔서 감사합니다.', 'ok')
+                      await logout()
+                      navigate('/')
+                    } else {
+                      toast(`탈퇴 실패: ${res.error}`, 'err')
+                      setWithdrawing(false)
+                    }
+                  }}>
+                  {withdrawing ? '처리 중…' : '탈퇴하기'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 자격증 약관 보기 팝업 — 포함 제공 강의 안내용 */}
       {termsOpen && (
