@@ -208,7 +208,7 @@ export default function InstructorProgressPageView() {
                     opacity: allChecked ? 0.7 : 1,
                   }}
                 />
-                <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
                   <input
                     type="text"
                     value={item.title}

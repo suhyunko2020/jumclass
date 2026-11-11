@@ -3631,7 +3631,7 @@ export default function AdminPage() {
                             <input
                               type="text" readOnly value={pageUrl}
                               onFocus={e => e.currentTarget.select()}
-                              style={{ flex: 1, fontSize: '.72rem', padding: '6px 8px', background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)', borderRadius: 'var(--r1)', color: 'var(--t2)', fontFamily: 'monospace' }}
+                              style={{ flex: 1, minWidth: 0, fontSize: '.72rem', padding: '6px 8px', background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)', borderRadius: 'var(--r1)', color: 'var(--t2)', fontFamily: 'monospace' }}
                             />
                             <button
                               type="button"

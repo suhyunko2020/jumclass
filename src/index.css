@@ -614,7 +614,7 @@ input, textarea, select { font-family: inherit; }
 .form-group { margin-bottom: 16px; }
 .form-label { display: block; font-size: .82rem; font-weight: 600; color: var(--t2); margin-bottom: 6px; }
 .form-input {
-  width: 100%; padding: 10px 14px;
+  width: 100%; min-width: 0; padding: 10px 14px;
   background: rgba(255,255,255,.05); border: 1px solid var(--line-2);
   border-radius: var(--r2); color: var(--t1); font-size: .875rem;
   transition: var(--t); outline: none;

@@ -100,7 +100,7 @@ export default function CoursesPage() {
 
       {/* 필터 */}
       <div className="container" style={{ marginBottom: '32px', marginTop: '28px' }}>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', rowGap: '10px', alignItems: 'center' }}>
           {FILTERS.map(f => (
             <button key={f} className={`tab ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
               {f}

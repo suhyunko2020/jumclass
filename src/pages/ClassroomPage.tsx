@@ -610,7 +610,7 @@ export default function ClassroomPage() {
                             {item.checked ? '✓' : i + 1}
                           </div>
                           <span style={{
-                            flex: 1, fontSize: '.88rem',
+                            flex: 1, minWidth: 0, overflowWrap: 'anywhere', fontSize: '.88rem',
                             color: item.checked ? 'var(--t3)' : 'var(--t1)',
                             textDecoration: item.checked ? 'line-through' : 'none',
                           }}>
