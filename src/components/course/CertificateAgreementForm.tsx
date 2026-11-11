@@ -363,7 +363,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
               placeholder="01000000000"
               disabled={inputLocked}
               style={{
-                flex: 1, padding: '10px 12px',
+                flex: 1, minWidth: 0, width: '100%', padding: '10px 12px',
                 background: inputLocked ? 'rgba(52,211,153,.06)' : 'rgba(6,7,15,.4)',
                 border: `1px solid ${inputLocked ? 'rgba(52,211,153,.35)' : 'var(--line)'}`,
                 borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.88rem',
@@ -380,7 +380,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
                 border: `1px solid ${isVerified ? 'rgba(52,211,153,.35)' : 'rgba(124,111,205,.35)'}`,
                 color: isVerified ? 'var(--ok)' : 'var(--purple-2)',
                 borderRadius: 'var(--r2)', cursor: isVerified ? 'default' : 'pointer',
-                flexShrink: 0, minWidth: '120px',
+                flexShrink: 0, minWidth: '104px', whiteSpace: 'nowrap',
                 opacity: (otpPhase === 'sending' || resendSec > 0) ? 0.6 : 1,
                 transition: 'opacity .2s',
               }}
@@ -410,7 +410,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
                 placeholder="6자리 인증번호"
                 disabled={hasExpired}
                 style={{
-                  flex: 1, padding: '10px 12px',
+                  flex: 1, minWidth: 0, width: '100%', padding: '10px 12px',
                   background: 'rgba(6,7,15,.4)', border: '1px solid var(--line)',
                   borderRadius: 'var(--r2)', color: 'var(--t1)', fontSize: '.95rem',
                   outline: 'none',
@@ -427,7 +427,7 @@ export default function CertificateAgreementForm({ value, onChange }: Props) {
                   border: '1px solid var(--purple-sat)',
                   color: 'white', borderRadius: 'var(--r2)',
                   cursor: (otpInput.length === 6 && !hasExpired) ? 'pointer' : 'not-allowed',
-                  flexShrink: 0, opacity: (otpPhase === 'verifying' || hasExpired) ? 0.6 : 1,
+                  flexShrink: 0, whiteSpace: 'nowrap', opacity: (otpPhase === 'verifying' || hasExpired) ? 0.6 : 1,
                 }}
               >
                 {otpPhase === 'verifying' ? '확인 중…' : '확인'}
